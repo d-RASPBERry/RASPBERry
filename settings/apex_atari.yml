@@ -18,7 +18,7 @@ hyper_parameters:
   num_gpus_per_worker: 0.01
   num_workers: 5
   replay_buffer_config:
-    capacity: 1000000
+    capacity: 200000
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1
     type: 'MultiAgentPrioritizedReplayBuffer'

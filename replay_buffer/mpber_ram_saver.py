@@ -4,7 +4,7 @@ import logging
 import numpy as np
 from itertools import chain
 from gymnasium.spaces import Space
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from ray.rllib.utils.typing import PolicyID
 from ray.rllib.utils.annotations import override, DeveloperAPI
 from ray.rllib.utils.replay_buffers import StorageUnit
@@ -147,6 +147,8 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         if buffer.full:
             data = buffer.sample()
             weight = np.mean(data.get("weights"))
+            if np.isnan(weight):
+                weight = 0.01
             buffer.reset()
             self._sub_store.append([data, weight])
         if len(self._sub_store) == self.num_save:
@@ -376,3 +378,25 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                     sample = decompress_sample_batch(sample)
                     samples[policy_id] = sample
                 return MultiAgentBatch(samples, sum(s.count for s in samples.values()))
+
+    def stats(self, debug: bool = False) -> Dict[str, Any]:
+        """
+        Returns stats about the replay buffer.
+
+        Returns:
+            A dictionary of stats.
+        """
+        stat = {
+            "add_batch_time_ms": round(1000 * self.add_batch_timer.mean, 3),
+            "replay_time_ms": round(1000 * self.replay_timer.mean, 3),
+            "update_priorities_time_ms": round(
+                1000 * self.update_priorities_timer.mean, 3
+            ),
+            "est_size_bytes": 0
+        }
+        for policy_id, replay_buffer in self.replay_buffers.items():
+            stat["est_size_bytes"] += replay_buffer.stats(debug=debug).get("est_size_bytes", 0)
+            stat.update(
+                {"policy_{}".format(policy_id): replay_buffer.stats(debug=debug)}
+            )
+        return stat

@@ -11,13 +11,22 @@ from replay_buffer.mpber_ram_saver_v7 import MultiAgentPrioritizedBlockReplayBuf
 from run_trainer import run_loop
 
 torch.manual_seed(10)
+parser = argparse.ArgumentParser()
+parser.add_argument("-R", "--run_name", dest="run_name", type=int)
+parser.add_argument("-S", "--setting", dest="setting_path", type=str)
+parser.add_argument("-L", "--log_path", dest="log_path", type=str)
+parser.add_argument("-C", "--checkpoint_path", dest="checkpoint_path", type=str)
+parser.add_argument("-E", "--env", dest="env_name", type=str)
+parser.add_argument("-SBZ", "--sbz", dest="sub_buffer_size", type=int)
 
-env_name = "PongNoFrameskip-v4"
-run_name = str(123)
-run_name = "APEX_DDQN_%s" % env_name + "_PBER_RAM_SAVER%s" % run_name
-log_path = "./logs/%s/%s" % (run_name, run_name)
-checkpoint_path = "./checkpoints/%s/%s" % (run_name, run_name)
-sub_buffer_size = 16
+# Config path
+env_name = parser.parse_args().env_name
+env_name += "NoFrameskip-v4"
+run_name = str(parser.parse_args().run_name)
+run_name = "APEX_DDQN_%s" % env_name + "_DPBER_RAM_SAVER%s" % run_name
+log_path = parser.parse_args().log_path
+checkpoint_path = parser.parse_args().checkpoint_path
+sub_buffer_size = int(parser.parse_args().sub_buffer_size)
 
 # Init Ray
 ray.init(
@@ -34,8 +43,8 @@ check_path(checkpoint_path)
 checkpoint_path = os.path.join(checkpoint_path, run_name)
 check_path(checkpoint_path)
 
-setting = Dynaconf(envvar_prefix="DYNACONF", settings_files="./settings/ddqn_atari.yaml")
-setting = check_path(setting)
+setting = parser.parse_args().setting_path
+setting = Dynaconf(envvar_prefix="DYNACONF", settings_files=setting)
 
 # Set Env
 hyper_parameters = setting.hyper_parameters.to_dict()
@@ -67,7 +76,7 @@ replay_buffer_config = {
 }
 hyper_parameters["replay_buffer_config"] = replay_buffer_config
 hyper_parameters["train_batch_size"] = int(hyper_parameters["train_batch_size"] / sub_buffer_size)
-hyper_parameters["optimizer"] = {"num_replay_buffer_shards": 10}
+hyper_parameters["optimizer"] = {"num_replay_buffer_shards": 1}
 
 # Set Trainer
 trainer = ApexDDQNWithDPBER(config=hyper_parameters, env="Atari")

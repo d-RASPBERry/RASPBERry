@@ -13,10 +13,10 @@ hyper_parameters:
   n_step: 3
   num_atoms: 1
   num_cpus_per_worker: 1
-  num_envs_per_worker: 8
+  num_envs_per_worker: 4
   num_gpus: 1
   num_gpus_per_worker: 0.01
-  num_workers: 5
+  num_workers: 2
   replay_buffer_config:
     capacity: 1000000
     prioritized_replay_alpha: 0.5
@@ -28,6 +28,6 @@ hyper_parameters:
   num_steps_sampled_before_learning_starts: 100000
 run: APEX
 log:
-  max_run: 1000
+  max_run: 10000
   log: 10
-  max_time: 24000
+  max_time: 240000

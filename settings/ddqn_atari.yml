@@ -15,9 +15,11 @@ hyper_parameters:
   num_atoms: 1
   num_cpus: 5
   num_gpus: 1
-  num_steps_sampled_before_learning_starts: 50000
+  num_workers: 1
+  num_envs_per_worker: 20
+  num_steps_sampled_before_learning_starts: 10000
   replay_buffer_config:
-    capacity: 1000000
+    capacity: 100000
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1
     type: MultiAgentPrioritizedReplayBuffer
@@ -26,6 +28,6 @@ hyper_parameters:
   train_batch_size: 32
 run: DDQN
 log:
-  max_run: 20000
+  max_run: 200
   log: 10
   max_time: 360000
