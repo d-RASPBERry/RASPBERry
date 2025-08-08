@@ -35,14 +35,14 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
                       >=0: 将指定维度从最后位置恢复到原始位置
     """
     t0 = time.time()
-    
+
     # 使用 unpack_array 恢复压缩的数组
     decompressed_obs_transposed = blosc.unpack_array(ma_batch["obs"][0])
     decompressed_new_obs_transposed = blosc.unpack_array(ma_batch["new_obs"][0])
 
     # 获取数据维度信息
     rank = len(decompressed_obs_transposed.shape)
-    
+
     if compress_base == -1:
         # 智能默认行为：将第0维（通常是batch维度）从最后位置移回开头
         if rank <= 1:
@@ -66,14 +66,14 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
             axes = list(range(rank))
             axes.pop()  # 移除最后一个维度
             axes.insert(compress_base, rank - 1)  # 插入到指定位置
-            
+
             decompressed_obs = np.transpose(decompressed_obs_transposed, axes)
             decompressed_new_obs = np.transpose(decompressed_new_obs_transposed, axes)
             transpose_type = f"dim_{compress_base}_from_end_{rank}D"
 
     t1 = time.time()
     logger.debug(f"[Decompression] Blosc unpack_array & {transpose_type} transpose took: {t1 - t0:.4f}s")
-    
+
     data_dict = {
         "obs": decompressed_obs,
         "new_obs": decompressed_new_obs,
@@ -86,7 +86,7 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
 
     if "batch_indexes" in ma_batch:
         data_dict["batch_indexes"] = ma_batch["batch_indexes"]
-        
+
     return SampleBatch(data_dict)
 
 
@@ -109,10 +109,10 @@ def compress_sample_batch(sample_batch: SampleBatch, weight: float, compress_bas
     """
     obs_array = sample_batch["obs"]
     new_obs_array = sample_batch["new_obs"]
-    
+
     # 获取数据维度信息
     rank = len(obs_array.shape)
-    
+
     if compress_base == -1:
         # 智能默认行为：将第0维移到最后
         if rank <= 1:
@@ -136,7 +136,7 @@ def compress_sample_batch(sample_batch: SampleBatch, weight: float, compress_bas
             axes = list(range(rank))
             axes.pop(compress_base)
             axes.append(compress_base)
-            
+
             obs_transposed = np.transpose(obs_array, axes)
             new_obs_transposed = np.transpose(new_obs_array, axes)
             transpose_type = f"dim_{compress_base}_to_end_{rank}D"
@@ -157,13 +157,13 @@ def compress_sample_batch(sample_batch: SampleBatch, weight: float, compress_bas
         "truncateds": sample_batch["truncateds"],
         "weights": sample_batch["weights"],
     })
-    
+
     return data, weight
 
 
 class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
     """带压缩的优先级重放缓冲区"""
-    
+
     def __init__(
             self,
             obs_space: Space,
@@ -193,7 +193,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
                 total_size += sys.getsizeof(sample_batch["obs"][0])
             if "new_obs" in sample_batch and hasattr(sample_batch["new_obs"], '__getitem__'):
                 total_size += sys.getsizeof(sample_batch["new_obs"][0])
-        
+
         return {
             "est_size_bytes": total_size,
             "num_entries": len(self._storage) * self.sub_buffer_size,
@@ -202,28 +202,27 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
     def sample(self, num_items: int, **kwargs) -> Optional[SampleBatch]:
         """重写采样方法以正确处理权重扩展"""
         batch = super(PrioritizedBlockReplayBuffer, self).sample(num_items, **kwargs)
-        
+
         # 修复权重扩展问题
-        if (batch is not None and 
-            "weights" in batch and 
-            batch.count > 0 and 
-            len(batch["weights"]) != batch.count):
-            
+        if (batch is not None and
+                "weights" in batch and
+                batch.count > 0 and
+                len(batch["weights"]) != batch.count):
             num_blocks = len(batch["weights"])
             samples_per_block = batch.count // num_blocks
             expanded_weights = np.repeat(batch["weights"], samples_per_block)
             batch["weights"] = expanded_weights
-        
+
         return batch
 
     def add(self, batch: SampleBatchType, **kwargs) -> None:
         """添加批次到缓冲区"""
         if not isinstance(batch, SampleBatch):
             return
-            
+
         buffer = self.base_buffer
         self.base_buffer.add(batch)
-        
+
         if buffer.full:
             data = buffer.sample()
             weights = data.get("weights")
@@ -233,16 +232,16 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
                     weight = 0.01
             else:
                 weight = 0.01
-                
+
             buffer.reset()
             self._sub_store.append([data, weight, self.compress_base])
-            
+
         if len(self._sub_store) == self.num_save:
             _list = split_list_into_n_parts(self._sub_store, n=self.split_mini_batch)
             result_ids = [compress_sample_batch_loop.remote(batch) for batch in _list]
             results = ray.get(result_ids)
             results = list(chain(*results))
-            
+
             for each in results:
                 self._add_single_batch(each[0], weight=each[1])
 
@@ -262,7 +261,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
 
         from ray.rllib.policy.sample_batch import concat_samples
         out = concat_samples(decompressed_samples)
-        
+
         return out
 
 
@@ -304,11 +303,11 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                     "This buffer will run in `independent` mode."
                 )
             kwargs["replay_mode"] = "independent"
-        
+
         # 存储块级参数以供后续使用
         self.sub_buffer_size = sub_buffer_size
         self.compress_base = compress_base
-        
+
         pber_config = {
             "type": PrioritizedBlockReplayBuffer,
             "action_space": action_space,
@@ -323,7 +322,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             "store": store,
             "compress_base": compress_base,
         }
-        
+
         MultiAgentPrioritizedReplayBuffer.__init__(
             self,
             capacity=capacity,
@@ -348,14 +347,14 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         """更新底层重放缓冲区的优先级，直接使用块级逻辑"""
         with self.update_priorities_timer:
             for policy_id, (batch_indexes, td_errors) in prio_dict.items():
-                
+
                 # 直接执行块级逻辑转换
                 block_indices, block_priorities = self._convert_to_block_priorities(
                     batch_indexes, td_errors
                 )
                 logger.debug(f"Block priority update: "
-                           f"{len(batch_indexes)} samples -> {len(block_indices)} blocks")
-                
+                             f"{len(batch_indexes)} samples -> {len(block_indices)} blocks")
+
                 # 更新底层缓冲区
                 if hasattr(self.replay_buffers[policy_id], 'update_priorities'):
                     self.replay_buffers[policy_id].update_priorities(
@@ -378,15 +377,15 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             # 重新整形为块结构
             block_indices = batch_indexes.reshape(-1, self.sub_buffer_size)[:, 0]
             block_td_errors = td_errors.reshape(-1, self.sub_buffer_size).mean(axis=1)
-            
+
             # 计算块级优先级
             block_priorities = np.abs(block_td_errors) + self.prioritized_replay_eps
-            
+
             logger.debug(f"Block conversion: {batch_indexes.shape} -> {block_indices.shape}, "
-                        f"TD errors: {td_errors.shape} -> {block_td_errors.shape}")
-            
+                         f"TD errors: {td_errors.shape} -> {block_td_errors.shape}")
+
             return block_indices, block_priorities
-            
+
         except Exception as e:
             logger.warning(f"Block conversion failed: {e}, falling back to direct processing")
             # 回退到原始处理方式
@@ -412,10 +411,10 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                     "indicate an issue.".format(type(self).__name__)
                 )
             return
-            
+
         batch = batch.copy()
         batch = batch.as_multi_agent()
-        
+
         with self.add_batch_timer:
             pids_and_batches = self._maybe_split_into_policy_batches(batch)
             for policy_id, sample_batch in pids_and_batches.items():
@@ -436,20 +435,20 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         """采样数据并智能解压"""
         t_start = time.time()
         logger.debug(f"Starting sample for policy '{policy_id}' with {num_items} items.")
-        
+
         kwargs = merge_dicts_with_warning(self.underlying_buffer_call_args, kwargs)
 
         with self.replay_timer:
             if self.replay_mode == ReplayMode.LOCKSTEP:
                 assert policy_id is None, "`policy_id` specifier not allowed in `lockstep` mode!"
-                
+
                 raw_sample = self.replay_buffers["__all__"].sample(num_items, **kwargs)
                 if raw_sample is None:
                     return None
-                    
+
                 decompressed_sample = decompress_sample_batch(raw_sample, self.compress_base)
                 return decompressed_sample
-                
+
             elif policy_id is not None:
                 sample = self.replay_buffers[policy_id].sample(num_items, **kwargs)
                 if sample is None:
@@ -458,7 +457,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 # 智能判断是否需要解压
                 if self._is_compressed(sample):
                     sample = decompress_sample_batch(sample, self.compress_base)
-                
+
                 ma_batch = MultiAgentBatch({policy_id: sample}, sample.count)
                 return ma_batch
 
@@ -482,8 +481,8 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
 
     def _is_compressed(self, sample: SampleBatch) -> bool:
         """判断样本是否仍然是压缩状态"""
-        return ('obs' in sample and 
-                isinstance(sample['obs'], np.ndarray) and 
+        return ('obs' in sample and
+                isinstance(sample['obs'], np.ndarray) and
                 sample['obs'].dtype == object)
 
     def stats(self, debug: bool = False) -> Dict[str, Any]:
@@ -496,7 +495,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             ),
             "est_size_bytes": 0
         }
-        
+
         total_estimated_bytes = 0
         for policy_id, replay_buffer in self.replay_buffers.items():
             policy_stats = replay_buffer.stats(debug=debug)
@@ -520,14 +519,14 @@ def _parallel_node_sample(node_data, compress_base=-1):
 
 class ParallelPrioritizedBlockReplayBuffer(PrioritizedBlockReplayBuffer):
     """使用node对象池的并行优化版本"""
-    
-    def __init__(self, *args, enable_parallel_nodes: bool = True, 
+
+    def __init__(self, *args, enable_parallel_nodes: bool = True,
                  node_pool_size: int = 50, parallel_threshold: int = 4, **kwargs):
         super().__init__(*args, **kwargs)
         self.enable_parallel_nodes = enable_parallel_nodes
         self.node_pool_size = node_pool_size
         self.parallel_threshold = parallel_threshold
-    
+
     def _encode_sample(self, idxes: List[int]) -> SampleBatch:
         """使用node对象池进行并行sample"""
         samples = []
@@ -547,4 +546,4 @@ class ParallelPrioritizedBlockReplayBuffer(PrioritizedBlockReplayBuffer):
             decompressed_samples = ray.get(futures)
 
         from ray.rllib.policy.sample_batch import concat_samples
-        return concat_samples(decompressed_samples) 
+        return concat_samples(decompressed_samples)

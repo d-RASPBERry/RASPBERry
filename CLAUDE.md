@@ -9,13 +9,21 @@ RASPBERry is a research project implementing **RAM-Saving Prioritized Block Expe
 ## Environment Setup
 
 ```bash
-# Create conda environment from specification
+# Create conda environment from specification (primary option)
 conda env create -f environment.yml
 conda activate gymnasium
 
-# Alternative environment file available
+# Alternative environment file available (minimal setup)
 conda env create -f ber_environment.yml
+conda activate ber
 ```
+
+**Dependencies:**
+- Python 3.9
+- PyTorch 1.12.1+cu113 (CUDA 11.3)
+- Ray 2.8.0 with all components
+- Gymnasium 0.28.1
+- OpenCV, blosc compression, dynaconf for configuration
 
 ## Common Commands
 
@@ -34,6 +42,20 @@ python atari_d_RASPBERry.py --env BreakoutNoFrameskip-v4 --num-workers 2 --block
 **Generic Training Launcher:**
 ```bash
 python run_trainer.py  # Uses YAML configs from settings/
+```
+
+**Training Script Arguments (common patterns):**
+```bash
+# Example with all key parameters
+python atari_RASPBERry.py -R 1 -S settings/ddqn_atari.yml -L logs/ -C checkpoints/ -E Pong -SBZ 8
+
+# Argument meanings:
+# -R/--run_name: Run identifier number
+# -S/--setting: Path to YAML configuration file
+# -L/--log_path: Directory for training logs
+# -C/--checkpoint_path: Directory for model checkpoints
+# -E/--env: Environment name (automatically appends "NoFrameskip-v4")
+# -SBZ/--sbz: Sub-buffer size for block-based replay
 ```
 
 ### Environment-Specific Entry Points
@@ -98,16 +120,37 @@ The core innovation is block-based experience storage with compression:
 
 **Ray Configuration:**
 - Distributed training uses Ray with custom system configs
-- Typical setup: 20 CPUs, 1 GPU
+- Typical setup: 5-20 CPUs, 1 GPU (configurable per script)
 - Dashboard disabled by default for resource efficiency
+- Custom GCS config: `{"maximum_gcs_destroyed_actor_cached_count": 200}`
+- Ray initialization example: `ray.init(num_cpus=5, num_gpus=1, include_dashboard=False)`
 
 ## Important Notes
 
-- No formal test suite detected - validation through training runs
+- **No formal test suite** - validation through training runs and manual testing scripts
+- **No linting/formatting setup** - code style varies across files
 - Uses PyTorch with CUDA 11.3 support
 - Requires significant computational resources for distributed training
 - Research codebase - some experimental features may be unstable
 - Block size tuning is critical for memory/performance balance
+- Mixed Chinese/English comments in some files (especially compression utilities)
+
+## Development Guidelines
+
+**Configuration Management:**
+- All hyperparameters defined in YAML files under `settings/`
+- Use `dynaconf` for dynamic configuration loading
+- Environment variables prefixed with `DYNACONF_`
+
+**Training Output:**
+- Checkpoints saved to `checkpoints/{run_name}/`
+- Training logs in JSON format at `logs/{run_name}/{iteration}.json`
+- Config snapshots saved as `.pyl` files (pickled dictionaries)
+
+**Memory Profiling:**
+- Buffer statistics automatically tracked and logged
+- Estimated memory usage calculated and reported in GB
+- Compression ratios monitored for performance tuning
 
 ## File Naming Conventions
 
