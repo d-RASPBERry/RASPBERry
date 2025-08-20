@@ -4,8 +4,10 @@ from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
 from ray.rllib.env.wrappers.atari_wrappers import wrap_deepmind
 from typing import Dict, Tuple, Union
 import gymnasium
+import warnings
 import numpy as np
 import os
+import yaml
 
 agent_dir = {
     0: '>',
@@ -25,14 +27,49 @@ def check_path(path):
 
 
 def convert_np_arrays(obj):
-    if isinstance(obj, np.ndarray):
+    """Convert numpy arrays and filter out non-JSON-serializable objects."""
+    if obj is None:
+        return None
+    elif isinstance(obj, np.ndarray):
         return obj.tolist()
+    elif isinstance(obj, (np.integer, np.floating)):
+        return obj.item()  # Convert numpy scalars to Python scalars
     elif isinstance(obj, dict):
-        return {key: convert_np_arrays(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_np_arrays(item) for item in obj]
+        # Filter out non-serializable values
+        result = {}
+        for key, value in obj.items():
+            if not isinstance(value, type):  # Skip type objects (ABCMeta, etc.)
+                converted = convert_np_arrays(value)
+                if converted is not None or value is None:
+                    result[key] = converted
+        return result
+    elif isinstance(obj, (list, tuple)):
+        # Filter out non-serializable items
+        result = []
+        for item in obj:
+            if not isinstance(item, type):  # Skip type objects
+                converted = convert_np_arrays(item)
+                if converted is not None or item is None:
+                    result.append(converted)
+        return result
+    elif isinstance(obj, type):
+        # Convert type objects to string representation
+        return str(obj)
+    elif hasattr(obj, '__dict__') and not callable(obj):
+        # Convert objects with __dict__ to dict representation
+        try:
+            return convert_np_arrays(obj.__dict__)
+        except:
+            return str(obj)
     else:
-        return obj
+        # For basic types (int, float, str, bool), return as is
+        # For other objects, convert to string
+        try:
+            import json
+            json.dumps(obj)  # Test if it's JSON serializable
+            return obj
+        except (TypeError, ValueError):
+            return str(obj)
 
 
 def flatten_dict(d):
@@ -180,6 +217,56 @@ def to_numpy(grid, allow, agent, vis_mask=None):
 def env_creator(env_config):
     if env_config["id"][0:8] == "MiniGrid":
         return minigrid_env_creator(env_config)
+    elif env_config["id"][0:5] == "Atari":
+        env_id = env_config["id"].replace("Atari-", "")
+        env = gymnasium.make(env_id)
+        return wrap_deepmind(env)
+    elif env_config["id"] == "CarRacing":
+        return gymnasium.make("CarRacing")
     else:
-        env = gymnasium.make(env_config["id"])
-        return wrap_deepmind(env, noframeskip=True)
+        raise NotImplementedError(f"Environment {env_config['id']} not supported")
+
+
+def load_config(config_path: str) -> Dict:
+    """
+    Load YAML configuration file with support for extends inheritance.
+    
+    Args:
+        config_path: Path to the YAML configuration file
+        
+    Returns:
+        Configuration dictionary with inheritance resolved
+    """
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Handle extends inheritance
+    if 'extends' in config:
+        base_path = os.path.join(os.path.dirname(config_path), config['extends'])
+        base_config = load_config(base_path)
+        # Remove extends key
+        del config['extends']
+        # Merge configs (current config overrides base)
+        config = deep_merge_config(base_config, config)
+    
+    return config
+
+
+def deep_merge_config(base: Dict, override: Dict) -> Dict:
+    """
+    Deep merge two configuration dictionaries.
+    
+    Args:
+        base: Base configuration dictionary
+        override: Override configuration dictionary
+        
+    Returns:
+        Merged configuration dictionary
+    """
+    result = base.copy()
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = deep_merge_config(result[key], value)
+        else:
+            result[key] = value
+    return result

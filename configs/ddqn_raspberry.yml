@@ -1,0 +1,10 @@
+# 继承基础配置
+extends: templates/ddqn_base.yml
+
+hyper_parameters:
+  replay_buffer_config:
+    capacity: 1000000
+    prioritized_replay_alpha: 0.5
+    prioritized_replay_beta: 0.4
+    prioritized_replay_eps: 1e-6
+    type: MultiAgentPrioritizedBlockReplayBuffer

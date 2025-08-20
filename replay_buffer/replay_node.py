@@ -36,23 +36,19 @@ class BaseBuffer(ABC):
         self.obs = np.zeros(np.concatenate([[self.buffer_size], self.obs_space]), dtype=obs_space.dtype)
         self.new_obs = np.zeros(np.concatenate([[self.buffer_size], self.obs_space]), dtype=obs_space.dtype)
         
-        # 增强动作空间支持，特别是连续动作空间
+        # 按 action_space 分配动作缓冲区（严格依赖环境声明）
         if isinstance(action_space, spaces.Discrete):
             self.actions = np.zeros(self.buffer_size, dtype=np.int32)
         elif isinstance(action_space, spaces.Box):
-            # SAC等连续控制算法的主要场景
             action_shape = action_space.shape
             self.actions = np.zeros((self.buffer_size, *action_shape), dtype=np.float32)
         elif isinstance(action_space, spaces.MultiDiscrete):
             action_shape = action_space.shape
             self.actions = np.zeros((self.buffer_size, *action_shape), dtype=np.int32)
         else:
-            # 更智能的回退策略 - 根据action_space的属性推断
             if hasattr(action_space, 'shape') and len(action_space.shape) > 0:
-                # 有形状信息，假设是连续的
                 self.actions = np.zeros((self.buffer_size, *action_space.shape), dtype=np.float32)
             else:
-                # 标量动作，保持原有逻辑
                 self.actions = np.zeros(self.buffer_size, dtype=np.int32)
         
         # 其他字段正常初始化
@@ -61,44 +57,6 @@ class BaseBuffer(ABC):
         self.truncateds = np.zeros(self.buffer_size, dtype=np.int32)
         self.weights = np.zeros(self.buffer_size, dtype=np.float32)
         self.t = np.zeros(self.buffer_size, dtype=np.int32)
-
-    def _init_action_buffer_from_space(self, action_space):
-        """保持原有的动作空间处理逻辑"""
-        if isinstance(action_space, spaces.Discrete):
-            self.actions = np.zeros(self.buffer_size, dtype=np.int32)
-        elif isinstance(action_space, spaces.Box):
-            action_shape = action_space.shape
-            self.actions = np.zeros((self.buffer_size, *action_shape), dtype=np.float32)
-        self._action_shape_initialized = True
-
-    def _initialize_action_buffer(self, sample_actions):
-        """根据第一个样本动态初始化动作缓冲区"""
-        if self._action_shape_initialized:
-            return
-            
-        # 从实际样本推断动作形状和类型
-        if isinstance(sample_actions, np.ndarray):
-            if sample_actions.ndim == 1:
-                # 单个样本
-                action_shape = sample_actions.shape
-                action_dtype = sample_actions.dtype
-            else:
-                # 批量样本
-                action_shape = sample_actions.shape[1:]  # 去掉batch维度
-                action_dtype = sample_actions.dtype
-        else:
-            # 处理标量或其他类型
-            action_shape = ()
-            action_dtype = np.float32 if isinstance(sample_actions, (float, np.floating)) else np.int32
-        
-        # 分配动作缓冲区
-        if action_shape == ():
-            self.actions = np.zeros(self.buffer_size, dtype=action_dtype)
-        else:
-            self.actions = np.zeros((self.buffer_size, *action_shape), dtype=action_dtype)
-        
-        self._action_shape_initialized = True
-        logger.debug(f"动态初始化动作缓冲区: shape={action_shape}, dtype={action_dtype}")
 
     def size(self) -> int:
         """
@@ -109,12 +67,7 @@ class BaseBuffer(ABC):
         return self.pos
 
     def add(self, batch: SampleBatch) -> None:
-        """添加元素到缓冲区，动态处理动作空间"""
-        # 获取样本动作并初始化动作缓冲区
-        sample_actions = batch.get("actions")
-        if not self._action_shape_initialized:
-            self._initialize_action_buffer(sample_actions)
-        
+        """添加元素到缓冲区"""
         shape = batch.get("obs").shape[0]
         
         # 边界检查
@@ -125,10 +78,9 @@ class BaseBuffer(ABC):
         self.obs[self.pos:self.pos + shape] = np.array(batch.get("obs")[:shape])
         self.new_obs[self.pos:self.pos + shape] = np.array(batch.get("new_obs")[:shape])
         
-        # 动态处理动作数据
-        actions_data = sample_actions[:shape]
+        # 动作数据（根据 action_space 分配的缓冲区写入；允许 (B,1)->(B,) 的轻量兼容）
+        actions_data = batch.get("actions")[:shape]
         if self.actions.ndim == 1 and actions_data.ndim > 1:
-            # 如果缓冲区是1D但数据是多维，展平处理
             self.actions[self.pos:self.pos + shape] = actions_data.flatten()[:shape]
         else:
             self.actions[self.pos:self.pos + shape] = actions_data
@@ -137,7 +89,6 @@ class BaseBuffer(ABC):
         self.terminateds[self.pos:self.pos + shape] = batch.get("terminateds")[:shape]
         self.truncateds[self.pos:self.pos + shape] = batch.get("truncateds")[:shape]
         
-        # 权重处理保持不变
         batch_weights = batch.get("weights")
         if batch_weights is not None:
             self.weights[self.pos:self.pos + shape] = batch_weights[:shape]
@@ -152,7 +103,6 @@ class BaseBuffer(ABC):
         """
         Add a new batch of transitions to the buffer
         """
-        # Do a for loop along the batch axis
         for data in zip(*args):
             self.add(*data)
 
@@ -202,10 +152,8 @@ class CompressedReplayNode(BaseBuffer):
     def sample(self):
         """sample时自动处理压缩数据"""
         if not self._compressed:
-            # 未压缩，使用父类方法
             return super().sample()
             
-        # 压缩数据，需要解压缩
         from .mpber_ram_saver_v8 import decompress_sample_batch
         return decompress_sample_batch(self._compressed_storage, self.compress_base)
         

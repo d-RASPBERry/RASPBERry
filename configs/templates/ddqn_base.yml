@@ -1,0 +1,54 @@
+# 基础路径配置
+paths:
+  log_path: "logs"
+  checkpoint_path: "checkpoints"
+
+# 通用训练设置
+training:
+  log_freq: 10
+  checkpoint_freq: 100
+
+hyper_parameters:
+  # 环境配置
+  framework: torch
+  
+  # 核心DQN参数
+  lr: 6.25e-05
+  gamma: 0.99
+  double_q: true
+  dueling: false
+  n_step: 1
+  noisy: false
+  num_atoms: 1
+  
+  # 网络架构
+  hiddens: [512]
+  
+  # Adam优化器
+  adam_epsilon: 0.00015
+  
+  # 目标网络更新
+  target_network_update_freq: 10000
+  
+  # 学习调度
+  num_steps_sampled_before_learning_starts: 50000
+  min_sample_timesteps_per_iteration: 4000
+  
+  # 探索参数
+  final_epsilon: 0.01
+  epsilon_timesteps: 1000000
+  
+  # 资源配置
+  num_gpus: 1
+  num_cpus_per_worker: 1
+  
+  # 回放缓冲区参数
+  replay_buffer_config:
+    capacity: 100000
+    prioritized_replay_alpha: 0.5
+    prioritized_replay_beta: 1
+    type: 'MultiAgentPrioritizedReplayBuffer'
+
+# log 策略
+log_freq: 10
+checkpoint_freq: 100

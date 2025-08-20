@@ -1,5 +1,7 @@
 import time
 import logging
+import json
+import os
 from ray.rllib.utils.typing import EnvCreator
 from ray.rllib.algorithms.dqn import DQN
 from ray.rllib.algorithms.simple_q.simple_q import SimpleQ
@@ -11,6 +13,7 @@ from ray.rllib.utils.metrics import NUM_ENV_STEPS_SAMPLED, NUM_AGENT_STEPS_SAMPL
 from ray.rllib.execution.common import LAST_TARGET_UPDATE_TS, NUM_TARGET_UPDATES
 from ray.rllib.utils.replay_buffers.utils import sample_min_n_steps_from_buffer, update_priorities_in_replay_buffer
 from ray.rllib.algorithms.dqn.dqn import calculate_rr_weights
+from utils import flatten_dict, convert_np_arrays
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +29,31 @@ class DDQNWithMPERAndLogging(DQN):
 
     def _init(self, config: AlgorithmConfigDict, env_creator: EnvCreator) -> None:
         super(DDQNWithMPERAndLogging, self)._init(config, env_creator)
+        self.iteration = 0
+        
+        # Setup JSON output
+        self.json_output_dir = config.get("json_output_dir", "logs")
+        os.makedirs(self.json_output_dir, exist_ok=True)
+        self.json_output_file = os.path.join(self.json_output_dir, "training_results.json")
+    
+    def _save_result_to_json(self, result: dict) -> None:
+        """Save training result to JSON file."""
+        try:
+            # Use utils functions to clean the result
+            flattened = flatten_dict(result)
+            clean_result = convert_np_arrays(flattened)
+            
+            output_data = {
+                "iteration": self.iteration,
+                "result": clean_result
+            }
+            
+            with open(self.json_output_file, "w" if self.iteration == 0 else "a", encoding="utf-8") as f:
+                json.dump(output_data, f, ensure_ascii=False)
+                f.write("\n")
+                
+        except Exception as e:
+            logger.warning(f"Failed to save JSON result: {e}")
 
     @override(SimpleQ)
     def training_step(self) -> ResultDict:
@@ -133,6 +161,11 @@ class DDQNWithMPERAndLogging(DQN):
         for each in ["sample", "train", "update", "store"]:
             self.time_usage[each + "_rate"] = self.time_usage[each] / self.time_usage["all"]
         train_results["time_usage"] = self.time_usage
+        
+        # Save result to JSON file
+        self._save_result_to_json(train_results)
+        self.iteration += 1
+        
         return train_results
 
     @staticmethod

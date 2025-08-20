@@ -1,4 +1,4 @@
-name: raspberry
+name: d_raspberry.py
 channels:
   - defaults
   - conda-forge
