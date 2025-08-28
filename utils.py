@@ -4,7 +4,6 @@ from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
 from ray.rllib.env.wrappers.atari_wrappers import wrap_deepmind
 from typing import Dict, Tuple, Union
 import gymnasium
-import warnings
 import numpy as np
 import os
 import yaml
@@ -85,9 +84,7 @@ def flatten_dict(d):
 
 # This function is copied from:
 # https://github.com/DLR-RM/stable-baselines3/
-def get_obs_shape(
-        observation_space: spaces.Space,
-) -> Union[Tuple[int, ...], Dict[str, Tuple[int, ...]]]:
+def get_obs_shape(observation_space: spaces.Space) -> Union[None, dict[str, Union[tuple[int, ...], dict[str, tuple[int, ...]]]], tuple[int], tuple[int, ...]]:
     """
     Get the shape of the observation (useful for the buffers).
 
@@ -107,6 +104,8 @@ def get_obs_shape(
         return int(observation_space.n),
     elif isinstance(observation_space, spaces.Dict):
         return {key: get_obs_shape(subspace) for (key, subspace) in observation_space.spaces.items()}
+    else:
+        return None
 
 
 # This function is copied from:
@@ -239,7 +238,7 @@ def load_config(config_path: str) -> Dict:
     """
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
-    
+
     # Handle extends inheritance
     if 'extends' in config:
         base_path = os.path.join(os.path.dirname(config_path), config['extends'])
@@ -248,7 +247,7 @@ def load_config(config_path: str) -> Dict:
         del config['extends']
         # Merge configs (current config overrides base)
         config = deep_merge_config(base_config, config)
-    
+
     return config
 
 

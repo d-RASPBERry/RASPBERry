@@ -1,5 +1,5 @@
 # 继承基础配置
-extends: templates/ddqn_base.yml
+extends: templates/sac_base.yml
 
 hyper_parameters:
   replay_buffer_config:

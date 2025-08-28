@@ -2,13 +2,10 @@ import ray
 import logging
 import numpy as np
 import time
-import blosc
-import sys
-from itertools import chain
 from gymnasium.spaces import Space
 from replay_buffer.raspberry import PrioritizedBlockReplayBuffer, decompress_sample_batch
 from typing import Dict, Optional, Any, List, Union
-from ray.rllib.utils.typing import PolicyID, SampleBatchType  # 修复导入
+from ray.rllib.utils.typing import PolicyID, SampleBatchType
 from ray.rllib.utils.annotations import override, DeveloperAPI
 from ray.rllib.utils.replay_buffers import StorageUnit
 from ray.rllib.utils.replay_buffers.replay_buffer import ReplayBuffer
@@ -22,6 +19,7 @@ from utils import split_list_into_n_parts
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 @DeveloperAPI
 class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
@@ -65,6 +63,8 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         # 存储块级参数以供后续使用
         self.sub_buffer_size = sub_buffer_size
         self.compress_base = compress_base
+        # 确保 prioritized_replay_eps 是数值类型
+        self.prioritized_replay_eps = float(prioritized_replay_eps)
 
         pber_config = {
             "type": PrioritizedBlockReplayBuffer,

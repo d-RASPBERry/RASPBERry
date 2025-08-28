@@ -1,0 +1,36 @@
+# 基础路径配置
+paths:
+  log_path: "logs"
+  checkpoint_path: "checkpoints"
+
+# 通用训练设置
+training:
+  log_freq: 10
+  checkpoint_freq: 100
+
+hyper_parameters:
+  # 环境配置
+  framework: torch
+
+  # 核心SAC参数
+  lr: 3e-4
+  gamma: 0.99
+  tau: 0.005                       # 软更新参数
+  target_entropy: "auto"           # 自动计算目标熵
+  initial_alpha: 1.0               # 初始温度参数
+  n_step: 1
+
+  # 网络架构
+  hiddens: [256, 256]              # SAC通常使用更深的网络
+
+  # 学习调度
+  num_steps_sampled_before_learning_starts: 10000
+  min_sample_timesteps_per_iteration: 1000
+
+  # 资源配置
+  num_gpus: 1
+  num_workers: 0                   # SAC通常不需要多个rollout workers
+
+# log 策略
+log_freq: 10
+checkpoint_freq: 100

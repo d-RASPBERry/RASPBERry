@@ -1,49 +1,44 @@
 """Base trainer class for RASPBERry project."""
-
 import ray
 import time
 import logging
 import warnings
+from ray.tune.registry import register_env
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
-from dynaconf import Dynaconf
 from pathlib import Path
-from utils import load_config
+from utils import env_creator, load_config
 
 
 class BaseTrainer(ABC):
-    """Abstract base class for trainers supporting both RASPBERry and Ray PER modes."""
+    """Abstract base class for reinforcement learning trainers."""
 
     def __init__(self,
                  config: str,
                  env_name: str,
-                 buffer_type: str,
+                 run_name: str,
                  log_path: Optional[str] = None,
                  checkpoint_path: Optional[str] = None):
         """Initialize common trainer state and I/O paths.
 
         Args:
-            config: High-level str configuration for algorithm/env/buffer.
+            config: Path to YAML configuration file containing algorithm/env/buffer settings.
             env_name: Short environment name used in the `run_name`.
-            buffer_type: Replay buffer type label (e.g., "RASPBERry", "PER").
             log_path: Optional root directory to store logs; a subfolder `run_name` is created.
             checkpoint_path: Optional root directory to store checkpoints; a subfolder `run_name` is created.
 
         Notes:
             - `run_name` is `{env_name}_YYYYMMDD_HHMMSS`.
-            - Subclasses must later set up the concrete RLlib `self.trainer` in `init_algorithm()`.
+            - Subclasses must implement `_filter_result()` and `init_algorithm()`.
         """
+        self._setup_config(config)
         self.start_time = time.time()
         self.env_name = env_name
-        self.buffer_type = buffer_type
-
-        self.config = self._setup_config(config, buffer_type)
-        self.run_name = f"{env_name}_{time.time_ns()}"
+        self.current_iteration = 0
+        self.run_name = f"{run_name}_{time.time_ns()}"
         self.trainer = None
-
         self.log_freq = self.config.get("log_freq")
         self.checkpoint_freq = self.config.get("checkpoint_freq")
-        self.current_iteration = 0
         self.log_path = Path(log_path) / self.run_name if log_path else None
         if self.log_path:
             self.log_path.mkdir(parents=True, exist_ok=True)
@@ -53,29 +48,33 @@ class BaseTrainer(ABC):
             self.checkpoint_path.mkdir(parents=True, exist_ok=True)
 
         self._setup_logger()
-        self.logger.info(f"🚀 Initializing {self.__class__.__name__}: {self.run_name} ({self.buffer_type})")
+        self.logger.info(f"🚀 Initializing {self.__class__.__name__}: {self.run_name}")
 
-    def _setup_config(self, config: str, buffer_type: str) -> Dynaconf:
-        """Load configuration and validate buffer compatibility.
+    def setup_environment(self) -> str:
+        """设置和注册训练环境，返回环境ID。"""
+        self.log(f"设置环境{self.env_name}", "TRAIN")
+        register_env(self.env_name, env_creator)
+        self.log(f"✓ 环境 {self.env_name} 注册成功", "TRAIN")
+        return self.env_name
 
-        Default implementation provides common config loading using utils.config_loader.
-        Subclasses can override to add algorithm-specific validation.
+    def _setup_config(self, config: str):
+        """Load configuration from YAML file.
 
         Args:
-            config: Path to YAML configuration file.
-            buffer_type: Replay buffer type label for compatibility validation.
+            config: Path to YAML configuration file containing all settings.
 
         Returns:
-            Loaded Dynaconf configuration object.
-
-        Expected responsibilities:
-            - Load configuration from file path.
-            - Validate `buffer_type` compatibility with the algorithm.
-            - Apply/merge buffer-specific settings if needed.
-            - Prepare any fields later used by `init_algorithm()`.
+            Configuration dictionary.
         """
+        # Load configuration from YAML file path
         config_dict = load_config(config)
-        return Dynaconf(settings=config_dict)
+
+        # Set default values for logging and checkpointing if not present
+        if config_dict.get('log_freq') is None:
+            config_dict['log_freq'] = 10
+        if config_dict.get('checkpoint_freq') is None:
+            config_dict['checkpoint_freq'] = 100
+        self.config = config_dict
 
     def _setup_logger(self) -> None:
         """Configure a stream logger and optional file logger under `log_path`.
@@ -105,7 +104,7 @@ class BaseTrainer(ABC):
         if category in ["TRAIN", "BUFFER", "CHECKPOINT"]:
             self.logger.info(f"[{category}] {message}")
         else:
-            self.logger.info(message)
+            self.logger.info(f"[UNKNOWN] {message}")
 
     @abstractmethod
     def _filter_result(self, iteration: int, result: Dict[str, Any]) -> Dict[str, Any]:
@@ -129,13 +128,13 @@ class BaseTrainer(ABC):
         result = self.trainer.train()
         self.current_iteration = iteration + 1
         stats = self._filter_result(iteration, result)
-
-        if iteration % self.log_freq == 0:
+        # skip first 50 iter log
+        if self.current_iteration > self.checkpoint_freq and iteration % self.log_freq == 0:
             reward = stats.get("reward", "N/A")
             timesteps = stats.get("timesteps", "N/A")
             self.log(f"Iter {iteration:4d} | Reward: {reward} | Timesteps: {timesteps}", "TRAIN")
 
-        if iteration % self.checkpoint_freq == 0 and self.checkpoint_path:
+        if self.current_iteration > self.checkpoint_freq and iteration % self.checkpoint_freq == 0 and self.checkpoint_path:
             checkpoint_path = self.checkpoint_path / f"checkpoint_{iteration}"
             self.trainer.save(str(checkpoint_path))
             self.log(f"Checkpoint saved: {checkpoint_path}", "CHECKPOINT")
