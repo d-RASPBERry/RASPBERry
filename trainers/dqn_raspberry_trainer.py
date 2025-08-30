@@ -98,6 +98,11 @@ class DQNRaspberryTrainer(BaseTrainer):
 
         # Framework settings
         dqn_config = dqn_config.framework(hyper_parameters["framework"])
+        
+        # 设置随机种子
+        if hyper_parameters.get("seed") is not None:
+            dqn_config = dqn_config.framework(hyper_parameters["framework"], torch_compile=False, seed=hyper_parameters["seed"])
+            self.log(f"设置随机种子: {hyper_parameters['seed']}", "TRAIN")
 
         # Training parameter settings
         dqn_config = dqn_config.training(
