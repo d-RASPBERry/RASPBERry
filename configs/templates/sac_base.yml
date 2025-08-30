@@ -27,6 +27,10 @@ hyper_parameters:
   num_steps_sampled_before_learning_starts: 10000
   min_sample_timesteps_per_iteration: 1000
 
+  # 训练批次配置
+  train_batch_size: 256            # SAC通常使用较大批次
+  rollout_fragment_length: 1       # SAC通常使用单步rollout
+  
   # 资源配置
   num_gpus: 1
   num_workers: 0                   # SAC通常不需要多个rollout workers
