@@ -5,6 +5,7 @@ Simple DQN Trainer example using Ray PER.
 from trainers.dqn_raspberry_trainer import DQNRaspberryTrainer
 from utils import env_creator
 
+
 def main():
     env_in = "Pong"
     env_name = f"Atari-{env_in}NoFrameskip-v4"
@@ -20,6 +21,7 @@ def main():
         checkpoint_path=f"./checkpoints/Atari/{env_in}/",
         obs_space=game.observation_space,
         action_space=game.action_space,
+        mlflow="./configs/mlflow.yml",
     )
     # Run training
     trainer.run(

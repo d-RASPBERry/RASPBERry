@@ -28,7 +28,8 @@ class DQNTrainer(BaseTrainer):
                  env_name: str,
                  run_name: str,
                  log_path: Optional[str] = None,
-                 checkpoint_path: Optional[str] = None):
+                 checkpoint_path: Optional[str] = None,
+                 mlflow: str = None):
         """
         Initialize DQN trainer with Ray's native PER buffer.
 
@@ -38,7 +39,7 @@ class DQNTrainer(BaseTrainer):
             log_path: Optional root directory to store logs
             checkpoint_path: Optional root directory to store checkpoints
         """
-        super().__init__(config, env_name, run_name, log_path, checkpoint_path)
+        super().__init__(config, env_name, run_name, log_path, checkpoint_path, use_mlflow=mlflow)
 
     def init_algorithm(self) -> Any:
         """
@@ -47,17 +48,13 @@ class DQNTrainer(BaseTrainer):
         Returns:
             Configured DQN algorithm instance
         """
-        self.log("Creating DQN algorithm...", "TRAIN")
-
         # Setup environment
         env_id = self.setup_environment()
 
         # Get hyperparameters
         hyper_parameters = self.config["hyper_parameters"]
-        self.log(f"hyper-parameters: {hyper_parameters}", "TRAIN")
         # Use replay buffer configuration directly from YAML
         buffer_config = hyper_parameters["replay_buffer_config"]
-        self.log(f"Using buffer config: {buffer_config}", "BUFFER")
 
         # 确保关键参数的类型正确
         if "prioritized_replay_eps" in buffer_config:
@@ -101,7 +98,7 @@ class DQNTrainer(BaseTrainer):
             target_network_update_freq=hyper_parameters["target_network_update_freq"],
             replay_buffer_config=buffer_config
         )
-        
+
         # Reporting settings
         dqn_config = dqn_config.reporting(
             min_sample_timesteps_per_iteration=hyper_parameters["min_sample_timesteps_per_iteration"]
@@ -133,8 +130,7 @@ class DQNTrainer(BaseTrainer):
 
         # Build algorithm
         self.trainer = dqn_config.build()
-        self.trainer._env_id
-        self.log(f"✓ DQN algorithm created successfully", "TRAIN")
+        self.log("✓ DQN ready", "TRAIN")
 
         return self.trainer
 

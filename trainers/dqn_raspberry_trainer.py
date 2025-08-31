@@ -14,10 +14,10 @@ from gymnasium.spaces import Space
 import time
 import json
 
-from .base_trainer import BaseTrainer
+from .dqn_per_trainer import DQNTrainer
 
 
-class DQNRaspberryTrainer(BaseTrainer):
+class DQNRaspberryTrainer(DQNTrainer):
     """
     DQN trainer using RASPBERry replay buffer.
     
@@ -31,8 +31,9 @@ class DQNRaspberryTrainer(BaseTrainer):
                  run_name: str,
                  log_path: Optional[str] = None,
                  checkpoint_path: Optional[str] = None,
+                 mlflow: str = None,
                  obs_space: Space = None,
-                 action_space: Space = None,):
+                 action_space: Space = None, ):
         """
         Initialize DQN RASPBERry trainer.
         
@@ -42,7 +43,7 @@ class DQNRaspberryTrainer(BaseTrainer):
             log_path: Optional root directory to store logs
             checkpoint_path: Optional root directory to store checkpoints
         """
-        super().__init__(config, env_name, run_name, log_path, checkpoint_path)
+        super().__init__(config, env_name, run_name, log_path, checkpoint_path, mlflow)
         self.obs_space = obs_space
         self.action_space = action_space
 
@@ -53,20 +54,15 @@ class DQNRaspberryTrainer(BaseTrainer):
         Returns:
             Configured DQN algorithm instance
         """
-        self.log("Creating DQN algorithm with RASPBERry...", "TRAIN")
-
         # Setup environment first
         env_id = self.setup_environment()
 
         # Get and configure hyperparameters
         hyper_parameters = self.config["hyper_parameters"]
-        self.log(f"hyper-parameters: {hyper_parameters}", "TRAIN")
         # Use replay buffer configuration directly from YAML
         buffer_config = hyper_parameters["replay_buffer_config"]
         buffer_config["action_space"] = self.action_space
         buffer_config["obs_space"] = self.obs_space
-
-        self.log(f"Using buffer config: {buffer_config}", "BUFFER")
 
         # 确保关键参数的类型正确
         if "prioritized_replay_eps" in buffer_config:
@@ -75,7 +71,6 @@ class DQNRaspberryTrainer(BaseTrainer):
             buffer_config["prioritized_replay_alpha"] = float(buffer_config["prioritized_replay_alpha"])
         if "prioritized_replay_beta" in buffer_config:
             buffer_config["prioritized_replay_beta"] = float(buffer_config["prioritized_replay_beta"])
-        self.log(f"Using buffer config: {buffer_config}", "BUFFER")
         # Ensure buffer_config type is object rather than string
         if buffer_config["type"] == "MultiAgentPrioritizedBlockReplayBuffer":
             buffer_config["type"] = MultiAgentPrioritizedBlockReplayBuffer
@@ -109,7 +104,7 @@ class DQNRaspberryTrainer(BaseTrainer):
             target_network_update_freq=hyper_parameters["target_network_update_freq"],
             replay_buffer_config=buffer_config
         )
-        
+
         # Reporting settings
         dqn_config = dqn_config.reporting(
             min_sample_timesteps_per_iteration=hyper_parameters["min_sample_timesteps_per_iteration"]
@@ -138,42 +133,8 @@ class DQNRaspberryTrainer(BaseTrainer):
             rollout_fragment_length=hyper_parameters["rollout_fragment_length"]
         )
 
-
         # Build algorithm
         self.trainer = dqn_config.build()
-        self.log(f"✓ DQN algorithm with RASPBERRY created successfully", "TRAIN")
+        self.log("✓ DQN+RASPBERry ready", "TRAIN")
 
         return self.trainer
-
-    def _filter_result(self, iteration: int, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Filter training results and return statistics for logging."""
-        # Extract key statistics for BaseTrainer logging
-        stats = {
-            "reward": result.get("episode_reward_mean", "N/A"),
-            "timesteps": result.get("timesteps_total", "N/A")
-        }
-
-        # If log path exists, save complete results to file
-        if self.log_path:
-            try:
-                result_with_meta = result.copy()
-                result_with_meta["iteration"] = iteration
-                result_with_meta["timestamp"] = time.time()
-                result_with_meta["episodes"] = result.get("episodes_total", "N/A")
-                result_with_meta["time_s"] = result.get("time_total_s", "N/A")
-
-                # Add buffer statistics (if available)
-                if hasattr(self.trainer, 'local_replay_buffer'):
-                    buffer_stats = self.trainer.local_replay_buffer.stats()
-                    result_with_meta["buffer_stats"] = buffer_stats
-
-                processed_data = convert_np_arrays(result_with_meta)
-
-                result_file = self.log_path / f"result_{iteration:06d}.json"
-                with open(result_file, "w", encoding="utf-8") as f:
-                    json.dump(processed_data, f, indent=2)
-
-            except Exception as e:
-                self.log(f"Failed to save result file: {e}")
-
-        return stats

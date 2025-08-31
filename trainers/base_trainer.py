@@ -7,7 +7,8 @@ from ray.tune.registry import register_env
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 from pathlib import Path
-from utils import env_creator, load_config
+from utils import env_creator, load_config, flatten_dict
+import mlflow
 
 
 class BaseTrainer(ABC):
@@ -18,7 +19,8 @@ class BaseTrainer(ABC):
                  env_name: str,
                  run_name: str,
                  log_path: Optional[str] = None,
-                 checkpoint_path: Optional[str] = None):
+                 checkpoint_path: Optional[str] = None,
+                 use_mlflow: Optional[str] = None):
         """Initialize common trainer state and I/O paths.
 
         Args:
@@ -26,6 +28,7 @@ class BaseTrainer(ABC):
             env_name: Short environment name used in the `run_name`.
             log_path: Optional root directory to store logs; a subfolder `run_name` is created.
             checkpoint_path: Optional root directory to store checkpoints; a subfolder `run_name` is created.
+            use_mlflow: Path to mlflow YAML configuration file, None to disable mlflow.
 
         Notes:
             - `run_name` is `{env_name}_YYYYMMDD_HHMMSS`.
@@ -50,21 +53,22 @@ class BaseTrainer(ABC):
         self._setup_logger()
         self.logger.info(f"🚀 Initializing {self.__class__.__name__}: {self.run_name}")
 
+        # mlflow state
+        self.use_mlflow = use_mlflow  # Path to mlflow config YAML or None
+        self.mlflow_run = None
+
     def setup_environment(self) -> str:
         """设置和注册训练环境，返回环境ID。"""
-        self.log(f"设置环境{self.env_name}", "TRAIN")
         env_str = self.env_name.split("-")[1].replace("NoFrameskip", "")
         register_env(env_str, env_creator)
         _env = env_creator({"id": self.env_name})
         reset_result = _env.reset()
-        self.log(f"reset()返回类型: {type(reset_result)}, 长度: {len(reset_result) if hasattr(reset_result, '__len__') else 'N/A'}", "TRAIN")
-        
+
         _env_rest = reset_result[0]
-        self.log(f"✓ 环境 {env_str} 注册成功, obs: {_env_rest.shape} {str(_env_rest.dtype)}, act: {_env.action_space}", "TRAIN")
-        self.log(f"obs范围: [{_env_rest.min():.3f}, {_env_rest.max():.3f}]", "TRAIN")
-        self.log(f"environment wrapper链: {_env}", "TRAIN")
+        self.log(f"✓ 环境 {env_str} 注册成功, obs: {_env_rest.shape}, act: {_env.action_space}", "TRAIN")
 
         return env_str
+
     def _setup_config(self, config: str):
         """Load configuration from YAML file.
 
@@ -141,6 +145,8 @@ class BaseTrainer(ABC):
             reward = stats.get("reward", "N/A")
             timesteps = stats.get("timesteps", "N/A")
             self.log(f"Iter {iteration:4d} | Reward: {reward} | Timesteps: {timesteps}", "TRAIN")
+            # mlflow logging for this iteration (best-effort)
+            self.log_mlflow_iteration(iteration, result)
 
         if self.current_iteration > self.checkpoint_freq and iteration % self.checkpoint_freq == 0 and self.checkpoint_path:
             checkpoint_path = self.checkpoint_path / f"checkpoint_{iteration}"
@@ -148,6 +154,86 @@ class BaseTrainer(ABC):
             self.log(f"Checkpoint saved: {checkpoint_path}", "CHECKPOINT")
 
         return result
+
+    def _setup_mlflow(self) -> None:
+        """Initialize mlflow from separate config file."""
+        if not self.use_mlflow:
+            return
+
+        # 读取独立的 mlflow 配置文件
+        mlflow_cfg = load_config(self.use_mlflow)
+
+        if "tracking_uri" in mlflow_cfg:
+            mlflow.set_tracking_uri(mlflow_cfg["tracking_uri"])
+
+        mlflow.set_experiment(experiment_name=self.env_name)
+
+        run_tags = mlflow_cfg.get("run_tags", {})
+        self.mlflow_run = mlflow.start_run(run_name=self.run_name, tags=run_tags)
+
+        # 扁平化保存 hyper_parameters
+        flat_params = flatten_dict(self.config["hyper_parameters"])
+        # 过滤掉类型对象，转换为字符串
+        clean_params = {}
+        for k, v in flat_params.items():
+            if isinstance(v, type):
+                clean_params[k] = str(v.__name__)
+            else:
+                clean_params[k] = v
+        mlflow.log_params(clean_params)
+
+        self.log("✓ mlflow ready", "TRAIN")
+
+    def log_mlflow_iteration(self, iteration: int, result: Dict[str, Any]) -> None:
+        """Log metrics to mlflow for a single iteration."""
+        if not self.use_mlflow:
+            return
+
+        # 构建指标
+        sampler = result.get("sampler_results", {})
+        eva = result.get("evaluation", {})
+        info = result.get("info", {})
+
+        # 缓冲区统计
+        buf = {}
+        if hasattr(self.trainer, 'local_replay_buffer'):
+            buf = flatten_dict(self.trainer.local_replay_buffer.stats())
+            if "est_size_bytes" in buf:
+                buf["est_size_gb"] = buf["est_size_bytes"] / 1e9
+
+        # 合并所有指标
+        metrics = {}
+        for d in [sampler, info, buf]:
+            metrics.update({k: v for k, v in d.items() if isinstance(v, (int, float))})
+
+        # 评估指标加前缀
+        for k, v in eva.items():
+            if isinstance(v, (int, float)):
+                metrics[f"eval_{k}"] = v
+
+        step = result.get("episodes_total", iteration)
+        mlflow.log_metrics(metrics, step=step)
+
+        # 周期性上传工件
+        mlflow_cfg = load_config(self.use_mlflow)
+        log_artifacts_every = mlflow_cfg.get("log_artifacts_every", 200)
+        if iteration % log_artifacts_every == 0:
+            if self.log_path:
+                mlflow.log_artifacts(str(self.log_path))
+            if self.checkpoint_path:
+                mlflow.log_artifacts(str(self.checkpoint_path))
+
+    def finalize_mlflow(self) -> None:
+        """Upload final artifacts and end mlflow run."""
+        if not self.use_mlflow:
+            return
+
+        if self.log_path:
+            mlflow.log_artifacts(str(self.log_path))
+        if self.checkpoint_path:
+            mlflow.log_artifacts(str(self.checkpoint_path))
+
+        mlflow.end_run()
 
     def setup_ray(self, num_cpus: int = 5, num_gpus: int = 1,
                   include_dashboard: bool = False) -> None:
@@ -161,7 +247,6 @@ class BaseTrainer(ABC):
         Notes:
             Tweaks `_system_config` for GC actor cache to avoid warnings on teardown.
         """
-        self.log("Initializing Ray cluster...")
         warnings.filterwarnings("ignore", category=DeprecationWarning, module="ray")
 
         if not ray.is_initialized():
@@ -172,9 +257,7 @@ class BaseTrainer(ABC):
                 _system_config={"maximum_gcs_destroyed_actor_cached_count": 200},
                 ignore_reinit_error=True
             )
-            self.log(f"✓ Ray initialized with {num_cpus} CPUs, {num_gpus} GPUs")
-        else:
-            self.log("Ray already initialized")
+            self.log(f"✓ Ray ready ({num_cpus} CPUs, {num_gpus} GPUs)")
 
     @abstractmethod
     def init_algorithm(self) -> Any:
@@ -204,8 +287,11 @@ class BaseTrainer(ABC):
         train_start_time = time.time()
 
         time_info = f" (max {max_time}s)" if max_time else ""
-        self.log(f"🚀 Training from iteration {start_iter} to {end_iter}{time_info}...", "TRAIN")
+        self.log(f"🚀 Training {start_iter}→{end_iter}{time_info}", "TRAIN")
 
+        # Setup mlflow on first train call
+        if self.current_iteration == start_iter and self.use_mlflow:
+            self._setup_mlflow()
 
         for iteration in range(start_iter, end_iter):
             if max_time and (time.time() - train_start_time) >= max_time:
@@ -213,13 +299,11 @@ class BaseTrainer(ABC):
                 break
             result = self._train_single_iteration(iteration)
 
-            if iteration ==20:
-                self.trainer
-                import pdb
-                pdb.set_trace()
-
         elapsed_time = time.time() - train_start_time
-        self.log(f"✅ Training completed in {elapsed_time:.1f}s", "TRAIN")
+        self.log(f"✅ Done ({elapsed_time:.1f}s)", "TRAIN")
+
+        # Finalize mlflow
+        self.finalize_mlflow()
 
     def run(self,
             max_iterations: Optional[int] = None,
