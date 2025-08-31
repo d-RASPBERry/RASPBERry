@@ -219,7 +219,7 @@ def env_creator(env_config):
     elif env_config["id"][0:5] == "Atari":
         env_id = env_config["id"].replace("Atari-", "")
         env = gymnasium.make(env_id)
-        return wrap_deepmind(env, noframeskip=True)
+        return wrap_deepmind(env)
     elif env_config["id"] == "CarRacing":
         return gymnasium.make("CarRacing")
     else:
