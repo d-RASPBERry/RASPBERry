@@ -3,9 +3,9 @@ extends: templates/ddqn_base.yml
 
 hyper_parameters:
   replay_buffer_config:
-    capacity: 100000
+    capacity: 1000000
     prioritized_replay_alpha: 0.5
-    prioritized_replay_beta: 0.4
+    prioritized_replay_beta: 1
     prioritized_replay_eps: 0.000001
     type: MultiAgentPrioritizedBlockReplayBuffer
     block_size: 8

@@ -6,7 +6,8 @@ from trainers.dqn_raspberry_trainer import DQNRaspberryTrainer
 from utils import env_creator
 
 def main():
-    env_name = "Atari-PongNoFrameskip-v4"
+    env_in = "Pong"
+    env_name = f"Atari-{env_in}NoFrameskip-v4"
     env_config = {
         "id": env_name
     }
@@ -14,20 +15,17 @@ def main():
     trainer = DQNRaspberryTrainer(
         config="./configs/ddqn_raspberry_atari.yml",
         env_name=env_name,
-        run_name="Pong_RASPBERRY",
-        log_path=f"./log/Atari/Pong/",
-        checkpoint_path="./checkpoints/Atari/Pong/",
+        run_name=f"{env_in}_RASPBERRY",
+        log_path=f"./log/Atari/{env_in}/",
+        checkpoint_path=f"./checkpoints/Atari/{env_in}/",
         obs_space=game.observation_space,
         action_space=game.action_space,
     )
-    trainer.setup_ray(10, 1, False)
-    trainer.init_algorithm()
-
     # Run training
     trainer.run(
-        initialize=False,
-        max_iterations=1000,
-        max_time=3600,
+        initialize=True,
+        max_iterations=10000,
+        max_time=360000,
     )
 
 

@@ -3,10 +3,9 @@ paths:
   log_path: "logs"
   checkpoint_path: "checkpoints"
 
-# 通用训练设置
-training:
-  log_freq: 10
-  checkpoint_freq: 100
+# log 策略
+log_freq: 10
+checkpoint_freq: 100
 
 hyper_parameters:
   # 环境配置
@@ -32,7 +31,7 @@ hyper_parameters:
 
   # 学习调度
   num_steps_sampled_before_learning_starts: 50000
-  min_sample_timesteps_per_iteration: 4000
+  min_sample_timesteps_per_iteration: 10000
 
   # 探索参数
   final_epsilon: 0.01
@@ -40,12 +39,11 @@ hyper_parameters:
 
   # 训练批次配置
   train_batch_size: 32
-  rollout_fragment_length: "4"
+  rollout_fragment_length: 4
   
   # 资源配置
   num_gpus: 1
+  num_envs_per_worker: 20
+  num_gpus_per_worker: 0.01
   num_cpus_per_worker: 1
 
-# log 策略
-log_freq: 10
-checkpoint_freq: 100

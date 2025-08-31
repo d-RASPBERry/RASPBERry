@@ -59,6 +59,15 @@ class DQNTrainer(BaseTrainer):
         buffer_config = hyper_parameters["replay_buffer_config"]
         self.log(f"Using buffer config: {buffer_config}", "BUFFER")
 
+        # 确保关键参数的类型正确
+        if "prioritized_replay_eps" in buffer_config:
+            buffer_config["prioritized_replay_eps"] = float(buffer_config["prioritized_replay_eps"])
+        if "prioritized_replay_alpha" in buffer_config:
+            buffer_config["prioritized_replay_alpha"] = float(buffer_config["prioritized_replay_alpha"])
+        if "prioritized_replay_beta" in buffer_config:
+            buffer_config["prioritized_replay_beta"] = float(buffer_config["prioritized_replay_beta"])
+
+        self.log(f"Using buffer config: {buffer_config}", "BUFFER")
         # Ensure buffer_config type is object rather than string
         if buffer_config["type"] == "MultiAgentPrioritizedReplayBuffer":
             buffer_config["type"] = MultiAgentPrioritizedReplayBuffer
@@ -76,7 +85,7 @@ class DQNTrainer(BaseTrainer):
         # Environment settings
         dqn_config = dqn_config.environment(
             env=env_id,
-            env_config=env_config
+            env_config=env_config,
         )
 
         # Framework settings
@@ -97,6 +106,11 @@ class DQNTrainer(BaseTrainer):
             target_network_update_freq=hyper_parameters["target_network_update_freq"],
             replay_buffer_config=buffer_config
         )
+        
+        # Reporting settings
+        dqn_config = dqn_config.reporting(
+            min_sample_timesteps_per_iteration=hyper_parameters["min_sample_timesteps_per_iteration"]
+        )
 
         # Exploration settings
         dqn_config = dqn_config.exploration(
@@ -110,11 +124,21 @@ class DQNTrainer(BaseTrainer):
 
         # Resource configuration
         dqn_config = dqn_config.resources(
-            num_gpus=hyper_parameters["num_gpus"]
+            num_gpus=hyper_parameters["num_gpus"],
+            num_gpus_per_worker=hyper_parameters["num_gpus_per_worker"],
+            num_cpus_per_worker=hyper_parameters["num_cpus_per_worker"],
+        )
+
+        # Rollouts configuration
+        dqn_config = dqn_config.rollouts(
+            num_envs_per_worker=hyper_parameters["num_envs_per_worker"],
+            preprocessor_pref=None,
+            rollout_fragment_length=hyper_parameters["rollout_fragment_length"]
         )
 
         # Build algorithm
         self.trainer = dqn_config.build()
+        self.trainer._env_id
         self.log(f"✓ DQN algorithm created successfully", "TRAIN")
 
         return self.trainer

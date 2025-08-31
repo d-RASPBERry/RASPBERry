@@ -53,10 +53,18 @@ class BaseTrainer(ABC):
     def setup_environment(self) -> str:
         """设置和注册训练环境，返回环境ID。"""
         self.log(f"设置环境{self.env_name}", "TRAIN")
-        register_env(self.env_name, env_creator)
-        self.log(f"✓ 环境 {self.env_name} 注册成功", "TRAIN")
-        return self.env_name
+        env_str = self.env_name.split("-")[1].replace("NoFrameskip", "")
+        register_env(env_str, env_creator)
+        _env = env_creator({"id": self.env_name})
+        reset_result = _env.reset()
+        self.log(f"reset()返回类型: {type(reset_result)}, 长度: {len(reset_result) if hasattr(reset_result, '__len__') else 'N/A'}", "TRAIN")
+        
+        _env_rest = reset_result[0]
+        self.log(f"✓ 环境 {env_str} 注册成功, obs: {_env_rest.shape} {str(_env_rest.dtype)}, act: {_env.action_space}", "TRAIN")
+        self.log(f"obs范围: [{_env_rest.min():.3f}, {_env_rest.max():.3f}]", "TRAIN")
+        self.log(f"environment wrapper链: {_env}", "TRAIN")
 
+        return env_str
     def _setup_config(self, config: str):
         """Load configuration from YAML file.
 
@@ -139,6 +147,8 @@ class BaseTrainer(ABC):
             self.trainer.save(str(checkpoint_path))
             self.log(f"Checkpoint saved: {checkpoint_path}", "CHECKPOINT")
 
+        return result
+
     def setup_ray(self, num_cpus: int = 5, num_gpus: int = 1,
                   include_dashboard: bool = False) -> None:
         """Initialize a local Ray cluster if not already initialized.
@@ -196,11 +206,17 @@ class BaseTrainer(ABC):
         time_info = f" (max {max_time}s)" if max_time else ""
         self.log(f"🚀 Training from iteration {start_iter} to {end_iter}{time_info}...", "TRAIN")
 
+
         for iteration in range(start_iter, end_iter):
             if max_time and (time.time() - train_start_time) >= max_time:
                 self.log(f"⏰ Time limit reached ({max_time}s), stopping training", "TRAIN")
                 break
-            self._train_single_iteration(iteration)
+            result = self._train_single_iteration(iteration)
+
+            if iteration ==20:
+                self.trainer
+                import pdb
+                pdb.set_trace()
 
         elapsed_time = time.time() - train_start_time
         self.log(f"✅ Training completed in {elapsed_time:.1f}s", "TRAIN")
