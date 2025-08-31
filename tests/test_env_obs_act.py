@@ -340,10 +340,8 @@ class TestEnvObsAct(unittest.TestCase):
                 shape_match = obs.shape == test_config['expected_obs_shape']
                 dtype_match = obs.dtype == test_config['expected_obs_dtype']
 
-                print(
-                    f"  obs 形状: {obs.shape} {'✓' if shape_match else '✗ 期望 ' + str(test_config['expected_obs_shape'])}")
-                print(
-                    f"  obs 类型: {obs.dtype} {'✓' if dtype_match else '✗ 期望 ' + str(test_config['expected_obs_dtype'])}")
+                print(f"  obs 形状: {obs.shape} {'✓' if shape_match else '✗ 期望 ' + str(test_config['expected_obs_shape'])}")
+                print(f"  obs 类型: {obs.dtype} {'✓' if dtype_match else '✗ 期望 ' + str(test_config['expected_obs_dtype'])}")
                 print(f"  动作空间: {env.action_space}")
                 print(f"  obs 范围: [{obs.min():.1f}, {obs.max():.1f}]")
                 print(f"  内存占用: {result['memory_usage_kb']:.1f} KB")
