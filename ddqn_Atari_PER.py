@@ -19,7 +19,7 @@ def main():
     # Run training
     trainer.run(
         initialize=True,
-        max_iterations=1000,
+        max_iterations=10000,
         max_time=36000,
     )
 
