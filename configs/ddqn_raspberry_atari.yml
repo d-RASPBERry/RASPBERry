@@ -8,9 +8,6 @@ hyper_parameters:
     prioritized_replay_beta: 1
     prioritized_replay_eps: 0.000001
     type: MultiAgentPrioritizedBlockReplayBuffer
-    block_size: 8
+    sub_buffer_size: 8
     compress_base: -1
-    split_mini_batch: 4
-    num_save: 100
-    store: 2000
     worker_side_prioritization: false

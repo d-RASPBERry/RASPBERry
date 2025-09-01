@@ -42,9 +42,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             prioritized_replay_alpha: float = 0.6,
             prioritized_replay_beta: float = 0.4,
             prioritized_replay_eps: float = 1e-6,
-            split_mini_batch: int = 10,
-            num_save: int = 200,
-            store: int = 2000,
             compress_base: int = -1,
             **kwargs
     ):
@@ -74,7 +71,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             "sub_buffer_size": sub_buffer_size,
             "prioritized_replay_alpha": prioritized_replay_alpha,
             "prioritized_replay_beta": prioritized_replay_beta,
-            "split_mini_batch": split_mini_batch,
             "compress_base": compress_base,
             "prioritized_replay_eps": prioritized_replay_eps,
         }

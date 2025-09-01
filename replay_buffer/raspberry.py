@@ -93,7 +93,6 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             obs_space: Space,
             action_space: Space,
             sub_buffer_size: int = 32,
-            split_mini_batch: int = 10,
             compress_base: int = -1,
             **kwargs
     ):
@@ -102,7 +101,6 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         super(PrioritizedBlockReplayBuffer, self).__init__(**kwargs)
 
         self.sub_buffer_size = sub_buffer_size
-        self.split_mini_batch = split_mini_batch
         self.compress_base = compress_base
         self.compress_node = CompressReplayNode(
             buffer_size=sub_buffer_size,
