@@ -181,13 +181,13 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
     def sample(
             self, num_items: int, policy_id: Optional[PolicyID] = None, **kwargs
     ) -> Optional[SampleBatchType]:
-        """采样数据并智能解压"""
+        """Sample data and conditionally decompress."""
         t_start = time.time()
         logger.debug(f"Starting sample for policy '{policy_id}' with {num_items} items.")
 
         kwargs = merge_dicts_with_warning(self.underlying_buffer_call_args, kwargs)
 
-        # 从 kwargs 或父类/底层缓冲动态获取 beta（RLlib 可能以 kwargs 方式传入退火后的 beta）
+        # Retrieve beta from kwargs or parent/underlying buffer (RLlib may pass annealed beta via kwargs)
         beta = kwargs.pop("beta", None)
         if beta is None:
             beta = getattr(self, "prioritized_replay_beta", None)
@@ -212,7 +212,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 if raw_sample is None:
                     return None
 
-                # 若已经是解压后的样本则直接返回
+                # If already decompressed sample, return directly
                 if not self._is_compressed(raw_sample):
                     return raw_sample
 

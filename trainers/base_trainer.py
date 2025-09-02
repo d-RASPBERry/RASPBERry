@@ -65,7 +65,7 @@ class BaseTrainer(ABC):
         reset_result = _env.reset()
 
         _env_rest = reset_result[0]
-        self.log(f"✓ 环境 {env_str} 注册成功, obs: {_env_rest.shape}, act: {_env.action_space}", "TRAIN")
+        self.log(f"✓ Environment {env_str} registered, obs: {_env_rest.shape}, act: {_env.action_space}", "TRAIN")
 
         return env_str
 

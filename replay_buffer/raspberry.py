@@ -87,7 +87,7 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
 
 
 class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
-    """带压缩的优先级重放缓冲区"""
+    """Prioritized replay buffer with on-the-fly compression."""
 
     def __init__(
             self,
@@ -98,8 +98,9 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             compress_pool_size: int = 0,
             **kwargs
     ):
-        # 严格遵循 Ray：将优先级参数（prioritized_replay_alpha/prioritized_replay_beta）
-        # 直接通过 **kwargs 透传给父类，不做别名或默认处理。
+        # Strictly follow Ray: pass prioritized parameters
+        # (prioritized_replay_alpha/prioritized_replay_beta) via **kwargs
+        # directly to the parent without aliasing or defaults here.
         super(PrioritizedBlockReplayBuffer, self).__init__(**kwargs)
 
         self.sub_buffer_size = sub_buffer_size
@@ -153,7 +154,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         self._inflight.append(fut)
 
     def stats(self, debug: bool = False) -> Dict[str, Any]:
-        """计算压缩块的实际内存占用"""
+        """Compute actual memory usage of compressed blocks."""
         total_size = 0
         for sample_batch in self._storage:
             if "obs" in sample_batch and hasattr(sample_batch["obs"], '__getitem__'):
@@ -167,7 +168,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         }
 
     def sample(self, num_items: int, beta: float, **kwargs) -> Optional[SampleBatch]:
-        """重写采样方法以正确处理权重扩展（块权重 -> transition 权重）"""
+        """Override sampling to properly expand weights (block -> transition)."""
         batch = super(PrioritizedBlockReplayBuffer, self).sample(num_items, beta=beta, **kwargs)
 
         if batch is not None:
@@ -187,11 +188,12 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         return batch
 
     def add(self, batch: SampleBatchType, **kwargs) -> None:
-        """添加批次到缓冲区"""
+        """Add a batch to the buffer."""
         if not isinstance(batch, SampleBatch):
             return
 
-        # 采用 CompressReplayNode 即时压缩入库：切片填充块，ready 即写入
+        # Use CompressReplayNode to compress on-the-fly:
+        # fill blocks by slicing; when ready, write immediately.
         idx = 0
         count = len(batch)
         while idx < count:

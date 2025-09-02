@@ -1,5 +1,5 @@
 """
-Simple DQN Trainer example using Ray PER.
+Simple DQN Trainer example using RASPBERry (block-prioritized replay with compression).
 """
 
 from trainers.dqn_raspberry_trainer import DQNRaspberryTrainer
