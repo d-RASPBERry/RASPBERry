@@ -1,9 +1,9 @@
 """
-Trainers module for RASPBERry project.
+RASPBERry trainers package.
 
-This module provides abstract base classes and concrete implementations
-for training reinforcement learning algorithms with both RASPBERry
-and Ray PER replay buffer modes.
+Provides the abstract base trainer and concrete trainers for DQN/SAC,
+supporting both Ray's native PER and the RASPBERry block-compressed
+prioritized replay buffers.
 """
 
 from .base_trainer import BaseTrainer

@@ -5,7 +5,6 @@ import blosc
 import sys
 from gymnasium.spaces import Space
 from typing import Dict, Optional, Any, List
-from concurrent.futures import ThreadPoolExecutor, Future
 from ray.rllib.utils.typing import SampleBatchType
 from ray.rllib.utils.replay_buffers.prioritized_replay_buffer import PrioritizedReplayBuffer
 from replay_buffer.compress_replay_node import CompressReplayNode
@@ -17,51 +16,51 @@ logger = logging.getLogger(__name__)
 
 
 def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> SampleBatch:
-    """Decompress a SampleBatch using blosc.unpack_array and restore axes.
-
-    Supports arbitrary observation ranks, not limited to images.
-
+    """使用 blosc.unpack_array 解压缩，并根据 compress_base 参数恢复原始格式。
+    
+    支持任意维度的观察数据，不再限制于图像数据。
+    
     Args:
-        ma_batch: compressed batch data
-        compress_base: axis moved to the end during compression
-                       -1: smart default (move axis 0 to the end when compressing)
-                       >=0: move the last axis back to the given position
+        ma_batch: 压缩的批次数据
+        compress_base: 压缩时移动到最后的维度索引
+                      -1: 智能默认行为（将第0维移到最后，适用于大多数时序数据）
+                      >=0: 将指定维度从最后位置恢复到原始位置
     """
     t0 = time.time()
 
-    # Prefer per-batch compress_base metadata if present
+    # 优先读取批次内的 compress_base 元数据
     compress_base_used = ma_batch.get("compress_base", compress_base)
 
-    # Unpack compressed arrays
+    # 使用 unpack_array 恢复压缩的数组
     decompressed_obs_transposed = blosc.unpack_array(ma_batch["obs"][0])
     decompressed_new_obs_transposed = blosc.unpack_array(ma_batch["new_obs"][0])
 
-    # Rank info
+    # 获取数据维度信息
     rank = len(decompressed_obs_transposed.shape)
 
     if compress_base_used == -1:
-        # Smart default: move axis 0 (batch) from end back to front
+        # 智能默认行为：将第0维（通常是batch维度）从最后位置移回开头
         if rank <= 1:
             decompressed_obs = decompressed_obs_transposed
             decompressed_new_obs = decompressed_new_obs_transposed
             transpose_type = "no_transpose"
         else:
-            # Multi-dim: move last axis (original axis 0) back to the front
+            # 多维数据：将最后一个维度（原第0维）移回开头
             axes = [rank - 1] + list(range(rank - 1))
             decompressed_obs = np.transpose(decompressed_obs_transposed, axes)
             decompressed_new_obs = np.transpose(decompressed_new_obs_transposed, axes)
             transpose_type = f"default_dim0_to_front_{rank}D"
     else:
-        # User-specified axis restoration
+        # 用户指定的维度恢复
         if compress_base_used >= rank or rank <= 1:
             decompressed_obs = decompressed_obs_transposed
             decompressed_new_obs = decompressed_new_obs_transposed
             transpose_type = "no_transpose"
         else:
-            # Insert the last axis back at compress_base position
+            # 将最后一个维度插入到 compress_base 位置
             axes = list(range(rank))
             axes.pop()  # 移除最后一个维度
-            axes.insert(compress_base_used, rank - 1)  # insert at specified position
+            axes.insert(compress_base_used, rank - 1)  # 插入到指定位置
 
             decompressed_obs = np.transpose(decompressed_obs_transposed, axes)
             decompressed_new_obs = np.transpose(decompressed_new_obs_transposed, axes)
@@ -95,7 +94,6 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             action_space: Space,
             sub_buffer_size: int = 32,
             compress_base: int = -1,
-            compress_pool_size: int = 0,
             **kwargs
     ):
         # 严格遵循 Ray：将优先级参数（prioritized_replay_alpha/prioritized_replay_beta）
@@ -104,53 +102,12 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
 
         self.sub_buffer_size = sub_buffer_size
         self.compress_base = compress_base
-        self._compress_pool_size = max(0, int(compress_pool_size))
-        self._compress_pool: Optional[ThreadPoolExecutor] = (
-            ThreadPoolExecutor(max_workers=self._compress_pool_size)
-            if self._compress_pool_size > 0 else None
-        )
-        self._inflight: List[Future] = []
-
         self.compress_node = CompressReplayNode(
             buffer_size=sub_buffer_size,
             obs_space=obs_space,
             action_space=action_space,
             compress_base=compress_base,
         )
-
-    def _drain_one(self) -> None:
-        """Process one completed future if available (non-blocking)."""
-        if not self._inflight:
-            return
-        done_indices = [i for i, f in enumerate(self._inflight) if f.done()]
-        if not done_indices:
-            return
-        idx = done_indices[0]
-        future = self._inflight.pop(idx)
-        try:
-            compressed_data, weight = future.result()
-            self._add_single_batch(compressed_data, weight=weight)
-        except Exception:
-            logger.exception("[RB] compression future failed")
-
-    def _submit_compress(self, node: CompressReplayNode) -> None:
-        assert self._compress_pool is not None
-        # Backpressure: if inflight at capacity, drain one (wait for earliest)
-        if len(self._inflight) >= self._compress_pool_size:
-            # Block on the oldest future
-            future0 = self._inflight.pop(0)
-            try:
-                compressed_data, weight = future0.result()
-                self._add_single_batch(compressed_data, weight=weight)
-            except Exception:
-                logger.exception("[RB] compression future failed (blocking)")
-
-        def _worker(n: CompressReplayNode):
-            out = n.sample()  # (compressed_batch, weight)
-            return out
-
-        fut = self._compress_pool.submit(_worker, node)
-        self._inflight.append(fut)
 
     def stats(self, debug: bool = False) -> Dict[str, Any]:
         """计算压缩块的实际内存占用"""
@@ -171,13 +128,13 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         batch = super(PrioritizedBlockReplayBuffer, self).sample(num_items, beta=beta, **kwargs)
 
         if batch is not None:
-            # Expand block-level weights to per-transition
+            # 展开块级权重到 transition 级
             if "weights" in batch and 0 < batch.count != len(batch["weights"]):
                 num_blocks = len(batch["weights"])
                 samples_per_block = batch.count // num_blocks
                 expanded_weights = np.repeat(batch["weights"], samples_per_block)
                 batch["weights"] = expanded_weights
-            # Expand block-level batch_indexes to per-transition for RLlib priority updates
+            # 展开块级 batch_indexes 到 transition 级，便于 RLlib 的通用优先级更新工具使用
             if "batch_indexes" in batch and 0 < batch.count != len(batch["batch_indexes"]):
                 num_blocks_idx = len(batch["batch_indexes"])
                 samples_per_block_idx = batch.count // num_blocks_idx
@@ -202,36 +159,21 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             idx += take
 
             if self.compress_node.is_ready():
-                if self._compress_pool is None:
-                    compressed_data, weight = self.compress_node.sample()
-                    try:
-                        comp_obs_len = len(compressed_data["obs"][0])
-                        comp_new_obs_len = len(compressed_data["new_obs"][0])
-                        logger.debug(
-                            f"[RB.add] block_ready: size={self.sub_buffer_size}, block_weight={weight:.4f}, "
-                            f"comp_obs_bytes={comp_obs_len}, comp_new_obs_bytes={comp_new_obs_len}"
-                        )
-                    except Exception:
-                        pass
-                    self._add_single_batch(compressed_data, weight=weight)
-                    self.compress_node.reset()
-                else:
-                    # Swap out full node and submit compression to pool
-                    node_to_compress = self.compress_node
-                    self.compress_node = CompressReplayNode(
-                        buffer_size=self.sub_buffer_size,
-                        obs_space=node_to_compress.obs_space,
-                        action_space=node_to_compress.action_space,
-                        compress_base=self.compress_base,
+                compressed_data, weight = self.compress_node.sample()
+                try:
+                    comp_obs_len = len(compressed_data["obs"][0])
+                    comp_new_obs_len = len(compressed_data["new_obs"][0])
+                    logger.debug(
+                        f"[RB.add] block_ready: size={self.sub_buffer_size}, block_weight={weight:.4f}, "
+                        f"comp_obs_bytes={comp_obs_len}, comp_new_obs_bytes={comp_new_obs_len}"
                     )
-                    self._submit_compress(node_to_compress)
-
-            # Opportunistically drain one completed future to bound latency
-            if self._compress_pool is not None:
-                self._drain_one()
+                except Exception:
+                    pass
+                self._add_single_batch(compressed_data, weight=weight)
+                self.compress_node.reset()
 
     def _encode_sample(self, idxes: List[int]) -> SampleBatch:
-        """Encode samples (sync decompress + one-shot concat). Called by parent."""
+        """编码样本（同步解压 + 一次性拼接）。本方法由父类在采样时调用，必须保留。"""
         t0 = time.time()
         compressed_list = []
         for i in idxes:

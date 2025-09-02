@@ -58,7 +58,7 @@ class BaseTrainer(ABC):
         self.mlflow_run = None
 
     def setup_environment(self) -> str:
-        """设置和注册训练环境，返回环境ID。"""
+        """Set up and register the training environment and return its ID."""
         env_str = self.env_name.split("-")[1].replace("NoFrameskip", "")
         register_env(env_str, env_creator)
         _env = env_creator({"id": self.env_name})
@@ -160,7 +160,7 @@ class BaseTrainer(ABC):
         if not self.use_mlflow:
             return
 
-        # 读取独立的 mlflow 配置文件
+        # Read separate mlflow configuration file
         mlflow_cfg = load_config(self.use_mlflow)
 
         if "tracking_uri" in mlflow_cfg:
@@ -171,9 +171,9 @@ class BaseTrainer(ABC):
         run_tags = mlflow_cfg.get("run_tags", {})
         self.mlflow_run = mlflow.start_run(run_name=self.run_name, tags=run_tags)
 
-        # 扁平化保存 hyper_parameters
+        # Flatten and log hyperparameters
         flat_params = flatten_dict(self.config["hyper_parameters"])
-        # 过滤掉类型对象，转换为字符串
+        # Convert type objects to string names
         clean_params = {}
         for k, v in flat_params.items():
             if isinstance(v, type):
@@ -189,24 +189,24 @@ class BaseTrainer(ABC):
         if not self.use_mlflow:
             return
 
-        # 构建指标
+        # Assemble metrics
         sampler = result.get("sampler_results", {})
         eva = result.get("evaluation", {})
         info = result.get("info", {})
 
-        # 缓冲区统计
+        # Replay buffer statistics
         buf = {}
         if hasattr(self.trainer, 'local_replay_buffer'):
             buf = flatten_dict(self.trainer.local_replay_buffer.stats())
             if "est_size_bytes" in buf:
                 buf["est_size_gb"] = buf["est_size_bytes"] / 1e9
 
-        # 合并所有指标
+        # Merge all numeric metrics
         metrics = {}
         for d in [sampler, info, buf]:
             metrics.update({k: v for k, v in d.items() if isinstance(v, (int, float))})
 
-        # 评估指标加前缀
+        # Add prefix for evaluation metrics
         for k, v in eva.items():
             if isinstance(v, (int, float)):
                 metrics[f"eval_{k}"] = v
@@ -214,7 +214,7 @@ class BaseTrainer(ABC):
         step = result.get("episodes_total", iteration)
         mlflow.log_metrics(metrics, step=step)
 
-        # 周期性上传工件
+        # Periodically upload artifacts
         mlflow_cfg = load_config(self.use_mlflow)
         log_artifacts_every = mlflow_cfg.get("log_artifacts_every", 200)
         if iteration % log_artifacts_every == 0:

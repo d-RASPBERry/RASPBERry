@@ -11,3 +11,4 @@ hyper_parameters:
     sub_buffer_size: 8
     compress_base: -1
     worker_side_prioritization: false
+    compress_pool_size: 50

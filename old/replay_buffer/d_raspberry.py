@@ -1,16 +1,21 @@
+import ray
 import logging
 import numpy as np
 import time
 from gymnasium.spaces import Space
 from replay_buffer.raspberry import PrioritizedBlockReplayBuffer, decompress_sample_batch
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, List, Union
 from ray.rllib.utils.typing import PolicyID, SampleBatchType
 from ray.rllib.utils.annotations import override, DeveloperAPI
 from ray.rllib.utils.replay_buffers import StorageUnit
+from ray.rllib.utils.replay_buffers.replay_buffer import ReplayBuffer
 from ray.rllib.utils.replay_buffers.multi_agent_replay_buffer import ReplayMode, merge_dicts_with_warning
 from ray.rllib.utils.replay_buffers.multi_agent_prioritized_replay_buffer import MultiAgentPrioritizedReplayBuffer
+from ray.rllib.utils.replay_buffers.prioritized_replay_buffer import PrioritizedReplayBuffer
+from replay_buffer.compress_replay_node import CompressReplayNode
 from ray.rllib.policy.sample_batch import SampleBatch, MultiAgentBatch
 from ray.util.debug import log_once
+from utils import split_list_into_n_parts
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -18,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 @DeveloperAPI
 class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
-    """Multi-agent prioritized block replay buffer."""
+    """多智能体优先级块重放缓冲区"""
 
     def __init__(
             self,
@@ -38,7 +43,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             prioritized_replay_beta: float = 0.4,
             prioritized_replay_eps: float = 1e-6,
             compress_base: int = -1,
-            compress_pool_size: int = 0,
             **kwargs
     ):
         if "replay_mode" in kwargs and (
@@ -53,10 +57,10 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 )
             kwargs["replay_mode"] = "independent"
 
-        # Store block-level parameters for later use
+        # 存储块级参数以供后续使用
         self.sub_buffer_size = sub_buffer_size
         self.compress_base = compress_base
-        # Ensure prioritized_replay_eps is numeric
+        # 确保 prioritized_replay_eps 是数值类型
         self.prioritized_replay_eps = float(prioritized_replay_eps)
 
         pber_config = {
@@ -68,7 +72,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             "prioritized_replay_alpha": prioritized_replay_alpha,
             "prioritized_replay_beta": prioritized_replay_beta,
             "compress_base": compress_base,
-            "compress_pool_size": compress_pool_size,
             "prioritized_replay_eps": prioritized_replay_eps,
         }
 
@@ -93,18 +96,18 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
     @DeveloperAPI
     @override(MultiAgentPrioritizedReplayBuffer)
     def update_priorities(self, prio_dict: Dict) -> None:
-        """Update priorities on underlying buffers using block-level logic."""
+        """更新底层重放缓冲区的优先级，直接使用块级逻辑"""
         with self.update_priorities_timer:
             for policy_id, (batch_indexes, td_errors) in prio_dict.items():
 
-                # Convert to block-level indices/priorities
+                # 直接执行块级逻辑转换
                 block_indices, block_priorities = self._convert_to_block_priorities(
                     batch_indexes, td_errors
                 )
                 logger.debug(f"Block priority update: "
                              f"{len(batch_indexes)} samples -> {len(block_indices)} blocks")
 
-                # Update underlying per-policy buffer
+                # 更新底层缓冲区
                 if hasattr(self.replay_buffers[policy_id], 'update_priorities'):
                     self.replay_buffers[policy_id].update_priorities(
                         block_indices, block_priorities
@@ -113,21 +116,21 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                     logger.warning(f"Policy {policy_id} replay buffer does not support priority updates")
 
     def _convert_to_block_priorities(self, batch_indexes: np.ndarray, td_errors: np.ndarray) -> tuple:
-        """Convert per-sample (indexes, td_errors) to per-block values.
-
+        """将样本级数据转换为块级数据
+        
         Args:
-            batch_indexes: original batch indexes [batch_size]
-            td_errors: original TD-errors [batch_size]
-
+            batch_indexes: 原始批次索引 [batch_size]
+            td_errors: 原始TD误差 [batch_size]
+            
         Returns:
             tuple: (block_indices, block_priorities)
         """
         try:
-            # Reshape into [num_blocks, sub_buffer_size]
+            # 重新整形为块结构
             block_indices = batch_indexes.reshape(-1, self.sub_buffer_size)[:, 0]
             block_td_errors = td_errors.reshape(-1, self.sub_buffer_size).mean(axis=1)
 
-            # Compute block-level priorities
+            # 计算块级优先级
             block_priorities = np.abs(block_td_errors) + self.prioritized_replay_eps
 
             logger.debug(f"Block conversion: {batch_indexes.shape} -> {block_indices.shape}, "
@@ -137,21 +140,21 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
 
         except Exception as e:
             logger.warning(f"Block conversion failed: {e}, falling back to direct processing")
-            # Fallback to original per-sample processing
+            # 回退到原始处理方式
             return batch_indexes, np.abs(td_errors) + self.prioritized_replay_eps
 
     def _maybe_split_into_policy_batches(self, batch: SampleBatchType) -> Dict:
-        """Split into policy batches based on replay mode."""
+        """根据重放模式拆分批次"""
         if isinstance(batch, MultiAgentBatch):
             return batch.policy_batches
         else:
-            # If a single SampleBatch, convert to multi-agent format
+            # 如果是单个SampleBatch，转换为多智能体格式
             return {"__default_policy__": batch}
 
     @DeveloperAPI
     @override(MultiAgentPrioritizedReplayBuffer)
     def add(self, batch: SampleBatchType, **kwargs) -> None:
-        """Add a batch to the corresponding policy's underlying replay buffer."""
+        """添加批次到适当的策略重放缓冲区"""
         if batch is None:
             if log_once("empty_batch_added_to_buffer"):
                 logger.info(
@@ -207,8 +210,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 raw_sample = self.replay_buffers["__all__"].sample(
                     num_items, beta=beta, **kwargs
                 )
-                import pdb
-                pdb.set_trace()
                 if raw_sample is None:
                     return None
 
@@ -225,25 +226,24 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 if sample is None:
                     return None
 
-                # Conditionally decompress
+                # 智能判断是否需要解压
                 if self._is_compressed(sample):
                     sample = decompress_sample_batch(sample, self.compress_base)
 
                 ma_batch = MultiAgentBatch({policy_id: sample}, sample.count)
-                logger.info(ma_batch.count)
                 return ma_batch
 
             else:
-                # Sample independently from all policies
+                # 从所有策略独立采样
                 samples = {}
                 for pid, replay_buffer in self.replay_buffers.items():
                     sample = replay_buffer.sample(num_items, beta=beta, **kwargs)
-
                     if sample is not None:
-                        # Conditionally decompress
+                        # 智能解压
                         if self._is_compressed(sample):
                             sample = decompress_sample_batch(sample, self.compress_base)
                         samples[pid] = sample
+
                 if samples:
                     total_count = sum(s.count for s in samples.values())
                     ma_batch = MultiAgentBatch(samples, total_count)
@@ -252,13 +252,13 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                     return None
 
     def _is_compressed(self, sample: SampleBatch) -> bool:
-        """Whether the sample is in compressed state (object-typed obs)."""
+        """判断样本是否仍然是压缩状态"""
         return ('obs' in sample and
                 isinstance(sample['obs'], np.ndarray) and
                 sample['obs'].dtype == object)
 
     def stats(self, debug: bool = False) -> Dict[str, Any]:
-        """Return replay buffer statistics."""
+        """返回重放缓冲区的统计信息"""
         stat = {
             "add_batch_time_ms": round(1000 * self.add_batch_timer.mean, 3),
             "replay_time_ms": round(1000 * self.replay_timer.mean, 3),
@@ -277,3 +277,13 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             )
         stat["est_size_bytes"] = total_estimated_bytes
         return stat
+
+
+@ray.remote(num_cpus=1, max_calls=50)
+def _parallel_node_sample(node_data, compress_base=-1):
+    """并行调用node的sample方法"""
+    from .replay_node import CompressedReplayNode
+    # 创建临时node并存储压缩数据
+    temp_node = CompressedReplayNode(buffer_size=1, obs_space=None, action_space=None, compress_base=compress_base)
+    temp_node.compress_and_store(node_data, weight=0.01)
+    return temp_node.sample()

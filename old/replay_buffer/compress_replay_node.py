@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Tuple
+from typing import Tuple, Dict, Any
 from gymnasium import spaces
 from ray.rllib.policy.sample_batch import SampleBatch
 from utils import get_obs_shape
@@ -11,14 +11,13 @@ logger = logging.getLogger(__name__)
 
 class CompressReplayNode(object):
     """
-    Compressed replay node.
-
-    Design principles:
-    1) Pre-allocate all necessary memory at initialization time
-    2) Clear dtype and shape definitions for all tensors
-    3) Built-in compression to produce a compressed SampleBatch in one step
-    4) Support different observation/action space types
-    5) Robust memory monitoring and error handling
+    压缩重放节点
+    设计原则：
+    1. 初始化时预分配所有必要空间
+    2. 明确的数据类型和维度定义
+    3. 内置压缩功能，一步到位压缩后的sample_batch
+    4. 支持不同类型的观察和动作空间
+    5. 完善的内存监控和错误处理
     """
 
     def __init__(
@@ -28,21 +27,21 @@ class CompressReplayNode(object):
             action_space: spaces.Space,
             compress_base: int = -1,
             compression_level: int = 5,
-            cname: str = 'lz4',
+            cname: str = 'zstd',
             shuffle: int = blosc.BITSHUFFLE,
             nthreads: int = 4,
     ):
         """
-        Initialize the compressed replay node.
+        初始化压缩重放节点
         Args:
-            buffer_size: secondary block size
-            obs_space: observation space (supports Box, Discrete, etc.)
-            action_space: action space (supports Discrete, Box, etc.)
-            compress_base: base axis for compression (-1 uses smart default)
-            compression_level: compression level (1-9, default 5)
+            buffer_size: 次级Block size
+            obs_space: 观察空间（支持Box, Discrete等）
+            action_space: 动作空间（支持Discrete, Box等）
+            compress_base: 压缩基准维度（-1为智能默认）
+            compression_level: 压缩级别（1-9，默认5）
         """
         if buffer_size <= 0:
-            raise ValueError(f"buffer_size must be > 0, got: {buffer_size}")
+            raise ValueError(f"buffer_size必须大于0，当前值: {buffer_size}")
 
         self.buffer_size = buffer_size
         self.obs_space = obs_space
@@ -55,36 +54,34 @@ class CompressReplayNode(object):
         try:
             blosc.set_nthreads(self.nthreads)
         except Exception:
-            # Some environments do not support setting the thread count; ignore
+            # 某些环境下不支持设置线程数，忽略即可
             pass
 
-        # State management
+        # 状态管理
         self.pos = 0
         self.full = False
 
         self.obs_shape = get_obs_shape(obs_space)
 
-        # Pre-allocate observation buffers
+        # 预分配观察空间
         obs_buffer_shape = (self.buffer_size,) + tuple(self.obs_shape)
         self.obs = np.zeros(obs_buffer_shape, dtype=obs_space.dtype)
         self.new_obs = np.zeros(obs_buffer_shape, dtype=obs_space.dtype)
 
-        # Action space support (Discrete and Box)
+        # 增强动作空间支持（采用BaseBuffer的完整逻辑）
         if isinstance(action_space, spaces.Discrete):
             self.actions = np.zeros(self.buffer_size, dtype=action_space.dtype)
         else:
             self.actions = np.zeros((self.buffer_size, *action_space.shape), dtype=action_space.dtype)
 
-        # Standard RL fields (keep dtypes aligned with BaseBuffer)
+        # 标准RL字段（与BaseBuffer保持一致的数据类型）
         self.rewards = np.zeros(self.buffer_size, dtype=np.float32)
         self.terminateds = np.zeros(self.buffer_size, dtype=np.int32)
         self.truncateds = np.zeros(self.buffer_size, dtype=np.int32)
         self.weights = np.zeros(self.buffer_size, dtype=np.float32)
 
     def add(self, batch: SampleBatch) -> None:
-        # todo: add
-
-        """Add a SampleBatch to the node's buffers."""
+        """添加样本批次到缓冲区"""
         if not isinstance(batch, SampleBatch) or len(batch) == 0:
             raise ValueError
 
@@ -95,7 +92,7 @@ class CompressReplayNode(object):
         if actual_size == 0:
             raise ValueError
 
-        # Store data
+        # 存储数据
         end_pos = self.pos + actual_size
         slice_range = slice(self.pos, end_pos)
         data_slice = slice(None, actual_size)
@@ -107,38 +104,38 @@ class CompressReplayNode(object):
         self.terminateds[slice_range] = batch["terminateds"][data_slice]
         self.truncateds[slice_range] = batch["truncateds"][data_slice]
 
-        # Handle weights
+        # 处理权重
         weights = batch.get("weights")
         self.weights[slice_range] = weights[data_slice] if weights is not None else 1.0
 
-        # Update state
+        # 更新状态
         self.pos = end_pos
         if self.pos >= self.buffer_size:
             self.full = True
 
     def _prepare_for_compression(self) -> SampleBatch:
-        """Prepare data for compression."""
+        """准备数据进行压缩"""
         size = self.size()
         obs_data = self.obs[:size]
         new_obs_data = self.new_obs[:size]
-
-        # Transpose for better compression locality if needed
+        
+        # 如果需要转置优化，先转置
         rank = len(obs_data.shape)
         if rank > 1:
             if self.compress_base == -1:
-                # Smart default: move batch dimension to the end
+                # 智能默认：将batch维度移到最后
                 axes = list(range(1, rank)) + [0]
                 obs_data = np.transpose(obs_data, axes)
                 new_obs_data = np.transpose(new_obs_data, axes)
             elif 0 <= self.compress_base < rank:
-                # User-specified axis to move to the end
+                # 用户指定维度转置
                 axes = list(range(rank))
                 to_move = axes.pop(self.compress_base)
                 axes.append(to_move)
                 obs_data = np.transpose(obs_data, axes)
                 new_obs_data = np.transpose(new_obs_data, axes)
-
-        # Create an optimized SampleBatch
+        
+        # 创建优化后的sample batch
         return SampleBatch({
             "obs": obs_data,
             "new_obs": new_obs_data,
@@ -152,45 +149,45 @@ class CompressReplayNode(object):
 
     def sample(self) -> Tuple[SampleBatch, float]:
         """
-        Sample and return compressed data.
-
-        Core steps:
-        1) Prepare data (including preprocessing)
-        2) Compute block-level weight
-        3) Perform compression
-        4) Return compressed SampleBatch and weight
-
+        采样并返回压缩数据
+        
+        这是节点的核心方法：
+        1. 准备数据（包含预处理）
+        2. 计算块级权重
+        3. 执行压缩
+        4. 返回压缩数据和权重
+        
         Returns:
-            Tuple[compressed_sample_batch, block_weight]
-
+            Tuple[压缩数据字典, 块权重]
+            
         Raises:
-            ValueError: if the node is empty
+            ValueError: 如果节点为空
         """
         if not self.full and self.pos == 0:
-            raise ValueError("Node is empty; cannot sample compressed data")
+            raise ValueError("节点为空，无法采样压缩数据")
 
-        # Prepare data
+        # 准备数据
         prepared_batch = self._prepare_for_compression()
 
-        # Compute block-level weight (mean of sample weights)
+        # 计算块级权重（样本权重的平均值）
         block_weight = float(np.mean(prepared_batch["weights"]))
         if np.isnan(block_weight) or block_weight <= 0:
-            block_weight = 0.01  # minimal weight guard
+            block_weight = 0.01  # 最小权重保护
 
-        # Perform compression
+        # 执行压缩
         try:
             compressed_batch = self._compress_sample_batch(prepared_batch)
             return compressed_batch, block_weight
         except Exception as e:
-            logger.exception("Compression failed")
-            raise RuntimeError(f"Compression failed: {e}")
+            logger.exception("压缩失败")
+            raise RuntimeError(f"压缩失败: {e}")
 
     def _compress_sample_batch(self, sample_batch: SampleBatch) -> SampleBatch:
-        """Compress the SampleBatch and return a compressed SampleBatch."""
+        """压缩样本批次并返回压缩后的 SampleBatch"""
         obs_array = sample_batch["obs"]
         new_obs_array = sample_batch["new_obs"]
 
-        # Compress with blosc, honoring compression level/algorithm/shuffle
+        # 使用blosc压缩，支持压缩级别/算法/洗牌策略配置
         compressed_obs = blosc.pack_array(
             obs_array,
             cname=self.cname,
@@ -204,7 +201,7 @@ class CompressReplayNode(object):
             shuffle=self.shuffle,
         )
 
-        # Return compressed SampleBatch (only obs/new_obs are compressed object arrays)
+        # 返回压缩后的 SampleBatch（仅 obs/new_obs 为压缩对象数组）
         return SampleBatch({
             "obs": np.array([compressed_obs], dtype=object),
             "new_obs": np.array([compressed_new_obs], dtype=object),
@@ -217,18 +214,18 @@ class CompressReplayNode(object):
         })
 
     def size(self) -> int:
-        """Return current number of stored samples."""
+        """获取当前存储的样本数量"""
         return self.buffer_size if self.full else self.pos
 
     def reset(self) -> None:
-        """Reset node state (keep allocated memory)."""
+        """重置节点状态（保留已分配的内存）"""
         self.pos = 0
         self.full = False
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("CompressReplayNode reset")
+            logger.debug("CompressReplayNode 已重置")
 
     def is_ready(self) -> bool:
-        """Whether the node is ready to compress (buffer full)."""
+        """检查节点是否准备好进行压缩"""
         return self.full
 
     def __repr__(self) -> str:

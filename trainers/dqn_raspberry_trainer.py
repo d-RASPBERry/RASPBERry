@@ -5,14 +5,10 @@ This module provides DQNRaspberryTrainer that uses RASPBERry's
 RAM-saving prioritized block experience replay buffer.
 """
 
-from typing import Dict, Any, Optional
+from typing import Any, Optional
 from ray.rllib.algorithms.dqn import DQNConfig
-from utils import convert_np_arrays
 from replay_buffer.d_raspberry import MultiAgentPrioritizedBlockReplayBuffer
 from gymnasium.spaces import Space
-
-import time
-import json
 
 from .dqn_per_trainer import DQNTrainer
 
@@ -64,7 +60,7 @@ class DQNRaspberryTrainer(DQNTrainer):
         buffer_config["action_space"] = self.action_space
         buffer_config["obs_space"] = self.obs_space
 
-        # 确保关键参数的类型正确
+        # Ensure critical parameters have correct types
         if "prioritized_replay_eps" in buffer_config:
             buffer_config["prioritized_replay_eps"] = float(buffer_config["prioritized_replay_eps"])
         if "prioritized_replay_alpha" in buffer_config:
@@ -94,16 +90,19 @@ class DQNRaspberryTrainer(DQNTrainer):
         # Framework settings
         dqn_config = dqn_config.framework(hyper_parameters["framework"])
 
-        # Training parameter settings
-        dqn_config = dqn_config.training(
-            lr=hyper_parameters["lr"],
-            gamma=hyper_parameters["gamma"],
-            double_q=hyper_parameters["double_q"],
-            dueling=hyper_parameters["dueling"],
-            hiddens=hyper_parameters["hiddens"],
-            target_network_update_freq=hyper_parameters["target_network_update_freq"],
-            replay_buffer_config=buffer_config
-        )
+        # Training parameter settings (allow batch sizes from YAML)
+        training_kwargs = {
+            "lr": hyper_parameters["lr"],
+            "gamma": hyper_parameters["gamma"],
+            "double_q": hyper_parameters["double_q"],
+            "dueling": hyper_parameters["dueling"],
+            "hiddens": hyper_parameters["hiddens"],
+            "target_network_update_freq": hyper_parameters["target_network_update_freq"],
+            "replay_buffer_config": buffer_config,
+            "train_batch_size": hyper_parameters["train_batch_size"]
+        }
+
+        dqn_config = dqn_config.training(**training_kwargs)
 
         # Reporting settings
         dqn_config = dqn_config.reporting(
