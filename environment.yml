@@ -14,6 +14,7 @@ dependencies:
       - ray[all]==2.8.0
       - ale-py==0.8.1
       - blosc==1.11.3
+      - mlflow
       # Install Gym to match good env behavior for Atari wrappers
       - gym==0.23.0
       - gym-notices==0.0.7
