@@ -5,23 +5,23 @@ dependencies:
   - python=3.9
   - pip
   - pip:
-      - --extra-index-url https://download.pytorch.org/whl/cu124
+      - --extra-index-url https://download.pytorch.org/whl/cu121
       # ===== PyTorch stack (keep as in your raspberry env) =====
-      - torch==2.6.0+cu124
-      - torchvision==0.21.0+cu124
-      - torchaudio==2.6.0+cu124
+      - torch==2.5.1+cu121
+      - torchvision==0.20.1+cu121
+      - torchaudio==2.5.1+cu121
       # ===== RL/runtime libs =====
       - ray[all]==2.8.0
       - ale-py==0.8.1
       - blosc==1.11.3
-      - mlflow
+      - mlflow==2.14.0
       # Install Gym to match good env behavior for Atari wrappers
       - gym==0.23.0
       - gym-notices==0.0.7
       - gymnasium==0.28.1
       - gymnasium[atari]==0.28.1
       - gymnasium[accept-rom-license]
-      - gymnasium[box2d]
+      # - gymnasium[box2d]
       # Envs
       - minigrid==2.0.0
       # ===== Core numerics =====

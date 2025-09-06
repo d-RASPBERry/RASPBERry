@@ -1,9 +1,11 @@
 """
 Simple DQN Trainer example using Ray PER.
 """
-
 import os
 import argparse
+from trainers.dqn_per_trainer import DQNTrainer
+
+os.environ["RAY_TMPDIR"] = os.path.abspath("/mnt/tmp_chuheng/")
 
 
 def main():
@@ -16,24 +18,21 @@ def main():
     )
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-
-    from trainers.dqn_per_trainer import DQNTrainer
-
     env_in = "Pong"
+    env_name = f"Atari-{env_in}NoFrameskip-v4"
     trainer = DQNTrainer(
         config="./configs/ddqn_per.yml",
-        env_name=f"Atari-{env_in}NoFrameskip-v4",
+        env_name=env_name,
         run_name=f"{env_in}_PER",
-        log_path=f"~/data/logging/New_RASPBERry/Atari/{env_in}/",
-        checkpoint_path=f"~/data/checkpoints/New_RASPBERry/Atari/{env_in}/",
+        log_path=f"/home/chengming/data/logging/New_RASPBERry/Atari/{env_in}/",
+        checkpoint_path=f"/home/chengming/data/checkpoints/New_RASPBERry/Atari/{env_in}/",
         mlflow="./configs/mlflow.yml",
     )
-    trainer.setup_ray(5, 1, False)
     # Run training
     trainer.run(
         initialize=True,
         max_iterations=10000,
-        max_time=43200,
+        max_time=360000,
     )
 
 
