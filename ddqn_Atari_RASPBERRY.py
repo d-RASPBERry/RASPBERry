@@ -27,7 +27,7 @@ def main():
     trainer.run(
         initialize=True,
         max_iterations=1000,
-        max_time=3600,
+        max_time=43200,
     )
 
 

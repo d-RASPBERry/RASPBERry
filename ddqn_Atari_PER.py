@@ -2,10 +2,23 @@
 Simple DQN Trainer example using Ray PER.
 """
 
-from trainers.dqn_per_trainer import DQNTrainer
+import os
+import argparse
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--gpu",
+        type=str,
+        default=os.getenv("CUDA_VISIBLE_DEVICES", "0"),
+        help="CUDA device id(s), e.g., '0' or '0,1'",
+    )
+    args = parser.parse_args()
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+
+    from trainers.dqn_per_trainer import DQNTrainer
+
     env_in = "Pong"
     trainer = DQNTrainer(
         config="./configs/ddqn_per.yml",
@@ -20,7 +33,7 @@ def main():
     trainer.run(
         initialize=True,
         max_iterations=10000,
-        max_time=36000,
+        max_time=43200,
     )
 
 
