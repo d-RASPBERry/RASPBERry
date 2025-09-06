@@ -4,8 +4,10 @@ Simple DQN Trainer example using Ray PER.
 import os
 import argparse
 from trainers.dqn_per_trainer import DQNTrainer
+from utils import load_paths
 
-os.environ["RAY_TMPDIR"] = os.path.abspath("/mnt/tmp_chuheng/")
+paths = load_paths()
+os.environ["RAY_TMPDIR"] = os.path.abspath(paths['tmp_dir'])
 
 
 def main():
@@ -16,16 +18,22 @@ def main():
         default=os.getenv("CUDA_VISIBLE_DEVICES", "0"),
         help="CUDA device id(s), e.g., '0' or '0,1'",
     )
+    parser.add_argument(
+        "--env_in",
+        type=str,
+        default="Pong",
+        help="Atari environment name (e.g., Pong, Breakout)",
+    )
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-    env_in = "Pong"
+    env_in = args.env_in
     env_name = f"Atari-{env_in}NoFrameskip-v4"
     trainer = DQNTrainer(
         config="./configs/ddqn_per.yml",
         env_name=env_name,
         run_name=f"{env_in}_PER",
-        log_path=f"/home/chengming/data/logging/New_RASPBERry/Atari/{env_in}/",
-        checkpoint_path=f"/home/chengming/data/checkpoints/New_RASPBERry/Atari/{env_in}/",
+        log_path=f"{paths['log_base_path']}{env_in}/",
+        checkpoint_path=f"{paths['checkpoint_base_path']}{env_in}/",
         mlflow="./configs/mlflow.yml",
     )
     # Run training

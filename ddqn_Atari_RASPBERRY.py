@@ -4,9 +4,10 @@ Simple DQN Trainer example using RASPBERry (block-prioritized replay with compre
 import os
 import argparse
 from trainers.dqn_raspberry_trainer import DQNRaspberryTrainer
-from utils import env_creator
+from utils import env_creator, load_paths
 
-os.environ["RAY_TMPDIR"] = os.path.abspath("/mnt/tmp_chuheng/")
+paths = load_paths()
+os.environ["RAY_TMPDIR"] = os.path.abspath(paths['tmp_dir'])
 
 
 def main():
@@ -17,9 +18,15 @@ def main():
         default=os.getenv("CUDA_VISIBLE_DEVICES", "0"),
         help="CUDA device id(s), e.g., '0' or '0,1'",
     )
+    parser.add_argument(
+        "--env_in",
+        type=str,
+        default="Pong",
+        help="Atari environment name (e.g., Pong, Breakout)",
+    )
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-    env_in = "Pong"
+    env_in = args.env_in
     env_name = f"Atari-{env_in}NoFrameskip-v4"
     env_config = {
         "id": env_name
@@ -29,8 +36,8 @@ def main():
         config="./configs/ddqn_raspberry_atari.yml",
         env_name=env_name,
         run_name=f"{env_in}_RASPBERRY",
-        log_path=f"/home/chengming/data/logging/New_RASPBERry/Atari/{env_in}/",
-        checkpoint_path=f"/home/chengming/data/checkpoints/New_RASPBERry/Atari/{env_in}/",
+        log_path=f"{paths['log_base_path']}{env_in}/",
+        checkpoint_path=f"{paths['checkpoint_base_path']}{env_in}/",
         obs_space=game.observation_space,
         action_space=game.action_space,
         mlflow="./configs/mlflow.yml",

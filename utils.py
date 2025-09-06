@@ -269,3 +269,18 @@ def deep_merge_config(base: Dict, override: Dict) -> Dict:
         else:
             result[key] = value
     return result
+
+
+def load_paths(path_config: str = "./configs/path.yml") -> Dict:
+    """
+    Load path configurations from YAML file.
+    
+    Args:
+        path_config: Path to the path configuration file
+        
+    Returns:
+        Path configuration dictionary
+    """
+    with open(path_config, 'r') as f:
+        paths = yaml.safe_load(f)
+    return paths
