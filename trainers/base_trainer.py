@@ -317,7 +317,7 @@ class BaseTrainer(ABC):
             initialize: If True, calls `setup_ray()` and `init_algorithm()` before training.
         """
         if initialize:
-            self.setup_ray(num_cpus=self.config["num_cpus"], num_gpus=self.config["num_gpus"])
+            self.setup_ray(num_cpus=self.config["hyper_parameters"]["num_cpus"], num_gpus=self.config["hyper_parameters"]["num_gpus"])
             self.init_algorithm()
 
         self.train(max_iterations=max_iterations, max_time=max_time)
