@@ -28,7 +28,7 @@ class CompressReplayNode(object):
             action_space: spaces.Space,
             compress_base: int = -1,
             compression_level: int = 5,
-            cname: str = 'lz4',
+            cname: str = 'zstd',
             shuffle: int = blosc.BITSHUFFLE,
             nthreads: int = 4,
     ):

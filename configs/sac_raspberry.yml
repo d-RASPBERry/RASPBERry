@@ -11,4 +11,6 @@ hyper_parameters:
     split_mini_batch: 4                  # 小批量分割
     num_save: 100                        # 保持未压缩的块数
     store: 2000                          # 存储管理参数
+    compression_algorithm: "blosclz"        # 压缩算法: zstd, lz4, lz4hc, blosclz
+    compression_level: 3                 # 压缩级别: 1-9
     type: MultiAgentPrioritizedBlockReplayBuffer

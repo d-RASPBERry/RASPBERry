@@ -96,6 +96,8 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             sub_buffer_size: int = 32,
             compress_base: int = -1,
             compress_pool_size: int = 0,
+            compression_algorithm: str = 'zstd',
+            compression_level: int = 5,
             **kwargs
     ):
         # Strictly follow Ray: pass prioritized parameters
@@ -117,6 +119,8 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             obs_space=obs_space,
             action_space=action_space,
             compress_base=compress_base,
+            cname=compression_algorithm,
+            compression_level=compression_level,
         )
 
     def _drain_one(self) -> None:
