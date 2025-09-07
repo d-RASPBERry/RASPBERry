@@ -40,11 +40,16 @@ hyper_parameters:
   # 训练批次配置
   train_batch_size: 32
   rollout_fragment_length: 4
-  
+
   # 资源配置
   num_gpus: 1
   num_cpus: 10
   num_envs_per_worker: 20
   num_gpus_per_worker: 0.01
   num_cpus_per_worker: 2
+
+  optimizer:
+    num_replay_buffer_shards: 1
+    async_replay_optimizer: True
+
 
