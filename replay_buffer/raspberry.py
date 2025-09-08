@@ -115,7 +115,16 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         )
         self._inflight: List[Future] = []
 
-        
+        # Cumulative metrics
+        self._metrics = {
+            "compress_time_ms": 0.0,
+            "compress_count": 0,
+            "compress_bytes_obs": 0,
+            "compress_bytes_new_obs": 0,
+            "backpressure_wait_ms": 0.0,
+            "decompress_time_ms": 0.0,
+            "decompress_count": 0,
+        }
 
         # Persist compression configuration for subsequent nodes
         self._compression_algorithm = compression_algorithm
@@ -132,16 +141,6 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             nthreads=self._compression_nthreads,
         )
 
-        # Lightweight cumulative metrics (kept minimal)
-        self.metrics: Dict[str, float] = {
-            "compress_time_ms": 0.0,
-            "backpressure_wait_ms": 0.0,
-            "decompress_time_ms": 0.0,
-            "compress_prep_ms": 0.0,
-            "compress_pack_obs_ms": 0.0,
-            "compress_pack_new_obs_ms": 0.0,
-        }
-
     def _drain_one(self) -> None:
         """Process one completed future if available (non-blocking)."""
         if not self._inflight:
@@ -152,8 +151,24 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         idx = done_indices[0]
         future = self._inflight.pop(idx)
         try:
-            compressed_data, weight = future.result()
+            result = future.result()
+            if isinstance(result, tuple) and len(result) >= 3:
+                compressed_data, weight, dt = result[0], result[1], result[2]
+                self._metrics["compress_time_ms"] += dt * 1000.0
+                if len(result) == 4 and isinstance(result[3], dict):
+                    info = result[3]
+                    for k in ("prepare_ms", "transpose_ms", "contig_ms", "compress_obs_ms", "compress_new_obs_ms", "assemble_ms"):
+                        if k in info:
+                            self._metrics[k] = self._metrics.get(k, 0.0) + float(info[k])
+            else:
+                compressed_data, weight = result
             self._add_single_batch(compressed_data, weight=weight)
+            try:
+                self._metrics["compress_bytes_obs"] += len(compressed_data["obs"][0])
+                self._metrics["compress_bytes_new_obs"] += len(compressed_data["new_obs"][0])
+            except Exception:
+                pass
+            self._metrics["compress_count"] += 1
         except Exception:
             logger.exception("[RB] compression future failed")
 
@@ -161,26 +176,57 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         assert self._compress_pool is not None
         # Backpressure: if inflight at capacity, drain one (wait for earliest)
         if len(self._inflight) >= self._compress_pool_size:
+            t_bp0 = time.time()
             # Block on the oldest future
             future0 = self._inflight.pop(0)
-            t_wait0 = time.time()
             try:
-                compressed_data, weight = future0.result()
-                wait_ms = (time.time() - t_wait0) * 1000.0
-                self.metrics["backpressure_wait_ms"] += float(wait_ms)
+                result0 = future0.result()
+                # Support both (data, weight) and (data, weight, dt[, info])
+                if isinstance(result0, tuple) and len(result0) >= 3:
+                    compressed_data, weight, dt = result0[0], result0[1], result0[2]
+                    self._metrics["compress_time_ms"] += dt * 1000.0
+                    if len(result0) == 4 and isinstance(result0[3], dict):
+                        info = result0[3]
+                        for k in ("prepare_ms", "transpose_ms", "contig_ms", "compress_obs_ms", "compress_new_obs_ms", "assemble_ms"):
+                            if k in info:
+                                self._metrics[k] = self._metrics.get(k, 0.0) + float(info[k])
+                else:
+                    compressed_data, weight = result0
                 self._add_single_batch(compressed_data, weight=weight)
+                self._metrics["backpressure_wait_ms"] += (time.time() - t_bp0) * 1000.0
+                try:
+                    logger.debug(
+                        f"[RB.bp] wait_ms={(time.time() - t_bp0)*1000.0:.3f} inflight_after={len(self._inflight)}"
+                    )
+                except Exception:
+                    pass
+                try:
+                    self._metrics["compress_bytes_obs"] += len(compressed_data["obs"][0])
+                    self._metrics["compress_bytes_new_obs"] += len(compressed_data["new_obs"][0])
+                except Exception:
+                    pass
+                self._metrics["compress_count"] += 1
             except Exception:
                 logger.exception("[RB] compression future failed (blocking)")
 
         def _worker(n: CompressReplayNode):
-            out = n.sample()  # (compressed_batch, weight)
-            return out
+            t0 = time.time()
+            out = n.sample()  # (compressed_batch, weight) or (compressed_batch, weight, info)
+            dt = time.time() - t0
+            if isinstance(out, tuple) and len(out) == 3 and isinstance(out[2], dict):
+                return out[0], out[1], dt, out[2]
+            return out[0], out[1], dt
 
         fut = self._compress_pool.submit(_worker, node)
+        try:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"[RB.submit] inflight={len(self._inflight)} pool_size={self._compress_pool_size}")
+        except Exception:
+            pass
         self._inflight.append(fut)
 
     def stats(self, debug: bool = False) -> Dict[str, Any]:
-        """Compute actual memory usage of compressed blocks."""
+        """Compute actual memory usage of compressed blocks and expose metrics."""
         total_size = 0
         for sample_batch in self._storage:
             if "obs" in sample_batch and hasattr(sample_batch["obs"], '__getitem__'):
@@ -193,11 +239,17 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
                         total_size += len(sample_batch["new_obs"][0])
                     except Exception:
                         total_size += sys.getsizeof(sample_batch["new_obs"][0])
-        return {
-            "est_size_bytes": total_size,
-            "num_entries": len(self._storage) * self.sub_buffer_size,
-            "metrics": dict(self.metrics),
+        # Only expose timing-related metrics as requested
+        out = {
+            "compress_time_ms": self._metrics.get("compress_time_ms", 0.0),
+            "backpressure_wait_ms": self._metrics.get("backpressure_wait_ms", 0.0),
+            "decompress_time_ms": self._metrics.get("decompress_time_ms", 0.0),
         }
+        # Include optional fine-grained timings when present
+        for k in ("prepare_ms", "transpose_ms", "contig_ms", "compress_obs_ms", "compress_new_obs_ms", "assemble_ms"):
+            if k in self._metrics:
+                out[k] = self._metrics[k]
+        return out
 
     def sample(self, num_items: int, beta: float, **kwargs) -> Optional[SampleBatch]:
         """Override sampling to properly expand weights (block -> transition)."""
@@ -237,17 +289,25 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
 
             if self.compress_node.is_ready():
                 if self._compress_pool is None:
+                    t0 = time.time()
                     compressed_data, weight = self.compress_node.sample()
-                    # accumulate per-node compression metrics snapshot
-                    c_metrics = getattr(self.compress_node, 'last_metrics', {}) or {}
-                    self.metrics["compress_time_ms"] += float(c_metrics.get("compress_time_ms", 0.0))
-                    self.metrics["compress_prep_ms"] += float(c_metrics.get("compress_prep_ms", 0.0))
-                    self.metrics["compress_pack_obs_ms"] += float(c_metrics.get("compress_pack_obs_ms", 0.0))
-                    self.metrics["compress_pack_new_obs_ms"] += float(c_metrics.get("compress_pack_new_obs_ms", 0.0))
-                    # write to underlying storage
-                    t_w0 = time.time()
+                    self._metrics["compress_time_ms"] += (time.time() - t0) * 1000.0
+                    try:
+                        self._metrics["compress_bytes_obs"] += len(compressed_data["obs"][0])
+                        self._metrics["compress_bytes_new_obs"] += len(compressed_data["new_obs"][0])
+                    except Exception:
+                        pass
+                    self._metrics["compress_count"] += 1
+                    try:
+                        comp_obs_len = len(compressed_data["obs"][0])
+                        comp_new_obs_len = len(compressed_data["new_obs"][0])
+                        logger.debug(
+                            f"[RB.add] block_ready: size={self.sub_buffer_size}, block_weight={weight:.4f}, "
+                            f"comp_obs_bytes={comp_obs_len}, comp_new_obs_bytes={comp_new_obs_len}"
+                        )
+                    except Exception:
+                        pass
                     self._add_single_batch(compressed_data, weight=weight)
-                    _ = (time.time() - t_w0) * 1000.0
                     self.compress_node.reset()
                 else:
                     # Swap out full node and submit compression to pool
@@ -266,7 +326,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             # Opportunistically drain one completed future to bound latency
             if self._compress_pool is not None:
                 self._drain_one()
-                
+
     def _encode_sample(self, idxes: List[int]) -> SampleBatch:
         """Encode samples (sync decompress + one-shot concat). Called by parent."""
         t0 = time.time()
@@ -275,12 +335,15 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             self._hit_count[i] += 1
             compressed_list.append(self._storage[i])
 
+        t_dec0 = time.time()
         decompressed_list: List[SampleBatch] = [
             decompress_sample_batch(compressed_sample, self.compress_base)
             for compressed_sample in compressed_list
         ]
         out = concat_samples(decompressed_list)
         dt = (time.time() - t0) * 1000.0
+        self._metrics["decompress_time_ms"] += (time.time() - t_dec0) * 1000.0
+        self._metrics["decompress_count"] += len(compressed_list)
         try:
             logger.debug(
                 f"[RB._encode_sample] blocks={len(idxes)}, transitions={out.count}, time_ms={dt:.2f}"

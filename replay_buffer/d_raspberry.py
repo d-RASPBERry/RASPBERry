@@ -275,21 +275,31 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         }
 
         total_estimated_bytes = 0
-        agg_metrics = {
-            "compress_time_ms": 0.0,
-            "backpressure_wait_ms": 0.0,
-            "decompress_time_ms": 0.0,
-            "compress_prep_ms": 0.0,
-            "compress_pack_obs_ms": 0.0,
-            "compress_pack_new_obs_ms": 0.0,
-        }
+        # Aggregate metrics across per-policy buffers. The underlying
+        # buffer exposes metrics at the top level via stats().
+        metric_keys = (
+            "compress_time_ms",
+            "backpressure_wait_ms",
+            "decompress_time_ms",
+            # Optional fine-grained timings if present
+            "prepare_ms",
+            "transpose_ms",
+            "contig_ms",
+            "compress_obs_ms",
+            "compress_new_obs_ms",
+            "assemble_ms",
+        )
+        agg_metrics = {k: 0.0 for k in metric_keys}
         for policy_id, replay_buffer in self.replay_buffers.items():
             policy_stats = replay_buffer.stats(debug=debug)
             total_estimated_bytes += policy_stats.get("est_size_bytes", 0)
-            # Aggregate per-policy metrics if present
-            m = policy_stats.get("metrics") or {}
-            for k in agg_metrics.keys():
-                agg_metrics[k] += float(m.get(k, 0.0))
+            # Aggregate per-policy metrics from top-level keys if present
+            for k in metric_keys:
+                if k in policy_stats:
+                    try:
+                        agg_metrics[k] += float(policy_stats[k])
+                    except Exception:
+                        pass
             stat.update(
                 {"policy_{}".format(policy_id): policy_stats}
             )
