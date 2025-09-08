@@ -98,6 +98,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             compress_pool_size: int = 0,
             compression_algorithm: str = 'zstd',
             compression_level: int = 5,
+            compression_nthreads: int = 1,
             **kwargs
     ):
         # Strictly follow Ray: pass prioritized parameters
@@ -114,13 +115,21 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         )
         self._inflight: List[Future] = []
 
+        
+
+        # Persist compression configuration for subsequent nodes
+        self._compression_algorithm = compression_algorithm
+        self._compression_level = compression_level
+        self._compression_nthreads = compression_nthreads
+
         self.compress_node = CompressReplayNode(
             buffer_size=sub_buffer_size,
             obs_space=obs_space,
             action_space=action_space,
             compress_base=compress_base,
-            cname=compression_algorithm,
-            compression_level=compression_level,
+            cname=self._compression_algorithm,
+            compression_level=self._compression_level,
+            nthreads=self._compression_nthreads,
         )
 
     def _drain_one(self) -> None:
@@ -162,10 +171,15 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         total_size = 0
         for sample_batch in self._storage:
             if "obs" in sample_batch and hasattr(sample_batch["obs"], '__getitem__'):
-                total_size += sys.getsizeof(sample_batch["obs"][0])
+                try:
+                    total_size += len(sample_batch["obs"][0])
+                except Exception:
+                    total_size += sys.getsizeof(sample_batch["obs"][0])
             if "new_obs" in sample_batch and hasattr(sample_batch["new_obs"], '__getitem__'):
-                total_size += sys.getsizeof(sample_batch["new_obs"][0])
-
+                    try:
+                        total_size += len(sample_batch["new_obs"][0])
+                    except Exception:
+                        total_size += sys.getsizeof(sample_batch["new_obs"][0])
         return {
             "est_size_bytes": total_size,
             "num_entries": len(self._storage) * self.sub_buffer_size,
@@ -209,16 +223,21 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
 
             if self.compress_node.is_ready():
                 if self._compress_pool is None:
+                    t_comp0 = time.time()
                     compressed_data, weight = self.compress_node.sample()
-                    try:
-                        comp_obs_len = len(compressed_data["obs"][0])
-                        comp_new_obs_len = len(compressed_data["new_obs"][0])
-                        logger.debug(
-                            f"[RB.add] block_ready: size={self.sub_buffer_size}, block_weight={weight:.4f}, "
-                            f"comp_obs_bytes={comp_obs_len}, comp_new_obs_bytes={comp_new_obs_len}"
-                        )
-                    except Exception:
-                        pass
+                    comp_ms = (time.time() - t_comp0) * 1000.0
+                    comp_obs_len = len(compressed_data["obs"][0])
+                    comp_new_obs_len = len(compressed_data["new_obs"][0])
+                    # Merge related info into a single line for add-path analysis
+                    t_w0 = time.time()
+                    self._add_single_batch(compressed_data, weight=weight)
+                    write_ms = (time.time() - t_w0) * 1000.0
+                    logger.debug(
+                        f"[RB.add] block_ready: size={self.sub_buffer_size}, block_weight={weight:.4f}, "
+                        f"comp_obs_bytes={comp_obs_len}, comp_new_obs_bytes={comp_new_obs_len}, "
+                        f"comp_ms={comp_ms:.2f}, write_ms={write_ms:.2f}"
+                    )
+                    # If logging failed, still perform the write
                     self._add_single_batch(compressed_data, weight=weight)
                     self.compress_node.reset()
                 else:
@@ -229,13 +248,15 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
                         obs_space=node_to_compress.obs_space,
                         action_space=node_to_compress.action_space,
                         compress_base=self.compress_base,
+                        cname=self._compression_algorithm,
+                        compression_level=self._compression_level,
+                        nthreads=self._compression_nthreads,
                     )
                     self._submit_compress(node_to_compress)
 
             # Opportunistically drain one completed future to bound latency
             if self._compress_pool is not None:
                 self._drain_one()
-
     def _encode_sample(self, idxes: List[int]) -> SampleBatch:
         """Encode samples (sync decompress + one-shot concat). Called by parent."""
         t0 = time.time()

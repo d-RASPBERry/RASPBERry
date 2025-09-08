@@ -41,6 +41,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             compress_pool_size: int = 0,
             compression_algorithm: str = 'zstd',
             compression_level: int = 5,
+            compression_nthreads: int = 1,
             **kwargs
     ):
         if "replay_mode" in kwargs and (
@@ -73,6 +74,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             "compress_pool_size": compress_pool_size,
             "compression_algorithm": compression_algorithm,
             "compression_level": compression_level,
+            "compression_nthreads": compression_nthreads,
             "prioritized_replay_eps": prioritized_replay_eps,
         }
 

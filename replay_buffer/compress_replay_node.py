@@ -4,6 +4,7 @@ from gymnasium import spaces
 from ray.rllib.policy.sample_batch import SampleBatch
 from utils import get_obs_shape
 import blosc
+import time
 import logging
 
 logger = logging.getLogger(__name__)
@@ -82,8 +83,6 @@ class CompressReplayNode(object):
         self.weights = np.zeros(self.buffer_size, dtype=np.float32)
 
     def add(self, batch: SampleBatch) -> None:
-        # todo: add
-
         """Add a SampleBatch to the node's buffers."""
         if not isinstance(batch, SampleBatch) or len(batch) == 0:
             raise ValueError
@@ -170,7 +169,9 @@ class CompressReplayNode(object):
             raise ValueError("Node is empty; cannot sample compressed data")
 
         # Prepare data
+        t_prep0 = time.time()
         prepared_batch = self._prepare_for_compression()
+        prep_ms = (time.time() - t_prep0) * 1000.0
 
         # Compute block-level weight (mean of sample weights)
         block_weight = float(np.mean(prepared_batch["weights"]))
@@ -179,6 +180,15 @@ class CompressReplayNode(object):
 
         # Perform compression
         try:
+            if logger.isEnabledFor(logging.DEBUG):
+                try:
+                    size = int(self.size())
+                    logger.debug(
+                        f"[Compress.sample] size={size}, prep_ms={prep_ms:.2f}, "
+                        f"obs_shape={prepared_batch['obs'].shape}, base={self.compress_base}"
+                    )
+                except Exception:
+                    pass
             compressed_batch = self._compress_sample_batch(prepared_batch)
             return compressed_batch, block_weight
         except Exception as e:
@@ -190,19 +200,42 @@ class CompressReplayNode(object):
         obs_array = sample_batch["obs"]
         new_obs_array = sample_batch["new_obs"]
 
+        # Ensure contiguous layout to avoid implicit copies inside blosc
+        obs_array = np.ascontiguousarray(obs_array)
+        new_obs_array = np.ascontiguousarray(new_obs_array)
+
         # Compress with blosc, honoring compression level/algorithm/shuffle
+        t_obs0 = time.time()
         compressed_obs = blosc.pack_array(
             obs_array,
             cname=self.cname,
             clevel=self.compression_level,
             shuffle=self.shuffle,
         )
+        t_obs1 = time.time()
         compressed_new_obs = blosc.pack_array(
             new_obs_array,
             cname=self.cname,
             clevel=self.compression_level,
             shuffle=self.shuffle,
         )
+        t_obs2 = time.time()
+
+        if logger.isEnabledFor(logging.DEBUG):
+            try:
+                obs_raw_bytes = int(obs_array.nbytes)
+                new_obs_raw_bytes = int(new_obs_array.nbytes)
+                obs_comp_bytes = int(len(compressed_obs))
+                new_obs_comp_bytes = int(len(compressed_new_obs))
+                logger.debug(
+                    f"[Compress.pack] pack_obs_ms={(t_obs1 - t_obs0)*1000.0:.2f}, "
+                    f"pack_new_obs_ms={(t_obs2 - t_obs1)*1000.0:.2f}, "
+                    f"obs_bytes={obs_comp_bytes}/{obs_raw_bytes} ({obs_comp_bytes/max(obs_raw_bytes,1):.3f}), "
+                    f"new_obs_bytes={new_obs_comp_bytes}/{new_obs_raw_bytes} ({new_obs_comp_bytes/max(new_obs_raw_bytes,1):.3f}), "
+                    f"algo={self.cname}, clevel={self.compression_level}, nthreads={self.nthreads}"
+                )
+            except Exception:
+                pass
 
         # Return compressed SampleBatch (only obs/new_obs are compressed object arrays)
         return SampleBatch({

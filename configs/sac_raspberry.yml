@@ -13,4 +13,5 @@ hyper_parameters:
     store: 2000                          # 存储管理参数
     compression_algorithm: "blosclz"        # 压缩算法: zstd, lz4, lz4hc, blosclz
     compression_level: 3                 # 压缩级别: 1-9
+    compression_nthreads: 1              # 小数据块单线程最优
     type: MultiAgentPrioritizedBlockReplayBuffer

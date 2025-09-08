@@ -11,6 +11,7 @@ hyper_parameters:
     sub_buffer_size: 8
     compress_base: -1
     worker_side_prioritization: false
-    compress_pool_size: 20
+    compress_pool_size: 10
     compression_algorithm: "blosclz"  # Options: zstd, lz4, lz4hc, blosclz
-    compression_level: 3           # 1-9, higher = better compression but slower
+    compression_level: 1           # 1-9, higher = better compression but slower
+    compression_nthreads: 1        # For small blocks (~225KB), single thread is optimal

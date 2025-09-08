@@ -4,8 +4,8 @@ paths:
   checkpoint_path: "checkpoints"
 
 # log 策略
-log_freq: 10
-checkpoint_freq: 100
+log_freq: 5
+checkpoint_freq: 50
 
 hyper_parameters:
   # 环境配置
@@ -30,8 +30,8 @@ hyper_parameters:
   target_network_update_freq: 10000
 
   # 学习调度
-  num_steps_sampled_before_learning_starts: 50000
-  min_sample_timesteps_per_iteration: 10000
+  num_steps_sampled_before_learning_starts: 20000
+  min_sample_timesteps_per_iteration: 5 000
 
   # 探索参数
   final_epsilon: 0.01
