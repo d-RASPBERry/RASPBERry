@@ -31,7 +31,7 @@ hyper_parameters:
 
   # 学习调度
   num_steps_sampled_before_learning_starts: 20000
-  min_sample_timesteps_per_iteration: 5 000
+  min_sample_timesteps_per_iteration: 5000
 
   # 探索参数
   final_epsilon: 0.01
