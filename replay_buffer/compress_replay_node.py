@@ -81,6 +81,13 @@ class CompressReplayNode(object):
         self.terminateds = np.zeros(self.buffer_size, dtype=np.int32)
         self.truncateds = np.zeros(self.buffer_size, dtype=np.int32)
         self.weights = np.zeros(self.buffer_size, dtype=np.float32)
+        # Last compression metrics snapshot (for callers who need details)
+        self.last_metrics = {
+            "compress_time_ms": 0.0,
+            "compress_prep_ms": 0.0,
+            "compress_pack_obs_ms": 0.0,
+            "compress_pack_new_obs_ms": 0.0,
+        }
 
     def add(self, batch: SampleBatch) -> None:
         """Add a SampleBatch to the node's buffers."""
@@ -189,13 +196,20 @@ class CompressReplayNode(object):
                     )
                 except Exception:
                     pass
-            compressed_batch = self._compress_sample_batch(prepared_batch)
+            # Compress and collect timing from inner routine
+            compressed_batch, pack_obs_ms, pack_new_obs_ms = self._compress_sample_batch(prepared_batch)
+            self.last_metrics = {
+                "compress_time_ms": float(prep_ms + pack_obs_ms + pack_new_obs_ms),
+                "compress_prep_ms": float(prep_ms),
+                "compress_pack_obs_ms": float(pack_obs_ms),
+                "compress_pack_new_obs_ms": float(pack_new_obs_ms),
+            }
             return compressed_batch, block_weight
         except Exception as e:
             logger.exception("Compression failed")
             raise RuntimeError(f"Compression failed: {e}")
 
-    def _compress_sample_batch(self, sample_batch: SampleBatch) -> SampleBatch:
+    def _compress_sample_batch(self, sample_batch: SampleBatch) -> Tuple[SampleBatch, float, float]:
         """Compress the SampleBatch and return a compressed SampleBatch."""
         obs_array = sample_batch["obs"]
         new_obs_array = sample_batch["new_obs"]
@@ -220,6 +234,8 @@ class CompressReplayNode(object):
             shuffle=self.shuffle,
         )
         t_obs2 = time.time()
+        pack_obs_ms = (t_obs1 - t_obs0) * 1000.0
+        pack_new_obs_ms = (t_obs2 - t_obs1) * 1000.0
 
         if logger.isEnabledFor(logging.DEBUG):
             try:
@@ -247,7 +263,7 @@ class CompressReplayNode(object):
             "truncateds": sample_batch["truncateds"],
             "weights": sample_batch["weights"],
             "compress_base": self.compress_base,
-        })
+        }), pack_obs_ms, pack_new_obs_ms
 
     def size(self) -> int:
         """Return current number of stored samples."""

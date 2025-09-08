@@ -275,11 +275,24 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         }
 
         total_estimated_bytes = 0
+        agg_metrics = {
+            "compress_time_ms": 0.0,
+            "backpressure_wait_ms": 0.0,
+            "decompress_time_ms": 0.0,
+            "compress_prep_ms": 0.0,
+            "compress_pack_obs_ms": 0.0,
+            "compress_pack_new_obs_ms": 0.0,
+        }
         for policy_id, replay_buffer in self.replay_buffers.items():
             policy_stats = replay_buffer.stats(debug=debug)
             total_estimated_bytes += policy_stats.get("est_size_bytes", 0)
+            # Aggregate per-policy metrics if present
+            m = policy_stats.get("metrics") or {}
+            for k in agg_metrics.keys():
+                agg_metrics[k] += float(m.get(k, 0.0))
             stat.update(
                 {"policy_{}".format(policy_id): policy_stats}
             )
         stat["est_size_bytes"] = total_estimated_bytes
+        stat["metrics"] = agg_metrics
         return stat

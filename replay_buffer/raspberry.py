@@ -132,6 +132,16 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             nthreads=self._compression_nthreads,
         )
 
+        # Lightweight cumulative metrics (kept minimal)
+        self.metrics: Dict[str, float] = {
+            "compress_time_ms": 0.0,
+            "backpressure_wait_ms": 0.0,
+            "decompress_time_ms": 0.0,
+            "compress_prep_ms": 0.0,
+            "compress_pack_obs_ms": 0.0,
+            "compress_pack_new_obs_ms": 0.0,
+        }
+
     def _drain_one(self) -> None:
         """Process one completed future if available (non-blocking)."""
         if not self._inflight:
@@ -153,8 +163,11 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         if len(self._inflight) >= self._compress_pool_size:
             # Block on the oldest future
             future0 = self._inflight.pop(0)
+            t_wait0 = time.time()
             try:
                 compressed_data, weight = future0.result()
+                wait_ms = (time.time() - t_wait0) * 1000.0
+                self.metrics["backpressure_wait_ms"] += float(wait_ms)
                 self._add_single_batch(compressed_data, weight=weight)
             except Exception:
                 logger.exception("[RB] compression future failed (blocking)")
@@ -183,6 +196,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         return {
             "est_size_bytes": total_size,
             "num_entries": len(self._storage) * self.sub_buffer_size,
+            "metrics": dict(self.metrics),
         }
 
     def sample(self, num_items: int, beta: float, **kwargs) -> Optional[SampleBatch]:
@@ -223,22 +237,17 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
 
             if self.compress_node.is_ready():
                 if self._compress_pool is None:
-                    t_comp0 = time.time()
                     compressed_data, weight = self.compress_node.sample()
-                    comp_ms = (time.time() - t_comp0) * 1000.0
-                    comp_obs_len = len(compressed_data["obs"][0])
-                    comp_new_obs_len = len(compressed_data["new_obs"][0])
-                    # Merge related info into a single line for add-path analysis
+                    # accumulate per-node compression metrics snapshot
+                    c_metrics = getattr(self.compress_node, 'last_metrics', {}) or {}
+                    self.metrics["compress_time_ms"] += float(c_metrics.get("compress_time_ms", 0.0))
+                    self.metrics["compress_prep_ms"] += float(c_metrics.get("compress_prep_ms", 0.0))
+                    self.metrics["compress_pack_obs_ms"] += float(c_metrics.get("compress_pack_obs_ms", 0.0))
+                    self.metrics["compress_pack_new_obs_ms"] += float(c_metrics.get("compress_pack_new_obs_ms", 0.0))
+                    # write to underlying storage
                     t_w0 = time.time()
                     self._add_single_batch(compressed_data, weight=weight)
-                    write_ms = (time.time() - t_w0) * 1000.0
-                    logger.debug(
-                        f"[RB.add] block_ready: size={self.sub_buffer_size}, block_weight={weight:.4f}, "
-                        f"comp_obs_bytes={comp_obs_len}, comp_new_obs_bytes={comp_new_obs_len}, "
-                        f"comp_ms={comp_ms:.2f}, write_ms={write_ms:.2f}"
-                    )
-                    # If logging failed, still perform the write
-                    self._add_single_batch(compressed_data, weight=weight)
+                    _ = (time.time() - t_w0) * 1000.0
                     self.compress_node.reset()
                 else:
                     # Swap out full node and submit compression to pool
@@ -257,6 +266,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             # Opportunistically drain one completed future to bound latency
             if self._compress_pool is not None:
                 self._drain_one()
+                
     def _encode_sample(self, idxes: List[int]) -> SampleBatch:
         """Encode samples (sync decompress + one-shot concat). Called by parent."""
         t0 = time.time()
