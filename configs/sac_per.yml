@@ -3,7 +3,7 @@ extends: templates/sac_base.yml
 
 hyper_parameters:
   replay_buffer_config:
-    capacity: 500000
+    capacity: 1000000
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1
     prioritized_replay_eps: 0.000001

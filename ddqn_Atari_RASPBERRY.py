@@ -45,10 +45,9 @@ def main():
     # Run training
     trainer.run(
         initialize=True,
-        max_iterations=1000,
-        max_time=2400,
+        max_iterations=5000,
+        max_time=10800,
     )
-
 
 if __name__ == "__main__":
     main()
