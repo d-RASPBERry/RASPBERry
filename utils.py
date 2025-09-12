@@ -220,8 +220,8 @@ def env_creator(env_config):
         env_id = env_config["id"].replace("Atari-", "")
         env = gymnasium.make(env_id)
         return wrap_deepmind(env)
-    elif env_config["id"] == "CarRacing":
-        return gymnasium.make("CarRacing")
+    elif env_config["id"][0:5] == "BOX2D":
+        return gymnasium.make(env_config["id"].replace("BOX2D-", ""))
     else:
         raise NotImplementedError(f"Environment {env_config['id']} not supported")
 

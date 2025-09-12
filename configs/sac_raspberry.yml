@@ -3,15 +3,17 @@ extends: templates/sac_base.yml
 
 hyper_parameters:
   replay_buffer_config:
-    capacity: 100000
+    capacity: 500000
     prioritized_replay_alpha: 0.5
-    prioritized_replay_beta: 0.4
-    sub_buffer_size: 8                   # RASPBERry特有参数
-    compress_base: -1                    # 自动压缩维度选择
-    split_mini_batch: 4                  # 小批量分割
-    num_save: 100                        # 保持未压缩的块数
-    store: 2000                          # 存储管理参数
-    compression_algorithm: "blosclz"        # 压缩算法: zstd, lz4, lz4hc, blosclz
-    compression_level: 3                 # 压缩级别: 1-9
-    compression_nthreads: 1              # 小数据块单线程最优
+    prioritized_replay_beta: 1
+    prioritized_replay_eps: 0.000001
     type: MultiAgentPrioritizedBlockReplayBuffer
+    sub_buffer_size: 16
+    compress_base: -1
+    worker_side_prioritization: false
+    compress_pool_size: 100
+    compression_algorithm: "lz4"  # Options: zstd, lz4, lz4hc, blosclz
+    compression_level: 1           # 1-9, higher = better compression but slower
+    compression_nthreads: 2        # For small blocks (~225KB), single thread is optimal
+    compression_mode: "D"          # "A": sync, "B": batch_pool, "D": batch_async
+    chunk_size: 20                 # Batch size for modes B and D (shared parameter)

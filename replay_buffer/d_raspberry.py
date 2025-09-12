@@ -42,6 +42,8 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             compression_algorithm: str = 'zstd',
             compression_level: int = 5,
             compression_nthreads: int = 1,
+            compression_mode: str = "A",  # "A": sync, "B": batch_pool, "D": batch_async
+            chunk_size: int = 10,
             **kwargs
     ):
         if "replay_mode" in kwargs and (
@@ -75,6 +77,8 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             "compression_algorithm": compression_algorithm,
             "compression_level": compression_level,
             "compression_nthreads": compression_nthreads,
+            "compression_mode": compression_mode,
+            "chunk_size": chunk_size,
             "prioritized_replay_eps": prioritized_replay_eps,
         }
 
@@ -213,8 +217,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 raw_sample = self.replay_buffers["__all__"].sample(
                     num_items, beta=beta, **kwargs
                 )
-                import pdb
-                pdb.set_trace()
                 if raw_sample is None:
                     return None
 
@@ -236,7 +238,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                     sample = decompress_sample_batch(sample, self.compress_base)
 
                 ma_batch = MultiAgentBatch({policy_id: sample}, sample.count)
-                logger.info(ma_batch.count)
+                logger.debug(f"Sampled batch for policy {policy_id}: {ma_batch.count} transitions")
                 return ma_batch
 
             else:
@@ -271,10 +273,13 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             "update_priorities_time_ms": round(
                 1000 * self.update_priorities_timer.mean, 3
             ),
-            "est_size_bytes": 0
+            "est_size_bytes": 0,
+            # Added for parity with RLlib PER buffer stats
+            "added_count": int(getattr(self, "_num_added", 0)),
         }
 
         total_estimated_bytes = 0
+        total_entries = 0
         # Aggregate metrics across per-policy buffers. The underlying
         # buffer exposes metrics at the top level via stats().
         metric_keys = (
@@ -293,6 +298,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         for policy_id, replay_buffer in self.replay_buffers.items():
             policy_stats = replay_buffer.stats(debug=debug)
             total_estimated_bytes += policy_stats.get("est_size_bytes", 0)
+            total_entries += policy_stats.get("num_entries", 0)
             # Aggregate per-policy metrics from top-level keys if present
             for k in metric_keys:
                 if k in policy_stats:
@@ -304,5 +310,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 {"policy_{}".format(policy_id): policy_stats}
             )
         stat["est_size_bytes"] = total_estimated_bytes
+        stat["num_entries"] = total_entries
         stat["metrics"] = agg_metrics
         return stat

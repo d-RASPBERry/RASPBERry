@@ -39,7 +39,10 @@ class CompressReplayNode(object):
             buffer_size: secondary block size
             obs_space: observation space (supports Box, Discrete, etc.)
             action_space: action space (supports Discrete, Box, etc.)
-            compress_base: base axis for compression (-1 uses smart default)
+            compress_base: base axis for compression
+                -1: smart default (move batch axis to the end)
+                 0: no transpose (preserve current layout)
+                >0: move that axis to the end (if < rank)
             compression_level: compression level (1-9, default 5)
         """
         if buffer_size <= 0:
@@ -122,13 +125,20 @@ class CompressReplayNode(object):
         if self.pos >= self.buffer_size:
             self.full = True
 
-    def _prepare_for_compression(self) -> SampleBatch:
-        """Prepare data for compression."""
+    def _prepare_for_compression(self) -> Tuple[SampleBatch, float, float]:
+        """Prepare data for compression.
+
+        Returns:
+            tuple: (prepared_batch, prepare_ms, transpose_ms)
+        """
+        t0 = time.time()
         size = self.size()
         obs_data = self.obs[:size]
         new_obs_data = self.new_obs[:size]
 
         # Transpose for better compression locality if needed
+        t_tr0 = time.time()
+        transpose_ms = 0.0
         rank = len(obs_data.shape)
         if rank > 1:
             if self.compress_base == -1:
@@ -136,16 +146,17 @@ class CompressReplayNode(object):
                 axes = list(range(1, rank)) + [0]
                 obs_data = np.transpose(obs_data, axes)
                 new_obs_data = np.transpose(new_obs_data, axes)
-            elif 0 <= self.compress_base < rank:
-                # User-specified axis to move to the end
+            elif 0 < self.compress_base < rank:
+                # User-specified axis to move to the end (skip when 0)
                 axes = list(range(rank))
                 to_move = axes.pop(self.compress_base)
                 axes.append(to_move)
                 obs_data = np.transpose(obs_data, axes)
                 new_obs_data = np.transpose(new_obs_data, axes)
+        transpose_ms = (time.time() - t_tr0) * 1000.0
 
         # Create an optimized SampleBatch
-        return SampleBatch({
+        prepared = SampleBatch({
             "obs": obs_data,
             "new_obs": new_obs_data,
             "actions": self.actions[:size],
@@ -155,8 +166,10 @@ class CompressReplayNode(object):
             "weights": self.weights[:size],
             "compress_base": self.compress_base,
         })
+        prepare_ms = (time.time() - t0) * 1000.0
+        return prepared, prepare_ms, transpose_ms
 
-    def sample(self) -> Tuple[SampleBatch, float]:
+    def sample(self) -> Tuple[SampleBatch, float, dict]:
         """
         Sample and return compressed data.
 
@@ -176,9 +189,7 @@ class CompressReplayNode(object):
             raise ValueError("Node is empty; cannot sample compressed data")
 
         # Prepare data
-        t_prep0 = time.time()
-        prepared_batch = self._prepare_for_compression()
-        prep_ms = (time.time() - t_prep0) * 1000.0
+        prepared_batch, prep_ms, transpose_ms = self._prepare_for_compression()
 
         # Compute block-level weight (mean of sample weights)
         block_weight = float(np.mean(prepared_batch["weights"]))
@@ -197,26 +208,39 @@ class CompressReplayNode(object):
                 except Exception:
                     pass
             # Compress and collect timing from inner routine
-            compressed_batch, pack_obs_ms, pack_new_obs_ms = self._compress_sample_batch(prepared_batch)
-            self.last_metrics = {
-                "compress_time_ms": float(prep_ms + pack_obs_ms + pack_new_obs_ms),
-                "compress_prep_ms": float(prep_ms),
-                "compress_pack_obs_ms": float(pack_obs_ms),
-                "compress_pack_new_obs_ms": float(pack_new_obs_ms),
+            compressed_batch, pack_obs_ms, pack_new_obs_ms, contig_ms, assemble_ms = self._compress_sample_batch(prepared_batch)
+            # Expose detailed metrics for aggregators
+            metrics = {
+                "prepare_ms": float(prep_ms),
+                "transpose_ms": float(transpose_ms),
+                "contig_ms": float(contig_ms),
+                "compress_obs_ms": float(pack_obs_ms),
+                "compress_new_obs_ms": float(pack_new_obs_ms),
+                "assemble_ms": float(assemble_ms),
             }
-            return compressed_batch, block_weight
+            self.last_metrics = {
+                "compress_time_ms": float(prep_ms + contig_ms + pack_obs_ms + pack_new_obs_ms + assemble_ms),
+                **metrics,
+            }
+            return compressed_batch, block_weight, metrics
         except Exception as e:
             logger.exception("Compression failed")
             raise RuntimeError(f"Compression failed: {e}")
 
-    def _compress_sample_batch(self, sample_batch: SampleBatch) -> Tuple[SampleBatch, float, float]:
-        """Compress the SampleBatch and return a compressed SampleBatch."""
+    def _compress_sample_batch(self, sample_batch: SampleBatch) -> Tuple[SampleBatch, float, float, float, float]:
+        """Compress the SampleBatch and return a compressed SampleBatch with timings.
+
+        Returns:
+            tuple: (compressed_batch, pack_obs_ms, pack_new_obs_ms, contig_ms, assemble_ms)
+        """
         obs_array = sample_batch["obs"]
         new_obs_array = sample_batch["new_obs"]
 
         # Ensure contiguous layout to avoid implicit copies inside blosc
+        t_contig0 = time.time()
         obs_array = np.ascontiguousarray(obs_array)
         new_obs_array = np.ascontiguousarray(new_obs_array)
+        contig_ms = (time.time() - t_contig0) * 1000.0
 
         # Compress with blosc, honoring compression level/algorithm/shuffle
         t_obs0 = time.time()
@@ -254,7 +278,8 @@ class CompressReplayNode(object):
                 pass
 
         # Return compressed SampleBatch (only obs/new_obs are compressed object arrays)
-        return SampleBatch({
+        t_asm0 = time.time()
+        out_batch = SampleBatch({
             "obs": np.array([compressed_obs], dtype=object),
             "new_obs": np.array([compressed_new_obs], dtype=object),
             "actions": sample_batch["actions"],
@@ -263,7 +288,9 @@ class CompressReplayNode(object):
             "truncateds": sample_batch["truncateds"],
             "weights": sample_batch["weights"],
             "compress_base": self.compress_base,
-        }), pack_obs_ms, pack_new_obs_ms
+        })
+        assemble_ms = (time.time() - t_asm0) * 1000.0
+        return out_batch, pack_obs_ms, pack_new_obs_ms, contig_ms, assemble_ms
 
     def size(self) -> int:
         """Return current number of stored samples."""

@@ -21,7 +21,7 @@ dependencies:
       - gymnasium==0.28.1
       - gymnasium[atari]==0.28.1
       - gymnasium[accept-rom-license]
-      # - gymnasium[box2d]
+      - gymnasium[box2d]
       # Envs
       - minigrid==2.0.0
       # ===== Core numerics =====

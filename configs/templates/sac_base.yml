@@ -33,6 +33,7 @@ hyper_parameters:
   
   # 资源配置
   num_gpus: 1
+  num_cpus: 10
   num_workers: 0                   # SAC通常不需要多个rollout workers
 
 # log 策略

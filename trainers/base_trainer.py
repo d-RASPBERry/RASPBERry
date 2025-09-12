@@ -228,10 +228,10 @@ class BaseTrainer(ABC):
         if not self.use_mlflow:
             return
 
-        if self.log_path:
-            mlflow.log_artifacts(str(self.log_path))
-        if self.checkpoint_path:
-            mlflow.log_artifacts(str(self.checkpoint_path))
+        # if self.log_path:
+        #     mlflow.log_artifacts(str(self.log_path))
+        # if self.checkpoint_path:
+        #     mlflow.log_artifacts(str(self.checkpoint_path))
 
         mlflow.end_run()
 
