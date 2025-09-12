@@ -48,11 +48,15 @@ class DQNTrainer(BaseTrainer):
         Returns:
             Configured DQN algorithm instance
         """
+        # Log and setup environment
+        self.log("Creating DQN algorithm...", "TRAIN")
+        
         # Setup environment
         env_id = self.setup_environment()
 
         # Get hyperparameters
         hyper_parameters = self.config["hyper_parameters"]
+        self.log(f"hyper-parameters: {hyper_parameters}", "TRAIN")
         # Use replay buffer configuration directly from YAML
         buffer_config = hyper_parameters["replay_buffer_config"]
 
@@ -69,7 +73,7 @@ class DQNTrainer(BaseTrainer):
         if buffer_config["type"] == "MultiAgentPrioritizedReplayBuffer":
             buffer_config["type"] = MultiAgentPrioritizedReplayBuffer
         else:
-            raise ValueError()
+            raise ValueError("Must use MultiAgentPrioritizedReplayBuffer")
 
         # Environment configuration
         env_config = {

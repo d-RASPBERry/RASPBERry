@@ -50,6 +50,8 @@ class DQNRaspberryTrainer(DQNTrainer):
         Returns:
             Configured DQN algorithm instance
         """
+        # Log and setup environment
+        self.log("Creating DQN+RASPBERry algorithm...", "TRAIN")
         # Setup environment first
         env_id = self.setup_environment()
 
@@ -129,6 +131,7 @@ class DQNRaspberryTrainer(DQNTrainer):
         # Rollouts configuration
         dqn_config = dqn_config.rollouts(
             num_envs_per_worker=hyper_parameters["num_envs_per_worker"],
+            preprocessor_pref=None,
             rollout_fragment_length=hyper_parameters["rollout_fragment_length"]
         )
 

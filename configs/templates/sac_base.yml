@@ -3,11 +3,6 @@ paths:
   log_path: "logs"
   checkpoint_path: "checkpoints"
 
-# 通用训练设置
-training:
-  log_freq: 10
-  checkpoint_freq: 100
-
 hyper_parameters:
   # 环境配置
   framework: torch

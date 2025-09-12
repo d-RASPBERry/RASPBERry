@@ -71,7 +71,7 @@ class SACTrainer(BaseTrainer):
         if buffer_config["type"] == "MultiAgentPrioritizedReplayBuffer":
             buffer_config["type"] = MultiAgentPrioritizedReplayBuffer
         else:
-            raise ValueError()
+            raise ValueError("Must use MultiAgentPrioritizedReplayBuffer")
 
         # Environment configuration
         env_config = {
