@@ -23,13 +23,16 @@ hyper_parameters:
   min_sample_timesteps_per_iteration: 1000
 
   # 训练批次配置
-  train_batch_size: 256            # SAC通常使用较大批次
-  rollout_fragment_length: 1       # SAC通常使用单步rollout
+  train_batch_size: 4096           # 提高批量以更好利用GPU
+  rollout_fragment_length: 32      # 增加fragment降低RPC与序列化开销
   
   # 资源配置
   num_gpus: 1
-  num_cpus: 10
-  num_workers: 0                   # SAC通常不需要多个rollout workers
+  num_cpus: 24
+  num_workers: 6                   # 提升并行采样
+  num_envs_per_worker: 4
+  num_gpus_per_worker: 0
+  num_cpus_per_worker: 2
 
 # log 策略
 log_freq: 10

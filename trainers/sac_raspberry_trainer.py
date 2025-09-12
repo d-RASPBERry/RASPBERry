@@ -114,12 +114,15 @@ class SACRaspberryTrainer(BaseTrainer):
 
         # Resource configuration
         sac_config = sac_config.resources(
-            num_gpus=hyper_parameters["num_gpus"]
+            num_gpus=hyper_parameters["num_gpus"],
+            num_gpus_per_worker=hyper_parameters.get("num_gpus_per_worker", 0),
+            num_cpus_per_worker=hyper_parameters.get("num_cpus_per_worker", 1),
         )
 
         # SAC-specific rollout configuration
         sac_config = sac_config.rollouts(
             num_rollout_workers=hyper_parameters.get("num_workers", 0),
+            num_envs_per_worker=hyper_parameters.get("num_envs_per_worker", 1),
             rollout_fragment_length=hyper_parameters.get("rollout_fragment_length", 1),
         )
 
