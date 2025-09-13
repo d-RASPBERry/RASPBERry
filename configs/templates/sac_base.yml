@@ -28,9 +28,9 @@ hyper_parameters:
 
   # 资源配置
   num_gpus: 1
-  num_cpus: 24
+  num_cpus: 10
   num_workers: 6                   # 提升并行采样
-  num_envs_per_worker: 4
+  num_envs_per_worker: 20
   num_gpus_per_worker: 0.01
   num_cpus_per_worker: 2
 

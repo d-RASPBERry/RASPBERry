@@ -1,10 +1,10 @@
 """
-Simple DQN Trainer example using RASPBERry (block-prioritized replay with compression).
+Simple DQN Trainer example using Ray PER.
 """
 import os
 import argparse
-from trainers.dqn_raspberry_trainer import DQNRaspberryTrainer
-from utils import env_creator, load_paths
+from trainers.dqn_per_trainer import DQNTrainer
+from utils import load_paths
 
 paths = load_paths()
 os.environ["RAY_TMPDIR"] = os.path.abspath(paths['tmp_dir'])
@@ -28,26 +28,18 @@ def main():
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     env_in = args.env_in
     env_name = f"Atari-{env_in}NoFrameskip-v4"
-    env_config = {
-        "id": env_name
-    }
-    game = env_creator(env_config)
-    trainer = DQNRaspberryTrainer(
-        config="./configs/ddqn_raspberry_atari.yml",
+    trainer = DQNTrainer(
+        config="./configs/ddqn_per.yml",
         env_name=env_name,
-        run_name=f"{env_in}_RASPBERRY",
+        run_name=f"{env_in}_PER",
         log_path=f"{paths['log_base_path']}{env_in}/",
         checkpoint_path=f"{paths['checkpoint_base_path']}{env_in}/",
-        obs_space=game.observation_space,
-        action_space=game.action_space,
         mlflow="./configs/mlflow.yml",
     )
     # Run training
-    trainer.run(
-        initialize=True,
-        max_iterations=5000,
-        max_time=10800,
-    )
+    trainer.run(initialize=True, max_iterations=10000, max_time=72000)
+
+
 
 if __name__ == "__main__":
     main()

@@ -33,7 +33,7 @@ def main():
         checkpoint_path=f"{paths['checkpoint_base_path']}{env_in}/",
         mlflow="./configs/mlflow.yml",
     )
-    trainer.run(initialize=True, max_iterations=1000, max_time=72000)
+    trainer.run(initialize=True, max_iterations=10000, max_time=72000)
 
 
 if __name__ == "__main__":
