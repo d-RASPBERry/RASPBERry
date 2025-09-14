@@ -1,0 +1,13 @@
+# Inherit base configuration
+extends: templates/apex_base.yml
+
+hyper_parameters:
+  replay_buffer_config:
+    capacity: 500000
+    prioritized_replay_alpha: 0.5
+    prioritized_replay_beta: 1.0
+    prioritized_replay_eps: 0.000001
+    type: MultiAgentPrioritizedReplayBuffer
+    replay_buffer_shards_colocated_with_driver: true
+    worker_side_prioritization: true
+    no_local_replay_buffer: true

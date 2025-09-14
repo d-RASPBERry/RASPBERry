@@ -1,11 +1,12 @@
 """
-DQN Trainer implementation using Ray RLlib.
+Ape-X DQN Trainer implementation using Ray RLlib.
 
-This module provides DQNTrainer that uses Ray's native PER replay buffer.
+This module provides ApexDQNTrainer that uses Ray's native distributed
+prioritized experience replay (PER) with Ape-X.
 """
 
 from typing import Dict, Any, Optional
-from ray.rllib.algorithms.dqn import DQNConfig
+from ray.rllib.algorithms.apex_dqn import ApexDQNConfig
 from utils import convert_np_arrays
 
 from ray.rllib.utils.replay_buffers import MultiAgentPrioritizedReplayBuffer
@@ -15,12 +16,9 @@ import json
 from .base_trainer import BaseTrainer
 
 
-class DQNTrainer(BaseTrainer):
+class ApexDQNTrainer(BaseTrainer):
     """
-    DQN trainer using Ray's native MultiAgent PER.
-    
-    This trainer creates DQN algorithms with Ray's built-in prioritized
-    experience replay buffer.
+    Ape-X DQN trainer using Ray's native MultiAgent PER in distributed mode.
     """
 
     def __init__(self,
@@ -31,7 +29,7 @@ class DQNTrainer(BaseTrainer):
                  checkpoint_path: Optional[str] = None,
                  mlflow: str = None):
         """
-        Initialize DQN trainer with Ray's native PER buffer.
+        Initialize Ape-X DQN trainer with Ray's native PER buffer.
 
         Args:
             config: Path to YAML configuration file
@@ -44,19 +42,16 @@ class DQNTrainer(BaseTrainer):
     def init_algorithm(self) -> Any:
         """
         Create and return RL algorithm instance.
-        
+
         Returns:
-            Configured DQN algorithm instance
+            Configured Ape-X DQN algorithm instance
         """
         # Log and setup environment
-        self.log("Creating DQN algorithm...", "TRAIN")
-        
-        # Setup environment
+        self.log("Creating Ape-X DQN algorithm...", "TRAIN")
         env_id = self.setup_environment()
 
         # Get hyperparameters
         hyper_parameters = self.config["hyper_parameters"]
-        self.log(f"hyper-parameters: {hyper_parameters}", "TRAIN")
         # Use replay buffer configuration directly from YAML
         buffer_config = hyper_parameters["replay_buffer_config"]
 
@@ -80,17 +75,17 @@ class DQNTrainer(BaseTrainer):
             "id": self.env_name
         }
 
-        # Create DQN configuration
-        dqn_config = DQNConfig()
+        # Create Ape-X DQN configuration
+        apex_config = ApexDQNConfig()
 
         # Environment settings
-        dqn_config = dqn_config.environment(
+        apex_config = apex_config.environment(
             env=env_id,
             env_config=env_config,
         )
 
         # Framework settings
-        dqn_config = dqn_config.framework(hyper_parameters["framework"])
+        apex_config = apex_config.framework(hyper_parameters["framework"])
 
         # Training parameter settings
         training_kwargs = {
@@ -102,22 +97,21 @@ class DQNTrainer(BaseTrainer):
             "target_network_update_freq": hyper_parameters["target_network_update_freq"],
             "replay_buffer_config": buffer_config,
             "train_batch_size": hyper_parameters["train_batch_size"],
-            # Additional fields from YAML
             "n_step": hyper_parameters["n_step"],
             "adam_epsilon": hyper_parameters["adam_epsilon"],
             "num_steps_sampled_before_learning_starts": hyper_parameters["num_steps_sampled_before_learning_starts"],
             "noisy": hyper_parameters["noisy"],
             "num_atoms": hyper_parameters["num_atoms"],
         }
-        dqn_config = dqn_config.training(**training_kwargs)
+        apex_config = apex_config.training(**training_kwargs)
 
         # Reporting settings
-        dqn_config = dqn_config.reporting(
+        apex_config = apex_config.reporting(
             min_sample_timesteps_per_iteration=hyper_parameters["min_sample_timesteps_per_iteration"]
         )
 
         # Exploration settings
-        dqn_config = dqn_config.exploration(
+        apex_config = apex_config.exploration(
             exploration_config={
                 "type": "EpsilonGreedy",
                 "initial_epsilon": 1.0,
@@ -127,22 +121,28 @@ class DQNTrainer(BaseTrainer):
         )
 
         # Resource configuration
-        dqn_config = dqn_config.resources(
+        apex_config = apex_config.resources(
             num_gpus=hyper_parameters["num_gpus"],
-            num_gpus_per_worker=hyper_parameters["num_gpus_per_worker"],
-            num_cpus_per_worker=hyper_parameters["num_cpus_per_worker"],
+            num_gpus_per_worker=hyper_parameters.get("num_gpus_per_worker", 0),
+            num_cpus_per_worker=hyper_parameters.get("num_cpus_per_worker", 1),
         )
 
-        # Rollouts configuration
-        dqn_config = dqn_config.rollouts(
+        # Rollouts configuration: Ape-X requires rollout workers > 0
+        apex_config = apex_config.rollouts(
+            num_rollout_workers=hyper_parameters.get("num_workers", 4),
             num_envs_per_worker=hyper_parameters["num_envs_per_worker"],
             preprocessor_pref=None,
-            rollout_fragment_length=hyper_parameters["rollout_fragment_length"]
+            rollout_fragment_length=hyper_parameters["rollout_fragment_length"],
         )
 
+        # Optimizer configuration (Ape-X specific)
+        optimizer_cfg = hyper_parameters.get("optimizer")
+        if optimizer_cfg:
+            apex_config = apex_config.update_from_dict({"optimizer": optimizer_cfg})
+
         # Build algorithm
-        self.trainer = dqn_config.build()
-        self.log("✓ DQN ready", "TRAIN")
+        self.trainer = apex_config.build()
+        self.log("✓ Ape-X DQN ready", "TRAIN")
 
         return self.trainer
 
@@ -163,9 +163,14 @@ class DQNTrainer(BaseTrainer):
                 result_with_meta["episodes"] = result.get("episodes_total", "N/A")
                 result_with_meta["time_s"] = result.get("time_total_s", "N/A")
 
-                if hasattr(self.trainer, 'local_replay_buffer'):
+                # Add buffer statistics (if available)
+                # For Ape-X, use distributed replay buffer stats from result
+                if hasattr(self.trainer, 'local_replay_buffer') and self.trainer.local_replay_buffer is not None:
                     buffer_stats = self.trainer.local_replay_buffer.stats()
                     result_with_meta["buffer_stats"] = buffer_stats
+                elif "info" in result and "replay_shard_0" in result["info"]:
+                    # Use Ape-X distributed buffer stats
+                    result_with_meta["buffer_stats"] = result["info"]["replay_shard_0"]
 
                 processed_data = convert_np_arrays(result_with_meta)
 
@@ -177,3 +182,5 @@ class DQNTrainer(BaseTrainer):
                 self.log(f"Failed to save result file: {e}")
 
         return stats
+
+

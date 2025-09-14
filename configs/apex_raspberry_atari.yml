@@ -1,0 +1,23 @@
+extends: templates/apex_base.yml
+
+hyper_parameters:
+  # Replay buffer (RASPBERry)
+  replay_buffer_config:
+    capacity: 1000000
+    prioritized_replay_alpha: 0.5
+    prioritized_replay_beta: 1.0
+    prioritized_replay_eps: 0.000001
+    type: MultiAgentPrioritizedBlockReplayBuffer
+    sub_buffer_size: 8
+    compress_base: -1
+    worker_side_prioritization: false
+    replay_buffer_shards_colocated_with_driver: true
+    no_local_replay_buffer: true
+    compress_pool_size: 100
+    compression_algorithm: "lz4"
+    compression_level: 1
+    compression_nthreads: 2
+    compression_mode: "D"
+    chunk_size: 20
+
+

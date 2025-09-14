@@ -7,7 +7,7 @@ hyper_parameters:
   framework: torch
 
   # Core parameters
-  lr: 6.25e-05
+  lr: 0.0001
   gamma: 0.99
   double_q: true
   dueling: false
@@ -22,31 +22,32 @@ hyper_parameters:
   # Adam optimizer
 
   # Target network updates
-  target_network_update_freq: 10000
+  target_network_update_freq: 50000
 
   # Learning schedule
-  num_steps_sampled_before_learning_starts: 20000
-  min_sample_timesteps_per_iteration: 5000
+  num_steps_sampled_before_learning_starts: 100000
+  min_sample_timesteps_per_iteration: 25000
 
   # Exploration parameters
   final_epsilon: 0.01
   epsilon_timesteps: 1000000
 
   # Training batch
-  train_batch_size: 32
-  rollout_fragment_length: 4
+  train_batch_size: 512
+  rollout_fragment_length: 20
 
   # Resource configuration
   num_gpus: 1
-  num_cpus: 10
-  num_envs_per_worker: 20
+  num_cpus: 20
+  num_workers: 4
+  num_envs_per_worker: 10
   num_gpus_per_worker: 0.01
   num_cpus_per_worker: 1
 
-  # DQN replay optimizer settings
+  # Ape-X replay optimizer settings
   optimizer:
     num_replay_buffer_shards: 1
-    async_replay_optimizer: True
+    async_replay_optimizer: true
 
 
 # Logging strategy

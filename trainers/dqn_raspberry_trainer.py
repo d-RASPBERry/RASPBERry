@@ -55,6 +55,10 @@ class DQNRaspberryTrainer(DQNTrainer):
         # Setup environment first
         env_id = self.setup_environment()
 
+        # Validate spaces required by RASPBERry buffer
+        if self.obs_space is None or self.action_space is None:
+            raise ValueError("RASPBERry buffer requires obs_space and action_space. Please pass both.")
+
         # Get and configure hyperparameters
         hyper_parameters = self.config["hyper_parameters"]
         # Use replay buffer configuration directly from YAML
@@ -101,7 +105,13 @@ class DQNRaspberryTrainer(DQNTrainer):
             "hiddens": hyper_parameters["hiddens"],
             "target_network_update_freq": hyper_parameters["target_network_update_freq"],
             "replay_buffer_config": buffer_config,
-            "train_batch_size": hyper_parameters["train_batch_size"]
+            "train_batch_size": hyper_parameters["train_batch_size"],
+            # Additional fields from YAML
+            "n_step": hyper_parameters["n_step"],
+            "adam_epsilon": hyper_parameters["adam_epsilon"],
+            "num_steps_sampled_before_learning_starts": hyper_parameters["num_steps_sampled_before_learning_starts"],
+            "noisy": hyper_parameters["noisy"],
+            "num_atoms": hyper_parameters["num_atoms"],
         }
 
         dqn_config = dqn_config.training(**training_kwargs)
