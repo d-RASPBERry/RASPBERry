@@ -140,8 +140,8 @@ class BaseTrainer(ABC):
         result = self.trainer.train()
         self.current_iteration = iteration + 1
         stats = self._filter_result(iteration, result)
-        # skip first 50 iter log
-        if self.current_iteration > self.checkpoint_freq and iteration % self.log_freq == 0:
+        # Log progress controlled purely by log_freq
+        if self.log_freq and iteration % self.log_freq == 0:
             reward = stats.get("reward", "N/A")
             timesteps = stats.get("timesteps", "N/A")
             self.log(f"Iter {iteration:4d} | Reward: {reward} | Timesteps: {timesteps}", "TRAIN")
