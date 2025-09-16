@@ -47,7 +47,7 @@ def main():
         action_space=game.action_space,
         mlflow="./configs/mlflow.yml",
     )
-    trainer.run(initialize=True, max_iterations=1000, max_time=2400)
+    trainer.run(initialize=True, max_iterations=1000, max_time=36000)
 
 
 if __name__ == "__main__":
