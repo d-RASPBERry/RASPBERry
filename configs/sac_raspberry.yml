@@ -11,7 +11,7 @@ hyper_parameters:
     sub_buffer_size: 32
     compress_base: -1
     worker_side_prioritization: false
-    compress_pool_size: 200
+    compress_pool_size: 400
     compression_algorithm: "lz4"  # Options: zstd, lz4, lz4hc, blosclz
     compression_level: 1           # 1-9, higher = better compression but slower
     compression_nthreads: 4

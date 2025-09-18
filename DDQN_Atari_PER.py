@@ -37,7 +37,7 @@ def main():
         mlflow="./configs/mlflow.yml",
     )
     # Run training
-    trainer.run(initialize=True, max_iterations=10000, max_time=72000)
+    trainer.run(initialize=True, max_iterations=10000, max_time=36000)
 
 
 

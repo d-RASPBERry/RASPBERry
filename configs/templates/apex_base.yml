@@ -26,7 +26,7 @@ hyper_parameters:
 
   # Learning schedule
   num_steps_sampled_before_learning_starts: 100000
-  min_sample_timesteps_per_iteration: 25000
+  min_sample_timesteps_per_iteration: 10000
 
   # Exploration parameters
   final_epsilon: 0.01
