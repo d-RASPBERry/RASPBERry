@@ -194,22 +194,62 @@ class BaseTrainer(ABC):
         eva = result.get("evaluation", {})
         info = result.get("info", {})
 
-        # Replay buffer statistics
-        buf = {}
-        if hasattr(self.trainer, 'local_replay_buffer'):
-            buf = flatten_dict(self.trainer.local_replay_buffer.stats())
-            if "est_size_bytes" in buf:
-                buf["est_size_gb"] = buf["est_size_bytes"] / 1e9
+        # Replay buffer statistics (robust handling for single-node vs Ape-X distributed)
+        try:
+            # Determine if using local buffer (single-node) vs distributed (Ape-X)
+            use_normal = (hasattr(self.trainer, 'local_replay_buffer') and 
+                         self.trainer.local_replay_buffer is not None)
+            
+            if use_normal:
+                # Single-node mode: use local buffer stats
+                buf = flatten_dict(self.trainer.local_replay_buffer.stats())
+                if "est_size_bytes" in buf:
+                    buf["est_size_gb"] = buf["est_size_bytes"] / 1e9
+            else:
+                # Ape-X distributed mode: extract from result info and scale by shard count
+                info_copy = info.copy() if hasattr(info, "copy") else dict(info)
+                shard0_stats = info_copy.get("replay_shard_0", {})
+                if shard0_stats:
+                    buf = flatten_dict(shard0_stats)
+                    # Get shard count from optimizer config
+                    try:
+                        optimizer_cfg = self.config["hyper_parameters"].get("optimizer", {})
+                        num_shards = int(optimizer_cfg.get("num_replay_buffer_shards", 1))
+                    except Exception:
+                        num_shards = 1
+                    
+                    # Scale single shard stats to total
+                    if "est_size_bytes" in buf:
+                        total_bytes = float(buf["est_size_bytes"]) * num_shards
+                        buf["est_size_bytes"] = total_bytes
+                        buf["est_size_gb"] = total_bytes / 1e9
+                else:
+                    # Fallback for missing replay stats
+                    buf = {"buffer_mode": "ape_x", "est_size_bytes": 0, "est_size_gb": 0.0}
+        except Exception as exc:
+            # Best-effort logging only; never fail training due to stats collection
+            self.log(f"replay buffer stats unavailable ({type(exc).__name__})", "BUFFER")
+            buf = {"buffer_error": str(exc)}
 
         # Merge all numeric metrics
-        metrics = {}
+        metrics: Dict[str, float] = {}
         for d in [sampler, info, buf]:
-            metrics.update({k: v for k, v in d.items() if isinstance(v, (int, float))})
+            for k, v in d.items():
+                if isinstance(v, (int, float)):
+                    metrics[k] = float(v)
 
         # Add prefix for evaluation metrics
         for k, v in eva.items():
             if isinstance(v, (int, float)):
-                metrics[f"eval_{k}"] = v
+                metrics[f"eval_{k}"] = float(v)
+
+        # Filter out NaN/Inf values to avoid logger errors
+        import math
+        metrics = {k: v for k, v in metrics.items() if v is not None and math.isfinite(v)}
+
+        # Nothing to log
+        if not metrics:
+            return
 
         step = result.get("episodes_total", iteration)
         mlflow.log_metrics(metrics, step=step)
