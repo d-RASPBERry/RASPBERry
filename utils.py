@@ -213,54 +213,8 @@ def to_numpy(grid, allow, agent, vis_mask=None):
         map_img[agent[0], agent[1]] = allow[agent_dir[agent[2]]]
     return map_img
 
-
-def test_env_creator(env_config):
-    """创建简单的测试环境，返回随机obs和actions"""
-    env_type = env_config.get("type", "ddqn")  # ddqn 或 sac
-    
-    class MockTestEnv:
-        def __init__(self, env_type):
-            # 固定观测空间：24x24x3 uint8
-            self.observation_space = Box(low=0, high=255, shape=(24, 24, 3), dtype=np.uint8)
-            
-            # 根据算法类型设置动作空间
-            if env_type == "sac":
-                # SAC: 2个float32连续动作
-                self.action_space = Box(low=-1.0, high=1.0, shape=(2,), dtype=np.float32)
-            else:
-                # DDQN: 离散动作 0,1,2
-                self.action_space = spaces.Discrete(3)
-            
-            self.env_type = env_type
-            self._step_count = 0
-            
-        def reset(self, seed=None):
-            self._step_count = 0
-            obs = np.random.randint(0, 256, size=(24, 24, 3), dtype=np.uint8)
-            return obs, {}
-            
-        def step(self, action):
-            self._step_count += 1
-            
-            # 随机obs
-            obs = np.random.randint(0, 256, size=(24, 24, 3), dtype=np.uint8)
-            
-            # 随机reward
-            reward = np.random.randn()
-            
-            # 随机结束条件 (10%概率结束，或步数超过100)
-            terminated = np.random.random() < 0.1 or self._step_count >= 100
-            truncated = self._step_count >= 100
-            
-            return obs, reward, terminated, truncated, {}
-    
-    return MockTestEnv(env_type)
-
-
 def env_creator(env_config):
-    if env_config["id"][0:5] == "TEST-":
-        return test_env_creator(env_config)
-    elif env_config["id"][0:8] == "MiniGrid":
+    if env_config["id"][0:8] == "MiniGrid":
         return minigrid_env_creator(env_config)
     elif env_config["id"][0:5] == "Atari":
         env_id = env_config["id"].replace("Atari-", "")

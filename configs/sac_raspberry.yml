@@ -3,12 +3,12 @@ extends: templates/sac_base.yml
 
 hyper_parameters:
   replay_buffer_config:
-    capacity: 1000000
+    capacity: 62500
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
     type: MultiAgentPrioritizedBlockReplayBuffer
-    sub_buffer_size: 32
+    sub_buffer_size: 16
     compress_base: -1
     worker_side_prioritization: false
     compress_pool_size: 400
