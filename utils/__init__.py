@@ -1,5 +1,5 @@
 from gymnasium import spaces
-from gymnasium.wrappers import TimeLimit, ResizeObservation
+from gymnasium.wrappers import PixelObservationWrapper, ResizeObservation, TimeLimit
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
 from ray.rllib.env.wrappers.atari_wrappers import wrap_deepmind
 from typing import Dict, Tuple, Union
@@ -326,7 +326,7 @@ def env_creator(env_config):
     
     Args:
         env_config: Dict with 'id' key specifying environment
-                   (MiniGrid-*, Atari-*, or BOX2D-*)
+                   (MiniGrid-*, Atari-*, BOX2D-*, Pendulum-*)
         
     Returns:
         Wrapped environment instance
@@ -340,6 +340,14 @@ def env_creator(env_config):
         env_id = env_config["id"].replace("Atari-", "")
         env = gymnasium.make(env_id)
         return wrap_deepmind(env)
+    elif env_config["id"].startswith("Pendulum-"):
+        env_id = env_config["id"].replace("Pendulum-", "", 1)
+        img_size = env_config.get("img_size", 84)
+        pixels_only = env_config.get("pixels_only", True)
+        env = gymnasium.make(env_id, render_mode="rgb_array")
+        env = PixelObservationWrapper(env, pixels_only=pixels_only)
+        env = ResizeObservation(env, (img_size, img_size))
+        return env
     elif env_config["id"][0:5] == "BOX2D":
         return gymnasium.make(env_config["id"].replace("BOX2D-", ""))
     else:
