@@ -2,3 +2,5 @@ old/
 2024
 .backups/
 .idea/
+__pycache__/
+*.pyc
