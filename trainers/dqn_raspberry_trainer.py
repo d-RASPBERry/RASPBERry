@@ -5,11 +5,12 @@ This module provides DQNRaspberryTrainer that uses RASPBERry's
 RAM-saving prioritized block experience replay buffer.
 """
 
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 from ray.rllib.algorithms.dqn import DQNConfig
 from replay_buffer.d_raspberry import MultiAgentPrioritizedBlockReplayBuffer
 from gymnasium.spaces import Space
 
+from algorithms.dqn_raspberry_algo import DQNRaspberryAlgo
 from .dqn_per_trainer import DQNTrainer
 
 
@@ -22,12 +23,12 @@ class DQNRaspberryTrainer(DQNTrainer):
     """
 
     def __init__(self,
-                 config: str,
+                 config: Dict[str, Any],
                  env_name: str,
                  run_name: str,
                  log_path: Optional[str] = None,
                  checkpoint_path: Optional[str] = None,
-                 mlflow: str = None,
+                 mlflow_cfg: Optional[Dict[str, Any]] = None,
                  obs_space: Space = None,
                  action_space: Space = None, ):
         """
@@ -39,7 +40,7 @@ class DQNRaspberryTrainer(DQNTrainer):
             log_path: Optional root directory to store logs
             checkpoint_path: Optional root directory to store checkpoints
         """
-        super().__init__(config, env_name, run_name, log_path, checkpoint_path, mlflow)
+        super().__init__(config, env_name, run_name, log_path, checkpoint_path, mlflow_cfg)
         self.obs_space = obs_space
         self.action_space = action_space
 
@@ -145,7 +146,8 @@ class DQNRaspberryTrainer(DQNTrainer):
             rollout_fragment_length=hyper_parameters["rollout_fragment_length"]
         )
 
-        # Build algorithm
+        # Build algorithm using custom training loop
+        dqn_config.__dict__["_algorithm_class"] = DQNRaspberryAlgo
         self.trainer = dqn_config.build()
         self.log("✓ DQN+RASPBERry ready", "TRAIN")
 

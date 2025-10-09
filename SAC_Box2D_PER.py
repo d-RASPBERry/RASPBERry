@@ -5,10 +5,10 @@ Default env: CarRacing
 import os
 import argparse
 from trainers.sac_per_trainer import SACTrainer
-from utils import load_paths
+from utils import load_config
 
 # Top-level path and Ray temp dir setup (unified style)
-paths = load_paths()
+paths = load_config("configs/path.yml")
 os.environ["RAY_TMPDIR"] = os.path.abspath(paths['tmp_dir'])
 
 
@@ -25,15 +25,26 @@ def main():
     env_in = args.env_in
     env_name = env_in if env_in.startswith("BOX2D-") else f"BOX2D-{env_in}"
 
+    config = load_config("./configs/sac_per.yml")
+    run_cfg = config['run_config']
+    if run_cfg.get('use_mlflow', False):
+        mlflow_cfg = load_config("configs/mlflow.yml")
+    else:
+        mlflow_cfg = None
+
     trainer = SACTrainer(
-        config="./configs/sac_per.yml",
+        config=config,
         env_name=env_name,
-        run_name=f"{env_in}_PER",
+        run_name=run_cfg['run_name_template'].format(env_in=env_in),
         log_path=f"{paths['log_base_path']}{env_in}/",
         checkpoint_path=f"{paths['checkpoint_base_path']}{env_in}/",
-        mlflow="./configs/mlflow.yml",
+        mlflow_cfg=mlflow_cfg,
     )
-    trainer.run(initialize=True, max_iterations=10000, max_time=72000)
+    trainer.run(
+        initialize=True,
+        max_iterations=run_cfg['max_iterations'],
+        max_time=run_cfg['max_time_s']
+    )
 
 
 if __name__ == "__main__":

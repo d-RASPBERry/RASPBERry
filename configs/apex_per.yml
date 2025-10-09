@@ -11,3 +11,9 @@ hyper_parameters:
     replay_buffer_shards_colocated_with_driver: true
     worker_side_prioritization: true
     no_local_replay_buffer: true
+
+run_config:
+  use_mlflow: true
+  run_name_template: "{env_in}_APEX_PER"
+  max_iterations: 200
+  max_time_s: 18000  # 5 hours

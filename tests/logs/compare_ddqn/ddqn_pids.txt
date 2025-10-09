@@ -1,0 +1,2 @@
+LOG_PATH=/home/seventheli/research/RASPBERry/tests/logs/compare_ddqn/ddqn_pids.txt
+PER=3755539 RASP_RAY=3755628

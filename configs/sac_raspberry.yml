@@ -17,3 +17,9 @@ hyper_parameters:
     compression_nthreads: 4
     compression_mode: "D"          # "A": sync, "B": batch_pool, "D": batch_async
     chunk_size: 20                 # Batch size for modes B and D (shared parameter)
+
+run_config:
+  use_mlflow: true
+  run_name_template: "{env_in}_RASPBERRY"
+  max_iterations: 100000
+  max_time_s: 360000 # 100 hours

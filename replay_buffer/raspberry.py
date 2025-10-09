@@ -25,8 +25,11 @@ def decompress_sample_batch(
 
     Supports arbitrary observation ranks, not limited to images.
 
+    IMPORTANT: This function assumes the input is ALWAYS compressed.
+    If you pass uncompressed data, it will fail with a clear error.
+
     Args:
-        ma_batch: compressed batch data
+        ma_batch: compressed batch data (must be compressed!)
         compress_base: axis moved to the end during compression
                        -1: smart default (move axis 0 to the end when compressing)
                        >=0: move the last axis back to the given position
@@ -36,7 +39,7 @@ def decompress_sample_batch(
     # Prefer per-batch compress_base metadata if present
     compress_base_used = ma_batch.get("compress_base", compress_base)
 
-    # Unpack compressed arrays
+    # Unpack compressed arrays (will fail if not compressed - by design!)
     decompressed_obs_transposed = blosc.unpack_array(ma_batch["obs"][0])
     decompressed_new_obs_transposed = blosc.unpack_array(ma_batch["new_obs"][0])
 
@@ -464,21 +467,22 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
                     self._compress_mode_D()  # 每次add都调用
 
     def _encode_sample(self, idxes: List[int]) -> SampleBatch:
-        """Encode samples (sync decompress + one-shot concat). Called by parent."""
-        t0 = time.time()
+        """Encode samples - returns COMPRESSED data (decompression happens at higher level)."""
         compressed_list = []
         for i in idxes:
             self._hit_count[i] += 1
             compressed_list.append(self._storage[i])
 
-        t_dec0 = time.time()
-        decompressed_list: List[SampleBatch] = [
-            decompress_sample_batch(compressed_sample, self.compress_base)
-            for compressed_sample in compressed_list
-        ]
-        out = concat_samples(decompressed_list)
-        dt = (time.time() - t0) * 1000.0
-        self._metrics["decompress_time_ms"] += (time.time() - t_dec0) * 1000.0
-        self._metrics["decompress_count"] += len(compressed_list)
+        # Remove compress_base metadata before concat (it's scalar, can't be concatenated)
+        compress_base_value = compressed_list[0].get("compress_base", self.compress_base) if compressed_list else self.compress_base
+        for batch in compressed_list:
+            if "compress_base" in batch:
+                del batch["compress_base"]
+        
+        # Concatenate compressed batches
+        out = concat_samples(compressed_list)
+        
+        # Add compress_base metadata back
+        out["compress_base"] = compress_base_value
 
         return out

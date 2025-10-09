@@ -1,6 +1,18 @@
+# Path configurations (merged from path.yml)
 paths:
-  log_path: "logs"
-  checkpoint_path: "checkpoints"
+  log_path: "logs"                                     # Relative log path within base
+  checkpoint_path: "checkpoints"                      # Relative checkpoint path within base
+  tmp_dir: "/tmp/"                                    # Temporary directory base
+  log_base_path: "/home/seventheli/data/logging/New_RASPBERry/Atari/"      # Base path for logging
+  checkpoint_base_path: "/home/seventheli/data/checkpoints/New_RASPBERry/Atari/"  # Base path for checkpoints
+  ray_temp_dir: "/home/seventheli/ray/"               # Ray temporary directory base
+
+# Ray configuration (integrated with path settings)
+ray_config:
+  object_store_memory_gb: 100                          # Object store memory in GB (100 * 1024 * 1024 * 1024 bytes)
+  include_dashboard: false                             # Whether to start Ray dashboard
+  ignore_reinit_error: true                           # Ignore reinit errors
+  max_gcs_destroyed_actor_cached_count: 100           # Maximum cached destroyed actors count (from path.yml)
 
 hyper_parameters:
   # Framework configuration
@@ -25,8 +37,8 @@ hyper_parameters:
   target_network_update_freq: 50000
 
   # Learning schedule
-  num_steps_sampled_before_learning_starts: 100000
-  min_sample_timesteps_per_iteration: 10000
+  num_steps_sampled_before_learning_starts: 50000
+  min_sample_timesteps_per_iteration: 5000
 
   # Exploration parameters
   final_epsilon: 0.01
@@ -38,18 +50,19 @@ hyper_parameters:
 
   # Resource configuration
   num_gpus: 1
-  num_cpus: 20
-  num_workers: 4
-  num_envs_per_worker: 10
+  num_cpus: 10
+  num_workers: 2
+  num_envs_per_worker: 5
   num_gpus_per_worker: 0.01
   num_cpus_per_worker: 1
 
   # Ape-X replay optimizer settings
   optimizer:
-    num_replay_buffer_shards: 1
+    num_replay_buffer_shards: 10
     async_replay_optimizer: true
 
 
 # Logging strategy
-log_freq: 10
-checkpoint_freq: 100
+log_freq: 1
+checkpoint_freq: 50
+log_start_iteration: 1

@@ -1,7 +1,18 @@
 # Basic path configuration
 paths:
-  log_path: "logs"
-  checkpoint_path: "checkpoints"
+  log_path: "logs"                                     # Relative log path within base
+  checkpoint_path: "checkpoints"                      # Relative checkpoint path within base
+  tmp_dir: "/tmp/"                                    # Temporary directory base
+  log_base_path: "/home/seventheli/data/logging/New_RASPBERry/Atari/"      # Base path for logging
+  checkpoint_base_path: "/home/seventheli/data/checkpoints/New_RASPBERry/Atari/"  # Base path for checkpoints
+  ray_temp_dir: "/home/seventheli/ray/"               # Ray temporary directory base
+
+# Ray configuration (integrated with path settings)
+ray_config:
+  object_store_memory_gb: 100                          # Object store memory in GB (100 * 1024 * 1024 * 1024 bytes)
+  include_dashboard: false                             # Whether to start Ray dashboard
+  ignore_reinit_error: true                           # Ignore reinit errors
+  max_gcs_destroyed_actor_cached_count: 100           # Maximum cached destroyed actors count (from path.yml)
 
 hyper_parameters:
   # Framework configuration
@@ -18,22 +29,24 @@ hyper_parameters:
   # Network architecture
   hiddens: [256, 256]              # SAC typically uses deeper networks
 
-  # Learning schedule
+  # Learning schedule (align with rl-experiments SAC baseline)
   num_steps_sampled_before_learning_starts: 10000
   min_sample_timesteps_per_iteration: 1000
+  training_intensity: 1.0
 
   # Training batch configuration
-  train_batch_size: 1024           # Larger batch to better utilize GPU
-  rollout_fragment_length: 32      # Longer fragments reduce RPC/serialization overhead
+  train_batch_size: 256            # rl-experiments uses 256 for Mujoco SAC
+  rollout_fragment_length: 1       # step-wise fragments typical for SAC
 
   # Resource configuration
   num_gpus: 1
   num_cpus: 10
-  num_workers: 6                   # Increase parallel sampling
-  num_envs_per_worker: 20
-  num_gpus_per_worker: 0.01
-  num_cpus_per_worker: 2
+  num_workers: 5                   # Increase parallel sampling
+  num_envs_per_worker: 8
+  num_gpus_per_worker: 0.1
+  num_cpus_per_worker: 1
 
 # Logging strategy
 log_freq: 10
 checkpoint_freq: 100
+log_start_iteration: 10

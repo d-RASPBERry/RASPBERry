@@ -1,0 +1,245 @@
+LOG_PATH=/home/seventheli/research/RASPBERry/tests/logs/compare_ddqn/ddqn_raspberry_ray_stdout.log
+
+[18:03:10] [DDQN_RASP.Breakout] ============================================================
+INFO:DDQN_RASP.Breakout:============================================================
+[18:03:10] [DDQN_RASP.Breakout] DDQN-RASPBERry 训练启动
+INFO:DDQN_RASP.Breakout:DDQN-RASPBERry 训练启动
+[18:03:10] [DDQN_RASP.Breakout] ============================================================
+INFO:DDQN_RASP.Breakout:============================================================
+[18:03:10] [DDQN_RASP.Breakout] 环境: Breakout
+INFO:DDQN_RASP.Breakout:环境: Breakout
+[18:03:10] [DDQN_RASP.Breakout] GPU: 0
+INFO:DDQN_RASP.Breakout:GPU: 0
+[18:03:10] [DDQN_RASP.Breakout] 日志目录: /home/seventheli/data/logging/New_RASPBERry/Atari/Breakout/Breakout
+INFO:DDQN_RASP.Breakout:日志目录: /home/seventheli/data/logging/New_RASPBERry/Atari/Breakout/Breakout
+[18:03:10] [DDQN_RASP.Breakout] 最大时长: 7200s
+INFO:DDQN_RASP.Breakout:最大时长: 7200s
+[18:03:10] [DDQN_RASP.Breakout] 最大迭代: 10000
+INFO:DDQN_RASP.Breakout:最大迭代: 10000
+[18:03:10] [DDQN_RASP.Breakout] ============================================================
+INFO:DDQN_RASP.Breakout:============================================================
+[18:03:12] [DDQN_RASP.Breakout] [MLFLOW] 实验: Breakout
+INFO:DDQN_RASP.Breakout:[MLFLOW] 实验: Breakout
+2025-10-03 18:03:14,620	INFO worker.py:1673 -- Started a local Ray instance.
+[18:03:15] [DDQN_RASP.Breakout] Ray 初始化完成 (CPUs=5, GPUs=1, 临时目录=/home/seventheli/ray/ray_1759510992)
+INFO:DDQN_RASP.Breakout:Ray 初始化完成 (CPUs=5, GPUs=1, 临时目录=/home/seventheli/ray/ray_1759510992)
+[18:03:15] [DDQN_RASP.Breakout] 构建算法...
+INFO:DDQN_RASP.Breakout:构建算法...
+A.L.E: Arcade Learning Environment (version 0.8.1+53f58b7)
+[Powered by Stella]
+2025-10-03 18:03:15,204	WARNING deprecation.py:50 -- DeprecationWarning: `rllib/algorithms/simple_q/` has been deprecated. Use `rllib_contrib/simple_q/` instead. This will raise an error in the future!
+2025-10-03 18:03:15,204	WARNING deprecation.py:50 -- DeprecationWarning: `algo = Algorithm(env='Breakout', ...)` has been deprecated. Use `algo = AlgorithmConfig().environment('Breakout').build()` instead. This will raise an error in the future!
+/home/seventheli/anaconda3/envs/RASPBERRY/lib/python3.9/site-packages/ray/rllib/algorithms/algorithm.py:484: RayDeprecationWarning: This API is deprecated and may be removed in future Ray releases. You could suppress this warning by setting env variable PYTHONWARNINGS="ignore::DeprecationWarning"
+`UnifiedLogger` will be removed in Ray 2.7.
+  return UnifiedLogger(config, logdir, loggers=None)
+/home/seventheli/anaconda3/envs/RASPBERRY/lib/python3.9/site-packages/ray/tune/logger/unified.py:53: RayDeprecationWarning: This API is deprecated and may be removed in future Ray releases. You could suppress this warning by setting env variable PYTHONWARNINGS="ignore::DeprecationWarning"
+The `JsonLogger interface is deprecated in favor of the `ray.tune.json.JsonLoggerCallback` interface and will be removed in Ray 2.7.
+  self._loggers.append(cls(self.config, self.logdir, self.trial))
+/home/seventheli/anaconda3/envs/RASPBERRY/lib/python3.9/site-packages/ray/tune/logger/unified.py:53: RayDeprecationWarning: This API is deprecated and may be removed in future Ray releases. You could suppress this warning by setting env variable PYTHONWARNINGS="ignore::DeprecationWarning"
+The `CSVLogger interface is deprecated in favor of the `ray.tune.csv.CSVLoggerCallback` interface and will be removed in Ray 2.7.
+  self._loggers.append(cls(self.config, self.logdir, self.trial))
+/home/seventheli/anaconda3/envs/RASPBERRY/lib/python3.9/site-packages/ray/tune/logger/unified.py:53: RayDeprecationWarning: This API is deprecated and may be removed in future Ray releases. You could suppress this warning by setting env variable PYTHONWARNINGS="ignore::DeprecationWarning"
+The `TBXLogger interface is deprecated in favor of the `ray.tune.tensorboardx.TBXLoggerCallback` interface and will be removed in Ray 2.7.
+  self._loggers.append(cls(self.config, self.logdir, self.trial))
+2025-10-03 18:03:15,375	WARNING deprecation.py:50 -- DeprecationWarning: `ray.rllib.models.torch.visionnet.VisionNetwork` has been deprecated. This will raise an error in the future!
+/home/seventheli/anaconda3/envs/RASPBERRY/lib/python3.9/site-packages/gymnasium/envs/registration.py:531: UserWarning: [33mWARN: Using the latest versioned environment `Breakout-v4` instead of the unversioned environment `Breakout`.[0m
+  logger.warn(
+[18:03:19] [DDQN_RASP.Breakout] 算法构建完成
+INFO:DDQN_RASP.Breakout:算法构建完成
+[18:03:19] [DDQN_RASP.Breakout] ============================================================
+INFO:DDQN_RASP.Breakout:============================================================
+[18:03:19] [DDQN_RASP.Breakout] 开始训练
+INFO:DDQN_RASP.Breakout:开始训练
+[18:03:19] [DDQN_RASP.Breakout] ============================================================
+INFO:DDQN_RASP.Breakout:============================================================
+2025-10-03 18:03:19,628	WARNING multi_agent_prioritized_replay_buffer.py:215 -- Adding batches with column `weights` to this buffer while providing weights as a call argument to the add method results in the column being overwritten.
+2025-10-03 18:03:43,040	WARNING deprecation.py:50 -- DeprecationWarning: `ray.rllib.execution.train_ops.multi_gpu_train_one_step` has been deprecated. This will raise an error in the future!
+[18:04:29] [DDQN_RASP.Breakout] [Iter 00010] reward_mean=1.0153846153846153 | timesteps=50400 | episodes=65
+INFO:DDQN_RASP.Breakout:[Iter 00010] reward_mean=1.0153846153846153 | timesteps=50400 | episodes=65
+[18:05:47] [DDQN_RASP.Breakout] [Iter 00020] reward_mean=1.69 | timesteps=100800 | episodes=133
+INFO:DDQN_RASP.Breakout:[Iter 00020] reward_mean=1.69 | timesteps=100800 | episodes=133
+[18:07:05] [DDQN_RASP.Breakout] [Iter 00030] reward_mean=1.95 | timesteps=151200 | episodes=202
+INFO:DDQN_RASP.Breakout:[Iter 00030] reward_mean=1.95 | timesteps=151200 | episodes=202
+[18:08:24] [DDQN_RASP.Breakout] [Iter 00040] reward_mean=1.61 | timesteps=201600 | episodes=274
+INFO:DDQN_RASP.Breakout:[Iter 00040] reward_mean=1.61 | timesteps=201600 | episodes=274
+[18:09:43] [DDQN_RASP.Breakout] [Iter 00050] reward_mean=1.82 | timesteps=252000 | episodes=338
+INFO:DDQN_RASP.Breakout:[Iter 00050] reward_mean=1.82 | timesteps=252000 | episodes=338
+[18:11:03] [DDQN_RASP.Breakout] [Iter 00060] reward_mean=1.85 | timesteps=302400 | episodes=411
+INFO:DDQN_RASP.Breakout:[Iter 00060] reward_mean=1.85 | timesteps=302400 | episodes=411
+[18:12:23] [DDQN_RASP.Breakout] [Iter 00070] reward_mean=1.84 | timesteps=352800 | episodes=479
+INFO:DDQN_RASP.Breakout:[Iter 00070] reward_mean=1.84 | timesteps=352800 | episodes=479
+[18:13:43] [DDQN_RASP.Breakout] [Iter 00080] reward_mean=1.55 | timesteps=403200 | episodes=557
+INFO:DDQN_RASP.Breakout:[Iter 00080] reward_mean=1.55 | timesteps=403200 | episodes=557
+[18:15:03] [DDQN_RASP.Breakout] [Iter 00090] reward_mean=1.37 | timesteps=453600 | episodes=634
+INFO:DDQN_RASP.Breakout:[Iter 00090] reward_mean=1.37 | timesteps=453600 | episodes=634
+[18:16:24] [DDQN_RASP.Breakout] [Iter 00100] reward_mean=1.41 | timesteps=504000 | episodes=705
+INFO:DDQN_RASP.Breakout:[Iter 00100] reward_mean=1.41 | timesteps=504000 | episodes=705
+[18:17:44] [DDQN_RASP.Breakout] [Iter 00110] reward_mean=1.58 | timesteps=554400 | episodes=778
+INFO:DDQN_RASP.Breakout:[Iter 00110] reward_mean=1.58 | timesteps=554400 | episodes=778
+[18:19:04] [DDQN_RASP.Breakout] [Iter 00120] reward_mean=1.41 | timesteps=604800 | episodes=855
+INFO:DDQN_RASP.Breakout:[Iter 00120] reward_mean=1.41 | timesteps=604800 | episodes=855
+[18:20:24] [DDQN_RASP.Breakout] [Iter 00130] reward_mean=1.48 | timesteps=655200 | episodes=927
+INFO:DDQN_RASP.Breakout:[Iter 00130] reward_mean=1.48 | timesteps=655200 | episodes=927
+[18:21:47] [DDQN_RASP.Breakout] [Iter 00140] reward_mean=1.27 | timesteps=705600 | episodes=1002
+INFO:DDQN_RASP.Breakout:[Iter 00140] reward_mean=1.27 | timesteps=705600 | episodes=1002
+[18:23:08] [DDQN_RASP.Breakout] [Iter 00150] reward_mean=1.27 | timesteps=756000 | episodes=1072
+INFO:DDQN_RASP.Breakout:[Iter 00150] reward_mean=1.27 | timesteps=756000 | episodes=1072
+[18:24:29] [DDQN_RASP.Breakout] [Iter 00160] reward_mean=1.59 | timesteps=806400 | episodes=1141
+INFO:DDQN_RASP.Breakout:[Iter 00160] reward_mean=1.59 | timesteps=806400 | episodes=1141
+[18:25:51] [DDQN_RASP.Breakout] [Iter 00170] reward_mean=1.74 | timesteps=856800 | episodes=1206
+INFO:DDQN_RASP.Breakout:[Iter 00170] reward_mean=1.74 | timesteps=856800 | episodes=1206
+[18:27:14] [DDQN_RASP.Breakout] [Iter 00180] reward_mean=1.74 | timesteps=907200 | episodes=1274
+INFO:DDQN_RASP.Breakout:[Iter 00180] reward_mean=1.74 | timesteps=907200 | episodes=1274
+[18:28:36] [DDQN_RASP.Breakout] [Iter 00190] reward_mean=1.04 | timesteps=957600 | episodes=1357
+INFO:DDQN_RASP.Breakout:[Iter 00190] reward_mean=1.04 | timesteps=957600 | episodes=1357
+[18:29:58] [DDQN_RASP.Breakout] [Iter 00200] reward_mean=1.18 | timesteps=1008000 | episodes=1433
+INFO:DDQN_RASP.Breakout:[Iter 00200] reward_mean=1.18 | timesteps=1008000 | episodes=1433
+[18:31:23] [DDQN_RASP.Breakout] [Iter 00210] reward_mean=1.15 | timesteps=1058400 | episodes=1511
+INFO:DDQN_RASP.Breakout:[Iter 00210] reward_mean=1.15 | timesteps=1058400 | episodes=1511
+[18:32:47] [DDQN_RASP.Breakout] [Iter 00220] reward_mean=1.41 | timesteps=1108800 | episodes=1580
+INFO:DDQN_RASP.Breakout:[Iter 00220] reward_mean=1.41 | timesteps=1108800 | episodes=1580
+[18:34:11] [DDQN_RASP.Breakout] [Iter 00230] reward_mean=1.35 | timesteps=1159200 | episodes=1655
+INFO:DDQN_RASP.Breakout:[Iter 00230] reward_mean=1.35 | timesteps=1159200 | episodes=1655
+[18:35:35] [DDQN_RASP.Breakout] [Iter 00240] reward_mean=1.33 | timesteps=1209600 | episodes=1733
+INFO:DDQN_RASP.Breakout:[Iter 00240] reward_mean=1.33 | timesteps=1209600 | episodes=1733
+[18:36:57] [DDQN_RASP.Breakout] [Iter 00250] reward_mean=1.47 | timesteps=1260000 | episodes=1804
+INFO:DDQN_RASP.Breakout:[Iter 00250] reward_mean=1.47 | timesteps=1260000 | episodes=1804
+[18:38:21] [DDQN_RASP.Breakout] [Iter 00260] reward_mean=1.68 | timesteps=1310400 | episodes=1874
+INFO:DDQN_RASP.Breakout:[Iter 00260] reward_mean=1.68 | timesteps=1310400 | episodes=1874
+[18:39:45] [DDQN_RASP.Breakout] [Iter 00270] reward_mean=1.66 | timesteps=1360800 | episodes=1947
+INFO:DDQN_RASP.Breakout:[Iter 00270] reward_mean=1.66 | timesteps=1360800 | episodes=1947
+[18:41:08] [DDQN_RASP.Breakout] [Iter 00280] reward_mean=1.84 | timesteps=1411200 | episodes=2016
+INFO:DDQN_RASP.Breakout:[Iter 00280] reward_mean=1.84 | timesteps=1411200 | episodes=2016
+[18:42:32] [DDQN_RASP.Breakout] [Iter 00290] reward_mean=2.33 | timesteps=1461600 | episodes=2079
+INFO:DDQN_RASP.Breakout:[Iter 00290] reward_mean=2.33 | timesteps=1461600 | episodes=2079
+[18:43:57] [DDQN_RASP.Breakout] [Iter 00300] reward_mean=1.92 | timesteps=1512000 | episodes=2152
+INFO:DDQN_RASP.Breakout:[Iter 00300] reward_mean=1.92 | timesteps=1512000 | episodes=2152
+[18:45:21] [DDQN_RASP.Breakout] [Iter 00310] reward_mean=2.41 | timesteps=1562400 | episodes=2210
+INFO:DDQN_RASP.Breakout:[Iter 00310] reward_mean=2.41 | timesteps=1562400 | episodes=2210
+[18:46:44] [DDQN_RASP.Breakout] [Iter 00320] reward_mean=2.58 | timesteps=1612800 | episodes=2275
+INFO:DDQN_RASP.Breakout:[Iter 00320] reward_mean=2.58 | timesteps=1612800 | episodes=2275
+[18:48:07] [DDQN_RASP.Breakout] [Iter 00330] reward_mean=2.31 | timesteps=1663200 | episodes=2346
+INFO:DDQN_RASP.Breakout:[Iter 00330] reward_mean=2.31 | timesteps=1663200 | episodes=2346
+[18:49:31] [DDQN_RASP.Breakout] [Iter 00340] reward_mean=1.67 | timesteps=1713600 | episodes=2412
+INFO:DDQN_RASP.Breakout:[Iter 00340] reward_mean=1.67 | timesteps=1713600 | episodes=2412
+[18:50:54] [DDQN_RASP.Breakout] [Iter 00350] reward_mean=1.75 | timesteps=1764000 | episodes=2482
+INFO:DDQN_RASP.Breakout:[Iter 00350] reward_mean=1.75 | timesteps=1764000 | episodes=2482
+[18:52:19] [DDQN_RASP.Breakout] [Iter 00360] reward_mean=1.83 | timesteps=1814400 | episodes=2549
+INFO:DDQN_RASP.Breakout:[Iter 00360] reward_mean=1.83 | timesteps=1814400 | episodes=2549
+[18:53:42] [DDQN_RASP.Breakout] [Iter 00370] reward_mean=2.54 | timesteps=1864800 | episodes=2614
+INFO:DDQN_RASP.Breakout:[Iter 00370] reward_mean=2.54 | timesteps=1864800 | episodes=2614
+[18:55:06] [DDQN_RASP.Breakout] [Iter 00380] reward_mean=2.63 | timesteps=1915200 | episodes=2675
+INFO:DDQN_RASP.Breakout:[Iter 00380] reward_mean=2.63 | timesteps=1915200 | episodes=2675
+[18:56:30] [DDQN_RASP.Breakout] [Iter 00390] reward_mean=2.36 | timesteps=1965600 | episodes=2743
+INFO:DDQN_RASP.Breakout:[Iter 00390] reward_mean=2.36 | timesteps=1965600 | episodes=2743
+[18:57:54] [DDQN_RASP.Breakout] [Iter 00400] reward_mean=1.84 | timesteps=2016000 | episodes=2810
+INFO:DDQN_RASP.Breakout:[Iter 00400] reward_mean=1.84 | timesteps=2016000 | episodes=2810
+[18:59:19] [DDQN_RASP.Breakout] [Iter 00410] reward_mean=2.26 | timesteps=2066400 | episodes=2874
+INFO:DDQN_RASP.Breakout:[Iter 00410] reward_mean=2.26 | timesteps=2066400 | episodes=2874
+[19:00:41] [DDQN_RASP.Breakout] [Iter 00420] reward_mean=2.08 | timesteps=2116800 | episodes=2931
+INFO:DDQN_RASP.Breakout:[Iter 00420] reward_mean=2.08 | timesteps=2116800 | episodes=2931
+[19:02:05] [DDQN_RASP.Breakout] [Iter 00430] reward_mean=2.55 | timesteps=2167200 | episodes=2995
+INFO:DDQN_RASP.Breakout:[Iter 00430] reward_mean=2.55 | timesteps=2167200 | episodes=2995
+[19:03:29] [DDQN_RASP.Breakout] [Iter 00440] reward_mean=2.3 | timesteps=2217600 | episodes=3061
+INFO:DDQN_RASP.Breakout:[Iter 00440] reward_mean=2.3 | timesteps=2217600 | episodes=3061
+[19:04:53] [DDQN_RASP.Breakout] [Iter 00450] reward_mean=2.28 | timesteps=2268000 | episodes=3120
+INFO:DDQN_RASP.Breakout:[Iter 00450] reward_mean=2.28 | timesteps=2268000 | episodes=3120
+[19:06:17] [DDQN_RASP.Breakout] [Iter 00460] reward_mean=2.99 | timesteps=2318400 | episodes=3179
+INFO:DDQN_RASP.Breakout:[Iter 00460] reward_mean=2.99 | timesteps=2318400 | episodes=3179
+[19:07:42] [DDQN_RASP.Breakout] [Iter 00470] reward_mean=2.49 | timesteps=2368800 | episodes=3250
+INFO:DDQN_RASP.Breakout:[Iter 00470] reward_mean=2.49 | timesteps=2368800 | episodes=3250
+[19:09:05] [DDQN_RASP.Breakout] [Iter 00480] reward_mean=1.74 | timesteps=2419200 | episodes=3315
+INFO:DDQN_RASP.Breakout:[Iter 00480] reward_mean=1.74 | timesteps=2419200 | episodes=3315
+[19:10:30] [DDQN_RASP.Breakout] [Iter 00490] reward_mean=2.51 | timesteps=2469600 | episodes=3368
+INFO:DDQN_RASP.Breakout:[Iter 00490] reward_mean=2.51 | timesteps=2469600 | episodes=3368
+[19:11:55] [DDQN_RASP.Breakout] [Iter 00500] reward_mean=3.19 | timesteps=2520000 | episodes=3428
+INFO:DDQN_RASP.Breakout:[Iter 00500] reward_mean=3.19 | timesteps=2520000 | episodes=3428
+[19:13:20] [DDQN_RASP.Breakout] [Iter 00510] reward_mean=2.75 | timesteps=2570400 | episodes=3487
+INFO:DDQN_RASP.Breakout:[Iter 00510] reward_mean=2.75 | timesteps=2570400 | episodes=3487
+[19:14:43] [DDQN_RASP.Breakout] [Iter 00520] reward_mean=3.53 | timesteps=2620800 | episodes=3544
+INFO:DDQN_RASP.Breakout:[Iter 00520] reward_mean=3.53 | timesteps=2620800 | episodes=3544
+[19:16:08] [DDQN_RASP.Breakout] [Iter 00530] reward_mean=3.92 | timesteps=2671200 | episodes=3606
+INFO:DDQN_RASP.Breakout:[Iter 00530] reward_mean=3.92 | timesteps=2671200 | episodes=3606
+[19:17:34] [DDQN_RASP.Breakout] [Iter 00540] reward_mean=3.59 | timesteps=2721600 | episodes=3665
+INFO:DDQN_RASP.Breakout:[Iter 00540] reward_mean=3.59 | timesteps=2721600 | episodes=3665
+[19:18:58] [DDQN_RASP.Breakout] [Iter 00550] reward_mean=3.67 | timesteps=2772000 | episodes=3720
+INFO:DDQN_RASP.Breakout:[Iter 00550] reward_mean=3.67 | timesteps=2772000 | episodes=3720
+[19:20:22] [DDQN_RASP.Breakout] [Iter 00560] reward_mean=3.74 | timesteps=2822400 | episodes=3773
+INFO:DDQN_RASP.Breakout:[Iter 00560] reward_mean=3.74 | timesteps=2822400 | episodes=3773
+[19:21:47] [DDQN_RASP.Breakout] [Iter 00570] reward_mean=3.83 | timesteps=2872800 | episodes=3832
+INFO:DDQN_RASP.Breakout:[Iter 00570] reward_mean=3.83 | timesteps=2872800 | episodes=3832
+[19:23:10] [DDQN_RASP.Breakout] [Iter 00580] reward_mean=3.8 | timesteps=2923200 | episodes=3887
+INFO:DDQN_RASP.Breakout:[Iter 00580] reward_mean=3.8 | timesteps=2923200 | episodes=3887
+[19:24:35] [DDQN_RASP.Breakout] [Iter 00590] reward_mean=4.32 | timesteps=2973600 | episodes=3945
+INFO:DDQN_RASP.Breakout:[Iter 00590] reward_mean=4.32 | timesteps=2973600 | episodes=3945
+[19:26:00] [DDQN_RASP.Breakout] [Iter 00600] reward_mean=3.42 | timesteps=3024000 | episodes=3998
+INFO:DDQN_RASP.Breakout:[Iter 00600] reward_mean=3.42 | timesteps=3024000 | episodes=3998
+[19:27:25] [DDQN_RASP.Breakout] [Iter 00610] reward_mean=3.21 | timesteps=3074400 | episodes=4051
+INFO:DDQN_RASP.Breakout:[Iter 00610] reward_mean=3.21 | timesteps=3074400 | episodes=4051
+[19:28:49] [DDQN_RASP.Breakout] [Iter 00620] reward_mean=3.47 | timesteps=3124800 | episodes=4109
+INFO:DDQN_RASP.Breakout:[Iter 00620] reward_mean=3.47 | timesteps=3124800 | episodes=4109
+[19:30:13] [DDQN_RASP.Breakout] [Iter 00630] reward_mean=3.5 | timesteps=3175200 | episodes=4170
+INFO:DDQN_RASP.Breakout:[Iter 00630] reward_mean=3.5 | timesteps=3175200 | episodes=4170
+[19:31:38] [DDQN_RASP.Breakout] [Iter 00640] reward_mean=3.15 | timesteps=3225600 | episodes=4226
+INFO:DDQN_RASP.Breakout:[Iter 00640] reward_mean=3.15 | timesteps=3225600 | episodes=4226
+[19:33:02] [DDQN_RASP.Breakout] [Iter 00650] reward_mean=4.2 | timesteps=3276000 | episodes=4284
+INFO:DDQN_RASP.Breakout:[Iter 00650] reward_mean=4.2 | timesteps=3276000 | episodes=4284
+[19:34:26] [DDQN_RASP.Breakout] [Iter 00660] reward_mean=4.91 | timesteps=3326400 | episodes=4339
+INFO:DDQN_RASP.Breakout:[Iter 00660] reward_mean=4.91 | timesteps=3326400 | episodes=4339
+[19:35:51] [DDQN_RASP.Breakout] [Iter 00670] reward_mean=4.46 | timesteps=3376800 | episodes=4391
+INFO:DDQN_RASP.Breakout:[Iter 00670] reward_mean=4.46 | timesteps=3376800 | episodes=4391
+[19:37:15] [DDQN_RASP.Breakout] [Iter 00680] reward_mean=4.29 | timesteps=3427200 | episodes=4442
+INFO:DDQN_RASP.Breakout:[Iter 00680] reward_mean=4.29 | timesteps=3427200 | episodes=4442
+[19:38:40] [DDQN_RASP.Breakout] [Iter 00690] reward_mean=5.03 | timesteps=3477600 | episodes=4494
+INFO:DDQN_RASP.Breakout:[Iter 00690] reward_mean=5.03 | timesteps=3477600 | episodes=4494
+[19:40:06] [DDQN_RASP.Breakout] [Iter 00700] reward_mean=4.55 | timesteps=3528000 | episodes=4556
+INFO:DDQN_RASP.Breakout:[Iter 00700] reward_mean=4.55 | timesteps=3528000 | episodes=4556
+[19:41:31] [DDQN_RASP.Breakout] [Iter 00710] reward_mean=3.97 | timesteps=3578400 | episodes=4605
+INFO:DDQN_RASP.Breakout:[Iter 00710] reward_mean=3.97 | timesteps=3578400 | episodes=4605
+[19:42:54] [DDQN_RASP.Breakout] [Iter 00720] reward_mean=5.08 | timesteps=3628800 | episodes=4656
+INFO:DDQN_RASP.Breakout:[Iter 00720] reward_mean=5.08 | timesteps=3628800 | episodes=4656
+[19:44:20] [DDQN_RASP.Breakout] [Iter 00730] reward_mean=5.4 | timesteps=3679200 | episodes=4701
+INFO:DDQN_RASP.Breakout:[Iter 00730] reward_mean=5.4 | timesteps=3679200 | episodes=4701
+[19:45:45] [DDQN_RASP.Breakout] [Iter 00740] reward_mean=4.42 | timesteps=3729600 | episodes=4754
+INFO:DDQN_RASP.Breakout:[Iter 00740] reward_mean=4.42 | timesteps=3729600 | episodes=4754
+[19:47:09] [DDQN_RASP.Breakout] [Iter 00750] reward_mean=3.42 | timesteps=3780000 | episodes=4815
+INFO:DDQN_RASP.Breakout:[Iter 00750] reward_mean=3.42 | timesteps=3780000 | episodes=4815
+[19:48:34] [DDQN_RASP.Breakout] [Iter 00760] reward_mean=3.03 | timesteps=3830400 | episodes=4867
+INFO:DDQN_RASP.Breakout:[Iter 00760] reward_mean=3.03 | timesteps=3830400 | episodes=4867
+[19:49:59] [DDQN_RASP.Breakout] [Iter 00770] reward_mean=3.46 | timesteps=3880800 | episodes=4924
+INFO:DDQN_RASP.Breakout:[Iter 00770] reward_mean=3.46 | timesteps=3880800 | episodes=4924
+[19:51:22] [DDQN_RASP.Breakout] [Iter 00780] reward_mean=3.72 | timesteps=3931200 | episodes=4979
+INFO:DDQN_RASP.Breakout:[Iter 00780] reward_mean=3.72 | timesteps=3931200 | episodes=4979
+[19:52:48] [DDQN_RASP.Breakout] [Iter 00790] reward_mean=3.62 | timesteps=3981600 | episodes=5034
+INFO:DDQN_RASP.Breakout:[Iter 00790] reward_mean=3.62 | timesteps=3981600 | episodes=5034
+[19:54:14] [DDQN_RASP.Breakout] [Iter 00800] reward_mean=4.36 | timesteps=4032000 | episodes=5077
+INFO:DDQN_RASP.Breakout:[Iter 00800] reward_mean=4.36 | timesteps=4032000 | episodes=5077
+[19:55:40] [DDQN_RASP.Breakout] [Iter 00810] reward_mean=5.05 | timesteps=4082400 | episodes=5129
+INFO:DDQN_RASP.Breakout:[Iter 00810] reward_mean=5.05 | timesteps=4082400 | episodes=5129
+[19:57:03] [DDQN_RASP.Breakout] [Iter 00820] reward_mean=4.44 | timesteps=4132800 | episodes=5181
+INFO:DDQN_RASP.Breakout:[Iter 00820] reward_mean=4.44 | timesteps=4132800 | episodes=5181
+[19:58:29] [DDQN_RASP.Breakout] [Iter 00830] reward_mean=3.95 | timesteps=4183200 | episodes=5231
+INFO:DDQN_RASP.Breakout:[Iter 00830] reward_mean=3.95 | timesteps=4183200 | episodes=5231
+[19:59:54] [DDQN_RASP.Breakout] [Iter 00840] reward_mean=3.98 | timesteps=4233600 | episodes=5286
+INFO:DDQN_RASP.Breakout:[Iter 00840] reward_mean=3.98 | timesteps=4233600 | episodes=5286
+[20:01:18] [DDQN_RASP.Breakout] [Iter 00850] reward_mean=3.79 | timesteps=4284000 | episodes=5339
+INFO:DDQN_RASP.Breakout:[Iter 00850] reward_mean=3.79 | timesteps=4284000 | episodes=5339
+[20:02:45] [DDQN_RASP.Breakout] [Iter 00860] reward_mean=3.97 | timesteps=4334400 | episodes=5391
+INFO:DDQN_RASP.Breakout:[Iter 00860] reward_mean=3.97 | timesteps=4334400 | episodes=5391
+[20:03:20] [DDQN_RASP.Breakout] ⏰ 达到时间上限 (7200s)，停止训练
+INFO:DDQN_RASP.Breakout:⏰ 达到时间上限 (7200s)，停止训练
+[20:03:20] [DDQN_RASP.Breakout] ============================================================
+INFO:DDQN_RASP.Breakout:============================================================
+[20:03:20] [DDQN_RASP.Breakout] 清理资源...
+INFO:DDQN_RASP.Breakout:清理资源...
+[20:03:20] [DDQN_RASP.Breakout] 训练完成，耗时: 7201.0s (2.0 小时)
+INFO:DDQN_RASP.Breakout:训练完成，耗时: 7201.0s (2.0 小时)
+[20:03:20] [DDQN_RASP.Breakout] 总迭代次数: 864
+INFO:DDQN_RASP.Breakout:总迭代次数: 864
+INFO:botocore.credentials:Found credentials in shared credentials file: ~/.aws/credentials
+[20:04:44] [DDQN_RASP.Breakout] MLflow run 已结束
+INFO:DDQN_RASP.Breakout:MLflow run 已结束
+[20:04:44] [DDQN_RASP.Breakout] ============================================================
+INFO:DDQN_RASP.Breakout:============================================================
+🏃 View run Breakout at: http://seventheli-mlflow-home.vip.cpolar.cn/#/experiments/6/runs/ef1310d093e24cecac021aeea0f0a138
+🧪 View experiment at: http://seventheli-mlflow-home.vip.cpolar.cn/#/experiments/6

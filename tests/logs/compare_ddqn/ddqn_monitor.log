@@ -1,0 +1,22 @@
+LOG_PATH=/home/seventheli/research/RASPBERry/tests/logs/compare_ddqn/ddqn_monitor.log
+
+Fri  3 Oct 18:03:07 BST 2025
+    PID %CPU %MEM     ELAPSED CMD
+3755539  244  0.1       00:01 python /home/seventheli/research/RASPBERry/tests/run_ddqn_per_algo.py
+3755628  0.0  0.0       00:00 python /home/seventheli/research/RASPBERry/tests/run_ddqn_raspberry_algo.py
+Fri  3 Oct 18:33:07 BST 2025
+    PID %CPU %MEM     ELAPSED CMD
+3755539 98.0 24.7       30:01 python /home/seventheli/research/RASPBERry/tests/run_ddqn_per_algo.py
+3755628  102  2.5       30:00 python /home/seventheli/research/RASPBERry/tests/run_ddqn_raspberry_algo.py
+Fri  3 Oct 19:03:07 BST 2025
+    PID %CPU %MEM     ELAPSED CMD
+3755539 96.6 27.1    01:00:01 python /home/seventheli/research/RASPBERry/tests/run_ddqn_per_algo.py
+3755628  103  2.5    01:00:00 python /home/seventheli/research/RASPBERry/tests/run_ddqn_raspberry_algo.py
+Fri  3 Oct 19:33:07 BST 2025
+    PID %CPU %MEM     ELAPSED CMD
+3755539 96.4 27.1    01:30:01 python /home/seventheli/research/RASPBERry/tests/run_ddqn_per_algo.py
+3755628  103  2.6    01:30:00 python /home/seventheli/research/RASPBERry/tests/run_ddqn_raspberry_algo.py
+Fri  3 Oct 20:03:07 BST 2025
+    PID %CPU %MEM     ELAPSED CMD
+3755539 96.6 27.1    02:00:01 python /home/seventheli/research/RASPBERry/tests/run_ddqn_per_algo.py
+3755628  103  2.6    02:00:00 python /home/seventheli/research/RASPBERry/tests/run_ddqn_raspberry_algo.py

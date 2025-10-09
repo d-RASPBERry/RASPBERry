@@ -1,6 +1,5 @@
 import logging
 import numpy as np
-import time
 from gymnasium.spaces import Space
 from replay_buffer.raspberry import PrioritizedBlockReplayBuffer, decompress_sample_batch
 from typing import Dict, Optional, Any
@@ -81,6 +80,16 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             "chunk_size": chunk_size,
             "prioritized_replay_eps": prioritized_replay_eps,
         }
+
+        # Track configured capacity (in transitions) and effective capacity (in blocks)
+        self._configured_capacity_transitions = int(capacity)
+        # Protect against divide-by-zero
+        self._effective_block_capacity = max(1, int(capacity // max(1, sub_buffer_size)))
+        # Record top-level storage unit for debug/metrics
+        self._top_storage_unit = storage_unit
+
+        # Enforce capacity on underlying (block-based) buffer
+        pber_config["capacity"] = self._effective_block_capacity
 
         MultiAgentPrioritizedReplayBuffer.__init__(
             self,
@@ -191,8 +200,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
     def sample(
             self, num_items: int, policy_id: Optional[PolicyID] = None, **kwargs
     ) -> Optional[SampleBatchType]:
-        """Sample data and conditionally decompress."""
-        t_start = time.time()
+        """Sample data and decompress (always decompress for simplicity in DRL scenarios)."""
         logger.debug(f"Starting sample for policy '{policy_id}' with {num_items} items.")
 
         kwargs = merge_dicts_with_warning(self.underlying_buffer_call_args, kwargs)
@@ -220,10 +228,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 if raw_sample is None:
                     return None
 
-                # If already decompressed sample, return directly
-                if not self._is_compressed(raw_sample):
-                    return raw_sample
-
+                # Always decompress
                 return decompress_sample_batch(raw_sample, self.compress_base)
 
             elif policy_id is not None:
@@ -233,9 +238,8 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 if sample is None:
                     return None
 
-                # Conditionally decompress
-                if self._is_compressed(sample):
-                    sample = decompress_sample_batch(sample, self.compress_base)
+                # Always decompress
+                sample = decompress_sample_batch(sample, self.compress_base)
 
                 ma_batch = MultiAgentBatch({policy_id: sample}, sample.count)
                 logger.debug(f"Sampled batch for policy {policy_id}: {ma_batch.count} transitions")
@@ -248,9 +252,8 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                     sample = replay_buffer.sample(num_items, beta=beta, **kwargs)
 
                     if sample is not None:
-                        # Conditionally decompress
-                        if self._is_compressed(sample):
-                            sample = decompress_sample_batch(sample, self.compress_base)
+                        # Always decompress
+                        sample = decompress_sample_batch(sample, self.compress_base)
                         samples[pid] = sample
                 if samples:
                     total_count = sum(s.count for s in samples.values())
@@ -258,12 +261,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                     return ma_batch
                 else:
                     return None
-
-    def _is_compressed(self, sample: SampleBatch) -> bool:
-        """Whether the sample is in compressed state (object-typed obs)."""
-        return ('obs' in sample and
-                isinstance(sample['obs'], np.ndarray) and
-                sample['obs'].dtype == object)
 
     def stats(self, debug: bool = False) -> Dict[str, Any]:
         """Return replay buffer statistics."""

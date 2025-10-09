@@ -1,5 +1,4 @@
 from gymnasium import spaces
-from gymnasium.spaces import Box
 from gymnasium.wrappers import TimeLimit, ResizeObservation
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
 from ray.rllib.env.wrappers.atari_wrappers import wrap_deepmind
@@ -18,16 +17,44 @@ agent_dir = {
 
 
 def split_list_into_n_parts(lst, n=10):
+    """Split a list into n interleaved parts.
+    
+    Args:
+        lst: List to split
+        n: Number of parts (default: 10)
+        
+    Returns:
+        List of n sub-lists with interleaved elements
+        
+    Example:
+        >>> split_list_into_n_parts([0,1,2,3,4,5], n=2)
+        [[0,2,4], [1,3,5]]
+    """
     return [lst[i::n] for i in range(n)]
 
 
 def check_path(path):
+    """Create directory if it doesn't exist.
+    
+    Args:
+        path: Directory path to check and create
+    """
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
 
 
 def convert_np_arrays(obj):
-    """Convert numpy arrays and filter out non-JSON-serializable objects."""
+    """Convert numpy arrays and filter out non-JSON-serializable objects.
+    
+    Args:
+        obj: Object to convert (dict, list, numpy array, etc.)
+        
+    Returns:
+        JSON-serializable version of obj (lists, primitives, dicts)
+        
+    Note:
+        Recursively converts nested structures, filters out type objects
+    """
     if obj is None:
         return None
     elif isinstance(obj, np.ndarray):
@@ -59,7 +86,7 @@ def convert_np_arrays(obj):
         # Convert objects with __dict__ to dict representation
         try:
             return convert_np_arrays(obj.__dict__)
-        except:
+        except (AttributeError, TypeError):
             return str(obj)
     else:
         # For basic types (int, float, str, bool), return as is
@@ -73,6 +100,18 @@ def convert_np_arrays(obj):
 
 
 def flatten_dict(d):
+    """Flatten a nested dictionary by one level.
+    
+    Args:
+        d: Dictionary to flatten
+        
+    Returns:
+        Flattened dictionary (nested values promoted to top level)
+        
+    Example:
+        >>> flatten_dict({'a': 1, 'b': {'c': 2, 'd': 3}})
+        {'a': 1, 'c': 2, 'd': 3}
+    """
     flat_dict = {}
     for key, value in d.items():
         if isinstance(value, dict):
@@ -85,12 +124,15 @@ def flatten_dict(d):
 
 # This function is copied from:
 # https://github.com/DLR-RM/stable-baselines3/
-def get_obs_shape(observation_space: spaces.Space) -> Union[None, dict[str, Union[tuple[int, ...], dict[str, tuple[int, ...]]]], tuple[int], tuple[int, ...]]:
-    """
-    Get the shape of the observation (useful for the buffers).
+def get_obs_shape(observation_space: spaces.Space) -> Union[
+    None, Dict[str, Union[Tuple[int, ...], Dict[str, Tuple[int, ...]]]], Tuple[int], Tuple[int, ...]]:
+    """Get the shape of the observation (useful for buffers).
 
-    :param observation_space:
-    :return:
+    Args:
+        observation_space: Gymnasium observation space
+        
+    Returns:
+        Tuple representing observation shape, or dict for Dict spaces
     """
     if isinstance(observation_space, spaces.Box):
         return observation_space.shape
@@ -112,11 +154,16 @@ def get_obs_shape(observation_space: spaces.Space) -> Union[None, dict[str, Unio
 # This function is copied from:
 # https://github.com/DLR-RM/stable-baselines3/
 def get_action_dim(action_space: spaces.Space) -> int:
-    """
-    Get the dimension of the action space.
+    """Get the dimension of the action space.
 
-    :param action_space:
-    :return:
+    Args:
+        action_space: Gymnasium action space
+        
+    Returns:
+        Integer dimension of action space
+        
+    Raises:
+        NotImplementedError: If action space type is not supported
     """
     if isinstance(action_space, spaces.Box):
         return int(np.prod(action_space.shape))
@@ -134,6 +181,14 @@ def get_action_dim(action_space: spaces.Space) -> int:
 
 
 def minigrid_env_creator(env_config):
+    """Create a MiniGrid environment with standard wrappers.
+    
+    Args:
+        env_config: Dict with 'id', 'tile_size', 'img_size', 'max_steps'
+        
+    Returns:
+        Wrapped MiniGrid environment (RGB, resized, time-limited)
+    """
     env = gymnasium.make(env_config["id"], render_mode="rgb_array")
     env = RGBImgObsWrapper(env, tile_size=env_config["tile_size"])
     env = ImgObsWrapper(env)
@@ -143,6 +198,14 @@ def minigrid_env_creator(env_config):
 
 
 def dicts_to_structured_array(dict_list):
+    """Convert list of dicts to numpy structured array.
+    
+    Args:
+        dict_list: List of dicts with same keys and numeric values
+        
+    Returns:
+        Numpy structured array with fields from dict keys
+    """
     keys = dict_list[0].keys()
     dtype = [(key, 'float32') for key in keys]
     structured_array = np.array([tuple(d.values()) for d in dict_list], dtype=dtype)
@@ -150,16 +213,41 @@ def dicts_to_structured_array(dict_list):
 
 
 def calculate_average_with_numpy(dict_list):
+    """Calculate average values across list of dicts using numpy.
+    
+    Args:
+        dict_list: List of dicts with same keys and numeric values
+        
+    Returns:
+        Dict mapping keys to mean values
+    """
     structured_array = dicts_to_structured_array(dict_list)
     averages = {dtype[0]: structured_array[dtype[0]].mean() for dtype in structured_array.dtype.descr}
     return averages
 
 
 def translate_state(state):
+    """Extract agent view, map, and battery from state dict.
+    
+    Args:
+        state: State dict with 'agent_view', 'whole_map', 'battery' keys
+        
+    Returns:
+        Tuple of (agent_view, whole_map, battery)
+    """
     return state["agent_view"], state["whole_map"], state["battery"]
 
 
 def copy_params(offline, online):
+    """Copy parameters from offline network to online network (MXNet-specific).
+    
+    Args:
+        offline: Offline network with parameters to copy
+        online: Online network to update
+        
+    Note:
+        Legacy function for MXNet-based networks
+    """
     layer = list(offline.collect_params().values())
     for i in layer:
         _1 = online.collect_params().get(
@@ -171,12 +259,25 @@ def copy_params(offline, online):
 
 
 def check_dir(i):
-    # create required path
+    """Create directory if it doesn't exist (legacy function, use check_path instead).
+    
+    Args:
+        i: Directory name to create in current directory
+    """
     if not os.path.exists("./{}/".format(i)):
         os.mkdir("./{}/".format(i))
 
 
 def get_goal(array, agent):
+    """Find closest goal location (value 3 or 4) to agent.
+    
+    Args:
+        array: 2D grid array with goal locations marked as 3 or 4
+        agent: Agent position [x, y, ...] (only first 2 elements used)
+        
+    Returns:
+        2D binary array with 1 at closest goal location, 0 elsewhere
+    """
     _min = 999
     _location = np.zeros([array.shape[0], array.shape[1]])
     for i, row in enumerate(array):
@@ -191,10 +292,16 @@ def get_goal(array, agent):
 
 
 def to_numpy(grid, allow, agent, vis_mask=None):
-    """
-    Produce a pretty string of the environment.txt grid along with the agent.
-    A grid cell is represented by 2-character string, the first one for
-    the object and the second one for the color.
+    """Convert MiniGrid grid to numpy array representation.
+    
+    Args:
+        grid: MiniGrid grid object
+        allow: Dict mapping object types to integer codes
+        agent: Agent position [x, y, direction] or None
+        vis_mask: Optional visibility mask (default: all visible)
+        
+    Returns:
+        2D numpy array with integer codes for each grid cell
     """
     shape = (grid.width, grid.height)
     grid = grid.grid
@@ -213,7 +320,20 @@ def to_numpy(grid, allow, agent, vis_mask=None):
         map_img[agent[0], agent[1]] = allow[agent_dir[agent[2]]]
     return map_img
 
+
 def env_creator(env_config):
+    """Create environment with appropriate wrappers based on type.
+    
+    Args:
+        env_config: Dict with 'id' key specifying environment
+                   (MiniGrid-*, Atari-*, or BOX2D-*)
+        
+    Returns:
+        Wrapped environment instance
+        
+    Raises:
+        NotImplementedError: If environment type not supported
+    """
     if env_config["id"][0:8] == "MiniGrid":
         return minigrid_env_creator(env_config)
     elif env_config["id"][0:5] == "Atari":
@@ -227,14 +347,17 @@ def env_creator(env_config):
 
 
 def load_config(config_path: str) -> Dict:
-    """
-    Load YAML configuration file with support for extends inheritance.
-    
+    """Load YAML configuration file with support for extends inheritance.
+
     Args:
-        config_path: Path to the YAML configuration file
-        
+        config_path: Path to YAML configuration file
+
     Returns:
-        Configuration dictionary with inheritance resolved
+        Configuration dict with inheritance resolved via 'extends' key
+        
+    Note:
+        If 'extends' key is present, recursively loads base config
+        and deep-merges with current config (current overrides base)
     """
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
@@ -252,15 +375,14 @@ def load_config(config_path: str) -> Dict:
 
 
 def deep_merge_config(base: Dict, override: Dict) -> Dict:
-    """
-    Deep merge two configuration dictionaries.
-    
+    """Deep merge two configuration dictionaries.
+
     Args:
-        base: Base configuration dictionary
-        override: Override configuration dictionary
-        
+        base: Base configuration dict
+        override: Override configuration dict (takes precedence)
+
     Returns:
-        Merged configuration dictionary
+        Merged configuration dict (nested dicts are recursively merged)
     """
     result = base.copy()
     for key, value in override.items():
@@ -271,16 +393,3 @@ def deep_merge_config(base: Dict, override: Dict) -> Dict:
     return result
 
 
-def load_paths(path_config: str = "./configs/path.yml") -> Dict:
-    """
-    Load path configurations from YAML file.
-    
-    Args:
-        path_config: Path to the path configuration file
-        
-    Returns:
-        Path configuration dictionary
-    """
-    with open(path_config, 'r') as f:
-        paths = yaml.safe_load(f)
-    return paths

@@ -5,30 +5,26 @@ Ape-X DQN Trainer with RASPBERry block-prioritized replay buffer.
 from typing import Dict, Any, Optional
 from gymnasium.spaces import Space
 from ray.rllib.algorithms.apex_dqn import ApexDQNConfig
-from utils import convert_np_arrays
-
 from replay_buffer.d_raspberry import MultiAgentPrioritizedBlockReplayBuffer
-import time
-import json
 
-from .base_trainer import BaseTrainer
+from .apex_per_trainer import ApexDQNTrainer as APEXPERTrainer
 
 
-class ApexDQNRaspberryTrainer(BaseTrainer):
+class APEXRaspberryTrainer(APEXPERTrainer):
     """
     Ape-X DQN trainer using RASPBERry MultiAgent Block PER buffer.
     """
 
     def __init__(self,
-                 config: str,
+                 config: Dict[str, Any],
                  env_name: str,
                  run_name: str,
                  log_path: Optional[str] = None,
                  checkpoint_path: Optional[str] = None,
-                 mlflow: str = None,
+                 mlflow_cfg: Optional[Dict[str, Any]] = None,
                  obs_space: Space = None,
                  action_space: Space = None):
-        super().__init__(config, env_name, run_name, log_path, checkpoint_path, use_mlflow=mlflow)
+        super().__init__(config, env_name, run_name, log_path, checkpoint_path, mlflow_cfg)
         self.obs_space = obs_space
         self.action_space = action_space
 
@@ -124,37 +120,5 @@ class ApexDQNRaspberryTrainer(BaseTrainer):
         self.trainer = apex_config.build()
         self.log("✓ Ape-X DQN + RASPBERry ready", "TRAIN")
         return self.trainer
-
-    def _filter_result(self, iteration: int, result: Dict[str, Any]) -> Dict[str, Any]:
-        stats = {
-            "reward": result.get("episode_reward_mean", "N/A"),
-            "timesteps": result.get("timesteps_total", "N/A")
-        }
-
-        if self.log_path:
-            try:
-                result_with_meta = result.copy()
-                result_with_meta["iteration"] = iteration
-                result_with_meta["timestamp"] = time.time()
-                result_with_meta["episodes"] = result.get("episodes_total", "N/A")
-                result_with_meta["time_s"] = result.get("time_total_s", "N/A")
-
-                if hasattr(self.trainer, 'local_replay_buffer') and self.trainer.local_replay_buffer is not None:
-                    buffer_stats = self.trainer.local_replay_buffer.stats()
-                    result_with_meta["buffer_stats"] = buffer_stats
-                elif "info" in result and "replay_shard_0" in result["info"]:
-                    # Use Ape-X distributed buffer stats
-                    result_with_meta["buffer_stats"] = result["info"]["replay_shard_0"]
-
-                processed_data = convert_np_arrays(result_with_meta)
-
-                result_file = self.log_path / f"result_{iteration:06d}.json"
-                with open(result_file, "w", encoding="utf-8") as f:
-                    json.dump(processed_data, f, indent=2)
-
-            except Exception as e:
-                self.log(f"Failed to save result file: {e}")
-
-        return stats
 
 

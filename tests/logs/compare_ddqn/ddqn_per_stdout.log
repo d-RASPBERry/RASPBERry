@@ -1,0 +1,158 @@
+LOG_PATH=/home/seventheli/research/RASPBERry/tests/logs/compare_ddqn/ddqn_per_stdout.log
+
+[18:03:09] [DDQN_PER.Breakout_PER_20251003_180309] LOG_BASE_DIR=/home/seventheli/data/logging/New_RASPBERry/Atari/Breakout/Breakout_PER_20251003_180309
+[18:03:09] [DDQN_PER.Breakout_PER_20251003_180309] [MLFLOW] 记录已开启 -> 实验: DDQN
+2025-10-03 18:03:12,717	INFO worker.py:1673 -- Started a local Ray instance.
+A.L.E: Arcade Learning Environment (version 0.8.1+53f58b7)
+[Powered by Stella]
+2025-10-03 18:03:13,232	WARNING deprecation.py:50 -- DeprecationWarning: `rllib/algorithms/simple_q/` has been deprecated. Use `rllib_contrib/simple_q/` instead. This will raise an error in the future!
+/home/seventheli/anaconda3/envs/RASPBERRY/lib/python3.9/site-packages/ray/rllib/algorithms/algorithm.py:484: RayDeprecationWarning: This API is deprecated and may be removed in future Ray releases. You could suppress this warning by setting env variable PYTHONWARNINGS="ignore::DeprecationWarning"
+`UnifiedLogger` will be removed in Ray 2.7.
+  return UnifiedLogger(config, logdir, loggers=None)
+/home/seventheli/anaconda3/envs/RASPBERRY/lib/python3.9/site-packages/ray/tune/logger/unified.py:53: RayDeprecationWarning: This API is deprecated and may be removed in future Ray releases. You could suppress this warning by setting env variable PYTHONWARNINGS="ignore::DeprecationWarning"
+The `JsonLogger interface is deprecated in favor of the `ray.tune.json.JsonLoggerCallback` interface and will be removed in Ray 2.7.
+  self._loggers.append(cls(self.config, self.logdir, self.trial))
+/home/seventheli/anaconda3/envs/RASPBERRY/lib/python3.9/site-packages/ray/tune/logger/unified.py:53: RayDeprecationWarning: This API is deprecated and may be removed in future Ray releases. You could suppress this warning by setting env variable PYTHONWARNINGS="ignore::DeprecationWarning"
+The `CSVLogger interface is deprecated in favor of the `ray.tune.csv.CSVLoggerCallback` interface and will be removed in Ray 2.7.
+  self._loggers.append(cls(self.config, self.logdir, self.trial))
+/home/seventheli/anaconda3/envs/RASPBERRY/lib/python3.9/site-packages/ray/tune/logger/unified.py:53: RayDeprecationWarning: This API is deprecated and may be removed in future Ray releases. You could suppress this warning by setting env variable PYTHONWARNINGS="ignore::DeprecationWarning"
+The `TBXLogger interface is deprecated in favor of the `ray.tune.tensorboardx.TBXLoggerCallback` interface and will be removed in Ray 2.7.
+  self._loggers.append(cls(self.config, self.logdir, self.trial))
+2025-10-03 18:03:13,403	WARNING deprecation.py:50 -- DeprecationWarning: `ray.rllib.models.torch.visionnet.VisionNetwork` has been deprecated. This will raise an error in the future!
+/home/seventheli/anaconda3/envs/RASPBERRY/lib/python3.9/site-packages/gymnasium/envs/registration.py:531: UserWarning: [33mWARN: Using the latest versioned environment `Breakout-v4` instead of the unversioned environment `Breakout`.[0m
+  logger.warn(
+[18:03:17] [DDQN_PER.Breakout_PER_20251003_180309] [CONFIG] max_time=7200s max_iterations=10000 (from YAML)
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[CONFIG] max_time=7200s max_iterations=10000 (from YAML)
+2025-10-03 18:03:17,994	WARNING replay_buffer.py:61 -- Estimated max memory usage for replay buffer is 56.502 GB (1000000.0 batches of size 1, 56502 bytes each), available system memory is 236.095455232 GB
+2025-10-03 18:03:17,995	WARNING multi_agent_prioritized_replay_buffer.py:215 -- Adding batches with column `weights` to this buffer while providing weights as a call argument to the add method results in the column being overwritten.
+2025-10-03 18:03:39,023	WARNING deprecation.py:50 -- DeprecationWarning: `ray.rllib.execution.train_ops.multi_gpu_train_one_step` has been deprecated. This will raise an error in the future!
+[18:04:26] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00010] reward_mean=1.2307692307692308 timesteps=50400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00010] reward_mean=1.2307692307692308 timesteps=50400
+[18:05:47] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00020] reward_mean=1.37 timesteps=100800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00020] reward_mean=1.37 timesteps=100800
+[18:07:12] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00030] reward_mean=1.26 timesteps=151200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00030] reward_mean=1.26 timesteps=151200
+[18:08:41] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00040] reward_mean=1.26 timesteps=201600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00040] reward_mean=1.26 timesteps=201600
+[18:10:13] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00050] reward_mean=1.2 timesteps=252000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00050] reward_mean=1.2 timesteps=252000
+[18:11:45] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00060] reward_mean=1.36 timesteps=302400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00060] reward_mean=1.36 timesteps=302400
+[18:13:22] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00070] reward_mean=1.34 timesteps=352800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00070] reward_mean=1.34 timesteps=352800
+[18:14:59] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00080] reward_mean=1.14 timesteps=403200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00080] reward_mean=1.14 timesteps=403200
+[18:16:37] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00090] reward_mean=1.38 timesteps=453600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00090] reward_mean=1.38 timesteps=453600
+[18:18:18] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00100] reward_mean=1.04 timesteps=504000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00100] reward_mean=1.04 timesteps=504000
+[18:20:04] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00110] reward_mean=1.13 timesteps=554400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00110] reward_mean=1.13 timesteps=554400
+[18:21:49] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00120] reward_mean=1.23 timesteps=604800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00120] reward_mean=1.23 timesteps=604800
+[18:23:40] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00130] reward_mean=1.13 timesteps=655200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00130] reward_mean=1.13 timesteps=655200
+[18:25:21] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00140] reward_mean=1.03 timesteps=705600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00140] reward_mean=1.03 timesteps=705600
+[18:27:08] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00150] reward_mean=1.04 timesteps=756000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00150] reward_mean=1.04 timesteps=756000
+[18:28:57] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00160] reward_mean=1.08 timesteps=806400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00160] reward_mean=1.08 timesteps=806400
+[18:30:53] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00170] reward_mean=1.35 timesteps=856800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00170] reward_mean=1.35 timesteps=856800
+[18:32:55] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00180] reward_mean=1.28 timesteps=907200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00180] reward_mean=1.28 timesteps=907200
+[18:34:55] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00190] reward_mean=1.31 timesteps=957600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00190] reward_mean=1.31 timesteps=957600
+[18:36:47] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00200] reward_mean=1.28 timesteps=1008000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00200] reward_mean=1.28 timesteps=1008000
+[18:38:49] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00210] reward_mean=1.32 timesteps=1058400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00210] reward_mean=1.32 timesteps=1058400
+[18:40:42] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00220] reward_mean=1.33 timesteps=1108800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00220] reward_mean=1.33 timesteps=1108800
+[18:42:43] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00230] reward_mean=1.5 timesteps=1159200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00230] reward_mean=1.5 timesteps=1159200
+[18:44:39] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00240] reward_mean=1.22 timesteps=1209600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00240] reward_mean=1.22 timesteps=1209600
+[18:46:36] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00250] reward_mean=1.26 timesteps=1260000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00250] reward_mean=1.26 timesteps=1260000
+[18:48:37] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00260] reward_mean=1.35 timesteps=1310400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00260] reward_mean=1.35 timesteps=1310400
+[18:50:33] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00270] reward_mean=1.35 timesteps=1360800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00270] reward_mean=1.35 timesteps=1360800
+[18:52:29] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00280] reward_mean=1.46 timesteps=1411200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00280] reward_mean=1.46 timesteps=1411200
+[18:54:33] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00290] reward_mean=1.23 timesteps=1461600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00290] reward_mean=1.23 timesteps=1461600
+[18:56:30] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00300] reward_mean=1.2 timesteps=1512000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00300] reward_mean=1.2 timesteps=1512000
+[18:58:31] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00310] reward_mean=1.57 timesteps=1562400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00310] reward_mean=1.57 timesteps=1562400
+[19:00:25] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00320] reward_mean=1.85 timesteps=1612800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00320] reward_mean=1.85 timesteps=1612800
+[19:02:19] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00330] reward_mean=1.98 timesteps=1663200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00330] reward_mean=1.98 timesteps=1663200
+[19:04:22] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00340] reward_mean=1.45 timesteps=1713600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00340] reward_mean=1.45 timesteps=1713600
+[19:06:18] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00350] reward_mean=1.25 timesteps=1764000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00350] reward_mean=1.25 timesteps=1764000
+[19:08:14] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00360] reward_mean=1.72 timesteps=1814400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00360] reward_mean=1.72 timesteps=1814400
+[19:10:09] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00370] reward_mean=1.47 timesteps=1864800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00370] reward_mean=1.47 timesteps=1864800
+[19:12:05] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00380] reward_mean=1.55 timesteps=1915200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00380] reward_mean=1.55 timesteps=1915200
+[19:14:06] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00390] reward_mean=1.8 timesteps=1965600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00390] reward_mean=1.8 timesteps=1965600
+[19:15:59] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00400] reward_mean=2.03 timesteps=2016000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00400] reward_mean=2.03 timesteps=2016000
+[19:17:52] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00410] reward_mean=2.0 timesteps=2066400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00410] reward_mean=2.0 timesteps=2066400
+[19:19:50] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00420] reward_mean=2.03 timesteps=2116800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00420] reward_mean=2.03 timesteps=2116800
+[19:21:47] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00430] reward_mean=1.78 timesteps=2167200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00430] reward_mean=1.78 timesteps=2167200
+[19:23:55] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00440] reward_mean=1.77 timesteps=2217600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00440] reward_mean=1.77 timesteps=2217600
+[19:25:49] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00450] reward_mean=1.76 timesteps=2268000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00450] reward_mean=1.76 timesteps=2268000
+[19:27:48] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00460] reward_mean=1.8 timesteps=2318400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00460] reward_mean=1.8 timesteps=2318400
+[19:29:50] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00470] reward_mean=1.82 timesteps=2368800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00470] reward_mean=1.82 timesteps=2368800
+[19:31:43] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00480] reward_mean=1.76 timesteps=2419200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00480] reward_mean=1.76 timesteps=2419200
+[19:33:46] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00490] reward_mean=1.46 timesteps=2469600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00490] reward_mean=1.46 timesteps=2469600
+[19:35:40] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00500] reward_mean=1.48 timesteps=2520000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00500] reward_mean=1.48 timesteps=2520000
+[19:37:34] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00510] reward_mean=1.64 timesteps=2570400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00510] reward_mean=1.64 timesteps=2570400
+[19:39:34] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00520] reward_mean=2.09 timesteps=2620800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00520] reward_mean=2.09 timesteps=2620800
+[19:41:27] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00530] reward_mean=1.99 timesteps=2671200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00530] reward_mean=1.99 timesteps=2671200
+[19:43:28] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00540] reward_mean=1.7 timesteps=2721600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00540] reward_mean=1.7 timesteps=2721600
+[19:45:20] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00550] reward_mean=1.96 timesteps=2772000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00550] reward_mean=1.96 timesteps=2772000
+[19:47:09] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00560] reward_mean=1.93 timesteps=2822400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00560] reward_mean=1.93 timesteps=2822400
+[19:49:08] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00570] reward_mean=2.01 timesteps=2872800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00570] reward_mean=2.01 timesteps=2872800
+[19:51:02] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00580] reward_mean=1.76 timesteps=2923200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00580] reward_mean=1.76 timesteps=2923200
+[19:52:58] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00590] reward_mean=1.61 timesteps=2973600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00590] reward_mean=1.61 timesteps=2973600
+[19:54:54] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00600] reward_mean=1.6 timesteps=3024000
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00600] reward_mean=1.6 timesteps=3024000
+[19:56:46] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00610] reward_mean=1.87 timesteps=3074400
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00610] reward_mean=1.87 timesteps=3074400
+[19:58:49] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00620] reward_mean=1.73 timesteps=3124800
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00620] reward_mean=1.73 timesteps=3124800
+[20:00:42] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00630] reward_mean=1.51 timesteps=3175200
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00630] reward_mean=1.51 timesteps=3175200
+[20:02:34] [DDQN_PER.Breakout_PER_20251003_180309] [Iter 00640] reward_mean=1.36 timesteps=3225600
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[Iter 00640] reward_mean=1.36 timesteps=3225600
+[20:03:18] [DDQN_PER.Breakout_PER_20251003_180309] [INFO] 达到时间上限 (7200s)，停止训练。
+INFO:DDQN_PER.Breakout_PER_20251003_180309:[INFO] 达到时间上限 (7200s)，停止训练。

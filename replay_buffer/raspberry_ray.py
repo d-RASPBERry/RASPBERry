@@ -1,0 +1,563 @@
+"""RASPBERry Replay Buffer with Ray-based Compression.
+
+Prioritized Block Replay Buffer with on-the-fly blosc compression.
+
+Key features:
+- Block-level storage: O(M/m) operations instead of O(M)
+- Ray-based parallel compression: 2.3x faster than ThreadPool
+- 60-95% memory reduction for Atari environments
+- Compatible with RLlib's PER interface
+
+See docs/raspberr_design.md for detailed architecture and design decisions.
+"""
+
+import logging
+import numpy as np
+import time
+import blosc
+import ray
+from gymnasium.spaces import Space
+from typing import Dict, Optional, Any, List
+from ray.rllib.utils.typing import SampleBatchType
+from ray.rllib.utils.replay_buffers.prioritized_replay_buffer import (
+    PrioritizedReplayBuffer,
+)
+from replay_buffer.compress_replay_node import CompressReplayNode
+from ray.rllib.policy.sample_batch import SampleBatch
+from ray.rllib.policy.sample_batch import concat_samples
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Ray Remote Compression Worker
+# ============================================================================
+
+@ray.remote
+def compress_node_batch_ray(nodes_data: List[dict], 
+                            compress_config: dict) -> List[dict]:
+    """Ray remote worker to compress a batch of nodes.
+    
+    Args:
+        nodes_data: List of node data dicts (obs, new_obs, actions, etc.)
+        compress_config: Compression config (cname, clevel, shuffle, compress_base)
+        
+    Returns:
+        List of dicts with compressed_data, weight, and byte counts
+    """
+    batch_results = []
+    
+    for node_data in nodes_data:
+        # Reconstruct arrays
+        obs = node_data['obs']
+        new_obs = node_data['new_obs']
+        
+        # Transpose for better compression (move batch dimension to end)
+        rank = len(obs.shape)
+        if rank > 1:
+            if compress_config['compress_base'] == -1:
+                axes = list(range(1, rank)) + [0]
+                obs = np.transpose(obs, axes)
+                new_obs = np.transpose(new_obs, axes)
+        
+        # Make contiguous
+        obs = np.ascontiguousarray(obs)
+        new_obs = np.ascontiguousarray(new_obs)
+        
+        # Compress with blosc
+        compressed_obs = blosc.pack_array(
+            obs,
+            cname=compress_config['cname'],
+            clevel=compress_config['clevel'],
+            shuffle=compress_config['shuffle'],
+        )
+        compressed_new_obs = blosc.pack_array(
+            new_obs,
+            cname=compress_config['cname'],
+            clevel=compress_config['clevel'],
+            shuffle=compress_config['shuffle'],
+        )
+        
+        # Reconstruct compressed batch
+        compressed_data = SampleBatch({
+            "obs": np.array([compressed_obs], dtype=object),
+            "new_obs": np.array([compressed_new_obs], dtype=object),
+            "actions": node_data['actions'],
+            "rewards": node_data['rewards'],
+            "terminateds": node_data['terminateds'],
+            "truncateds": node_data['truncateds'],
+            "weights": node_data['weights'],
+            "compress_base": compress_config['compress_base'],
+        })
+        
+        result = {
+            'compressed_data': compressed_data,
+            'weight': node_data['weight'],
+            'obs_bytes': len(compressed_obs),
+            'new_obs_bytes': len(compressed_new_obs),
+        }
+        batch_results.append(result)
+    
+    return batch_results
+
+
+def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> SampleBatch:
+    """Decompress obs/new_obs using blosc and restore axes.
+    
+    Args:
+        ma_batch: Compressed batch with obs[0] and new_obs[0] as blosc-packed arrays
+        compress_base: Axis transposition hint (-1 for auto, 0 for none)
+        
+    Returns:
+        Decompressed SampleBatch with expanded weights/batch_indexes
+        
+    Note:
+        weights/batch_indexes should already be expanded to transition-level
+        by the buffer's sample() method before calling this function.
+    """
+    t0 = time.time()
+
+    # Prefer per-batch compress_base metadata if present
+    compress_base_used = ma_batch.get("compress_base", compress_base)
+
+    # Unpack compressed arrays (will fail if not compressed - by design!)
+    decompressed_obs_transposed = blosc.unpack_array(ma_batch["obs"][0])
+    decompressed_new_obs_transposed = blosc.unpack_array(ma_batch["new_obs"][0])
+
+    # Rank info
+    rank = len(decompressed_obs_transposed.shape)
+
+    if compress_base_used == -1:
+        # Smart default: move axis 0 (batch) from end back to front
+        if rank <= 1:
+            decompressed_obs = decompressed_obs_transposed
+            decompressed_new_obs = decompressed_new_obs_transposed
+            transpose_type = "no_transpose"
+        else:
+            # Multi-dim: move last axis (original axis 0) back to the front
+            axes = [rank - 1] + list(range(rank - 1))
+            decompressed_obs = np.transpose(decompressed_obs_transposed, axes)
+            decompressed_new_obs = np.transpose(decompressed_new_obs_transposed, axes)
+            transpose_type = f"default_dim0_to_front_{rank}D"
+    elif compress_base_used == 0:
+        # No transpose when compress_base=0
+        decompressed_obs = decompressed_obs_transposed
+        decompressed_new_obs = decompressed_new_obs_transposed
+        transpose_type = "no_transpose_base0"
+    else:
+        # User-specified axis restoration
+        if compress_base_used >= rank or rank <= 1:
+            decompressed_obs = decompressed_obs_transposed
+            decompressed_new_obs = decompressed_new_obs_transposed
+            transpose_type = "no_transpose"
+        else:
+            # Insert the last axis back at compress_base position
+            axes = list(range(rank))
+            axes.pop()  # Remove last dimension
+            axes.insert(compress_base_used, rank - 1)  # Insert at specified position
+
+            decompressed_obs = np.transpose(decompressed_obs_transposed, axes)
+            decompressed_new_obs = np.transpose(decompressed_new_obs_transposed, axes)
+            transpose_type = f"dim_{compress_base_used}_from_end_{rank}D"
+
+    t1 = time.time()
+    logger.debug("[Decompression] Blosc unpack + %s transpose: %.4fs", 
+                 transpose_type, t1 - t0)
+
+    # Simply pass through all other fields (weights and batch_indexes should already
+    # be expanded to transition-level by PrioritizedBlockReplayBuffer.sample())
+    data_dict = {
+        "obs": decompressed_obs,
+        "new_obs": decompressed_new_obs,
+        "actions": ma_batch["actions"],
+        "rewards": ma_batch["rewards"],
+        "terminateds": ma_batch["terminateds"],
+        "truncateds": ma_batch["truncateds"],
+        "weights": ma_batch["weights"],
+    }
+
+    if "batch_indexes" in ma_batch:
+        data_dict["batch_indexes"] = ma_batch["batch_indexes"]
+
+    return SampleBatch(data_dict)
+
+
+# ============================================================================
+# Prioritized Block Replay Buffer with Ray Compression
+# ============================================================================
+
+class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
+    """Prioritized replay buffer with Ray-based on-the-fly compression."""
+
+    def __init__(
+            self,
+            obs_space: Space,
+            action_space: Space,
+            sub_buffer_size: int = 32,
+            compress_base: int = -1,
+            compress_pool_size: int = 5,
+            compression_algorithm: str = "zstd",
+            compression_level: int = 5,
+            compression_nthreads: int = 1,
+            compression_mode: str = "B",  # "A": sync, "B": batch_ray, "D": async_ray
+            chunk_size: int = 10,
+            **kwargs,
+    ):
+        """Initialize the prioritized block replay buffer with Ray compression.
+        
+        Args:
+            obs_space: Observation space
+            action_space: Action space
+            sub_buffer_size: Block size (transitions per block)
+            compress_base: Axis to move for compression (-1 for auto)
+            compress_pool_size: Number of Ray workers (default: 5)
+            compression_algorithm: Blosc algorithm (zstd, lz4, etc.)
+            compression_level: Compression level (1-9)
+            compression_nthreads: Blosc compression threads
+            compression_mode: "A" (sync), "B" (batch Ray), "D" (async Ray)
+            chunk_size: Number of nodes per Ray task batch
+            **kwargs: Additional args for PrioritizedReplayBuffer
+        """
+        super(PrioritizedBlockReplayBuffer, self).__init__(**kwargs)
+
+        self.sub_buffer_size = sub_buffer_size
+        self.compress_base = compress_base
+        self.obs_space = obs_space
+        self.action_space = action_space
+
+        # Compression mode configuration
+        self._compression_mode = compression_mode.upper()
+        self._chunk_size = max(1, int(chunk_size))
+        
+        # Ray setup based on mode
+        if self._compression_mode == "A":
+            self._num_ray_workers = 0  # No Ray for pure sync
+        elif self._compression_mode in ["B", "D"]:
+            self._num_ray_workers = max(4, int(compress_pool_size)) if compress_pool_size > 0 else 5
+            if not ray.is_initialized():
+                logger.debug("Initializing Ray with %d CPUs for compression", self._num_ray_workers)
+                ray.init(num_cpus=self._num_ray_workers, ignore_reinit_error=True)
+
+        self._inflight_futures: List[ray.ObjectRef] = []
+        self._pending_nodes: List[CompressReplayNode] = []
+
+        # Cumulative metrics
+        self._metrics = {
+            "compress_time_ms": 0.0,
+            "compress_count": 0,
+            "compress_bytes_obs": 0,
+            "compress_bytes_new_obs": 0,
+            "backpressure_wait_ms": 0.0,
+            "decompress_time_ms": 0.0,
+            "decompress_count": 0,
+        }
+
+        # Persist compression configuration
+        self._compression_config = {
+            'cname': compression_algorithm,
+            'clevel': compression_level,
+            'nthreads': compression_nthreads,
+            'compress_base': compress_base,
+            'shuffle': blosc.BITSHUFFLE,
+        }
+
+        self.compress_node = self._create_compress_node()
+
+    def _create_compress_node(self):
+        """Create a new compress node with consistent parameters."""
+        return CompressReplayNode(
+            buffer_size=self.sub_buffer_size,
+            obs_space=self.obs_space,
+            action_space=self.action_space,
+            compress_base=self.compress_base,
+            cname=self._compression_config['cname'],
+            compression_level=self._compression_config['clevel'],
+            nthreads=self._compression_config['nthreads'],
+        )
+
+    def _node_to_dict(self, node: CompressReplayNode) -> dict:
+        """Convert a CompressReplayNode to a serializable dict."""
+        size = node.size()
+        return {
+            'obs': node.obs[:size].copy(),
+            'new_obs': node.new_obs[:size].copy(),
+            'actions': node.actions[:size].copy(),
+            'rewards': node.rewards[:size].copy(),
+            'terminateds': node.terminateds[:size].copy(),
+            'truncateds': node.truncateds[:size].copy(),
+            'weights': node.weights[:size].copy(),
+            'weight': np.mean(node.weights[:size]),
+        }
+
+    def _compress_mode_A(self):
+        """Mode A: Pure synchronous compression (no Ray)."""
+        t0 = time.time()
+        compressed_data, weight, metrics = self.compress_node.sample()
+        self._metrics["compress_time_ms"] += (time.time() - t0) * 1000.0
+        self._metrics["compress_bytes_obs"] += len(compressed_data["obs"][0])
+        self._metrics["compress_bytes_new_obs"] += len(compressed_data["new_obs"][0])
+        self._metrics["compress_count"] += 1
+        self._add_single_batch(compressed_data, weight=weight)
+        self.compress_node.reset()
+
+    def _compress_mode_B(self):
+        """Mode B: Batch processing with Ray (synchronous)."""
+        nodes = self._pending_nodes[:]
+        
+        t_batch_start = time.time()
+        
+        # Convert nodes to serializable dicts
+        nodes_data = [self._node_to_dict(node) for node in nodes]
+        
+        # Split into chunks for Ray tasks
+        chunks = [
+            nodes_data[i:i + self._chunk_size]
+            for i in range(0, len(nodes_data), self._chunk_size)
+        ]
+        
+        # Submit Ray tasks
+        futures = [
+            compress_node_batch_ray.remote(chunk, self._compression_config)
+            for chunk in chunks
+        ]
+        
+        # Wait for all results (synchronous)
+        all_results = ray.get(futures)
+        
+        # Flatten results and add to buffer
+        for batch_results in all_results:
+            for result in batch_results:
+                self._add_single_batch(
+                    result["compressed_data"], weight=result["weight"]
+                )
+                self._metrics["compress_bytes_obs"] += result["obs_bytes"]
+                self._metrics["compress_bytes_new_obs"] += result["new_obs_bytes"]
+                self._metrics["compress_count"] += 1
+        
+        # Record wall time
+        actual_wall_time = (time.time() - t_batch_start) * 1000.0
+        self._metrics["compress_time_ms"] += actual_wall_time
+
+    def _compress_mode_D(self):
+        """Mode D: True asynchronous processing with Ray."""
+        
+        # 1. Submit new tasks when we have enough pending nodes
+        while len(self._pending_nodes) >= self._chunk_size:
+            chunk_nodes = self._pending_nodes[:self._chunk_size]
+            self._pending_nodes = self._pending_nodes[self._chunk_size:]
+            
+            # Convert to dicts and submit
+            nodes_data = [self._node_to_dict(node) for node in chunk_nodes]
+            future = compress_node_batch_ray.remote(nodes_data, self._compression_config)
+            self._inflight_futures.append(future)
+            
+            logger.debug("Mode D: Submitted chunk (%d nodes), %d futures pending", 
+                        len(chunk_nodes), len(self._inflight_futures))
+        
+        # 2. Check for completed tasks (non-blocking)
+        if self._inflight_futures:
+            ready_refs, remaining_refs = ray.wait(
+                self._inflight_futures, 
+                num_returns=len(self._inflight_futures),
+                timeout=0  # Non-blocking
+            )
+            
+            # Process completed tasks
+            if ready_refs:
+                t_drain_start = time.time()
+                for ref in ready_refs:
+                    batch_results = ray.get(ref)
+                    for result in batch_results:
+                        self._add_single_batch(
+                            result["compressed_data"], weight=result["weight"]
+                        )
+                        self._metrics["compress_bytes_obs"] += result["obs_bytes"]
+                        self._metrics["compress_bytes_new_obs"] += result["new_obs_bytes"]
+                        self._metrics["compress_count"] += 1
+                
+                drain_time = (time.time() - t_drain_start) * 1000.0
+                self._metrics["compress_time_ms"] += drain_time
+                
+                # Update futures list
+                self._inflight_futures = remaining_refs
+                
+                logger.debug("Mode D: Processed %d futures, buffer=%d, pending=%d", 
+                           len(ready_refs), len(self._storage), len(self._inflight_futures))
+        
+        # 3. Backpressure: if too many pending futures, wait for oldest
+        if len(self._inflight_futures) >= self._num_ray_workers * 2:
+            logger.debug("Mode D: Backpressure triggered, waiting for oldest future")
+            t_backpressure_start = time.time()
+            
+            # Wait for the oldest future
+            oldest_ref = self._inflight_futures.pop(0)
+            batch_results = ray.get(oldest_ref)
+            
+            for result in batch_results:
+                self._add_single_batch(
+                    result["compressed_data"], weight=result["weight"]
+                )
+                self._metrics["compress_bytes_obs"] += result["obs_bytes"]
+                self._metrics["compress_bytes_new_obs"] += result["new_obs_bytes"]
+                self._metrics["compress_count"] += 1
+            
+            backpressure_time = (time.time() - t_backpressure_start) * 1000.0
+            self._metrics["compress_time_ms"] += backpressure_time
+            self._metrics["backpressure_wait_ms"] += backpressure_time
+
+    def _reset_pool(self):
+        """Reset pending nodes pool."""
+        self._pending_nodes = []
+
+    def stats(self, debug: bool = False) -> Dict[str, Any]:
+        """Compute memory usage and expose timing metrics.
+        
+        Returns:
+            Dict with est_size_bytes, num_entries, and timing metrics (ms)
+        """
+        total_size = 0
+        for sample_batch in self._storage:
+            if "obs" in sample_batch and hasattr(sample_batch["obs"], "__getitem__"):
+                total_size += len(sample_batch["obs"][0])
+            if "new_obs" in sample_batch and hasattr(
+                sample_batch["new_obs"], "__getitem__"
+            ):
+                total_size += len(sample_batch["new_obs"][0])
+
+        out = {
+            "est_size_bytes": total_size,
+            "num_entries": len(self._storage) * self.sub_buffer_size,
+            "compress_time_ms": self._metrics.get("compress_time_ms", 0.0),
+            "backpressure_wait_ms": self._metrics.get("backpressure_wait_ms", 0.0),
+            "decompress_time_ms": self._metrics.get("decompress_time_ms", 0.0),
+        }
+        return out
+
+    def sample(self, num_items: int, beta: float, **kwargs) -> Optional[SampleBatch]:
+        """Sample blocks and expand metadata to transition-level for DQN training.
+        
+        Args:
+            num_items: Number of blocks to sample
+            beta: PER importance sampling exponent
+            **kwargs: Additional sampling args
+            
+        Returns:
+            SampleBatch with expanded weights/batch_indexes, or None if buffer empty
+        """
+        # Drain pending async tasks if buffer empty (Mode D only)
+        if self._compression_mode == "D" and len(self._storage) == 0 and len(self._inflight_futures) > 0:
+            self._drain_pending_futures()
+        
+        if len(self._storage) == 0:
+            return None
+        
+        try:
+            batch = super(PrioritizedBlockReplayBuffer, self).sample(num_items, beta=beta, **kwargs)
+        except ValueError as e:
+            if "empty buffer" in str(e).lower():
+                return None
+            raise
+
+        if batch is None:
+            return None
+
+        # Expand block-level weights/batch_indexes to transition-level
+        num_transitions = len(batch.get("actions", batch.get("rewards", [])))
+        self._expand_block_field(batch, "weights", num_transitions)
+        self._expand_block_field(batch, "batch_indexes", num_transitions)
+
+        return batch
+    
+    def _expand_block_field(self, batch: SampleBatch, field_name: str, target_size: int) -> None:
+        """Expand block-level field to transition-level by replicating values.
+        
+        Args:
+            batch: SampleBatch to modify in-place
+            field_name: Field to expand (weights, batch_indexes)
+            target_size: Target size (number of transitions)
+        """
+        if field_name not in batch or len(batch[field_name]) == target_size:
+            return
+        
+        replicate_factor = target_size // len(batch[field_name])
+        batch[field_name] = np.repeat(batch[field_name], replicate_factor)
+    
+    def _drain_pending_futures(self) -> None:
+        """Drain all pending Ray futures and add to storage (Mode D async only)."""
+        t_start = time.time()
+        all_results = ray.get(self._inflight_futures)
+        self._inflight_futures = []
+        
+        for batch_results in all_results:
+            for result in batch_results:
+                self._add_single_batch(result["compressed_data"], weight=result["weight"])
+                self._metrics["compress_bytes_obs"] += result["obs_bytes"]
+                self._metrics["compress_bytes_new_obs"] += result["new_obs_bytes"]
+                self._metrics["compress_count"] += 1
+        
+        self._metrics["compress_time_ms"] += (time.time() - t_start) * 1000.0
+
+    def add(self, batch: SampleBatchType, **kwargs) -> None:
+        """Add a batch to the buffer, compressing blocks as they fill up.
+        
+        Args:
+            batch: SampleBatch with transitions to add
+            **kwargs: Additional args (unused)
+        """
+        if not isinstance(batch, SampleBatch):
+            return
+
+        # Use CompressReplayNode to fill blocks
+        idx = 0
+        count = len(batch)
+        while idx < count:
+            space = self.compress_node.buffer_size - self.compress_node.pos
+            take = min(space, count - idx)
+            slice_batch = batch.slice(idx, idx + take)
+            self.compress_node.add(slice_batch)
+            idx += take
+
+            if self.compress_node.is_ready():
+                if self._compression_mode == "A":
+                    self._compress_mode_A()
+                elif self._compression_mode == "B":
+                    # Mode B: Accumulate nodes then batch process
+                    self._pending_nodes.append(self.compress_node)
+                    self.compress_node = self._create_compress_node()
+                    if len(self._pending_nodes) >= self._chunk_size:
+                        self._compress_mode_B()
+                        self._reset_pool()
+                elif self._compression_mode == "D":
+                    # Mode D: True async processing
+                    self._pending_nodes.append(self.compress_node)
+                    self.compress_node = self._create_compress_node()
+                    self._compress_mode_D()
+
+    def _encode_sample(self, idxes: List[int]) -> SampleBatch:
+        """Encode samples - returns COMPRESSED data (decompression at higher level).
+        
+        Args:
+            idxes: Block indices to retrieve
+            
+        Returns:
+            Concatenated compressed SampleBatch with compress_base metadata
+        """
+        compressed_list = []
+        for i in idxes:
+            self._hit_count[i] += 1
+            compressed_list.append(self._storage[i])
+
+        # Remove compress_base metadata before concat (it's scalar, can't be concatenated)
+        compress_base_value = compressed_list[0].get("compress_base", self.compress_base) if compressed_list else self.compress_base
+        for batch in compressed_list:
+            if "compress_base" in batch:
+                del batch["compress_base"]
+        
+        # Concatenate compressed batches
+        out = concat_samples(compressed_list)
+        
+        # Add compress_base metadata back
+        out["compress_base"] = compress_base_value
+        
+        return out
+

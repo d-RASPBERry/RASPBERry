@@ -8,3 +8,6 @@ hyper_parameters:
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
     type: MultiAgentPrioritizedReplayBuffer
+  # Override resources for concurrent 3h compare run
+  num_cpus: 5
+  num_gpus: 1

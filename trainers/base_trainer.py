@@ -1,13 +1,16 @@
 """Base trainer class for RASPBERry project."""
 import ray
 import time
+import json
+import math
 import logging
 import warnings
+import datetime
 from ray.tune.registry import register_env
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 from pathlib import Path
-from utils import env_creator, load_config, flatten_dict
+from utils import env_creator, flatten_dict, convert_np_arrays
 import mlflow
 
 
@@ -15,26 +18,31 @@ class BaseTrainer(ABC):
     """Abstract base class for reinforcement learning trainers."""
 
     def __init__(self,
-                 config: str,
+                 config: Dict[str, Any],
                  env_name: str,
                  run_name: str,
                  log_path: Optional[str] = None,
                  checkpoint_path: Optional[str] = None,
-                 use_mlflow: Optional[str] = None):
+                 mlflow_cfg: Optional[Dict[str, Any]] = None):
         """Initialize common trainer state and I/O paths.
 
         Args:
-            config: Path to YAML configuration file containing algorithm/env/buffer settings.
+            config: Configuration dictionary containing algorithm/env/buffer settings.
             env_name: Short environment name used in the `run_name`.
             log_path: Optional root directory to store logs; a subfolder `run_name` is created.
             checkpoint_path: Optional root directory to store checkpoints; a subfolder `run_name` is created.
-            use_mlflow: Path to mlflow YAML configuration file, None to disable mlflow.
+            mlflow_cfg: Optional dictionary with MLflow configuration.
 
         Notes:
             - `run_name` is `{env_name}_YYYYMMDD_HHMMSS`.
             - Subclasses must implement `_filter_result()` and `init_algorithm()`.
         """
-        self._setup_config(config)
+        # Set default values for logging and checkpointing if not present
+        if config.get('log_freq') is None:
+            config['log_freq'] = 10
+        if config.get('checkpoint_freq') is None:
+            config['checkpoint_freq'] = 100
+        self.config = config
         self.start_time = time.time()
         self.env_name = env_name
         self.current_iteration = 0
@@ -42,6 +50,12 @@ class BaseTrainer(ABC):
         self.trainer = None
         self.log_freq = self.config.get("log_freq")
         self.checkpoint_freq = self.config.get("checkpoint_freq")
+        self.log_start_iteration = self.config.get("log_start_iteration", 0)
+
+        # mlflow state must be set before logger setup
+        self.mlflow_cfg = mlflow_cfg
+        self.mlflow_run = None
+
         self.log_path = Path(log_path) / self.run_name if log_path else None
         if self.log_path:
             self.log_path.mkdir(parents=True, exist_ok=True)
@@ -52,10 +66,6 @@ class BaseTrainer(ABC):
 
         self._setup_logger()
         self.logger.info(f"🚀 Initializing {self.__class__.__name__}: {self.run_name}")
-
-        # mlflow state
-        self.use_mlflow = use_mlflow  # Path to mlflow config YAML or None
-        self.mlflow_run = None
 
     def setup_environment(self) -> str:
         """Set up and register the training environment and return its ID."""
@@ -68,25 +78,6 @@ class BaseTrainer(ABC):
         self.log(f"✓ Environment {env_str} registered, obs: {_env_rest.shape}, act: {_env.action_space}", "TRAIN")
 
         return env_str
-
-    def _setup_config(self, config: str):
-        """Load configuration from YAML file.
-
-        Args:
-            config: Path to YAML configuration file containing all settings.
-
-        Returns:
-            Configuration dictionary.
-        """
-        # Load configuration from YAML file path
-        config_dict = load_config(config)
-
-        # Set default values for logging and checkpointing if not present
-        if config_dict.get('log_freq') is None:
-            config_dict['log_freq'] = 10
-        if config_dict.get('checkpoint_freq') is None:
-            config_dict['checkpoint_freq'] = 100
-        self.config = config_dict
 
     def _setup_logger(self) -> None:
         """Configure a stream logger and optional file logger under `log_path`.
@@ -118,145 +109,214 @@ class BaseTrainer(ABC):
         else:
             self.logger.info(f"[UNKNOWN] {message}")
 
-    @abstractmethod
-    def _filter_result(self, iteration: int, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Map RLlib training `result` into a compact stats dict for logging.
-
+    @staticmethod
+    def _prepare_result_metadata(iteration: int, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Prepare result dictionary with standard metadata.
+        
+        This is a pure function that adds iteration, timestamp, and other common fields.
+        
         Args:
-            iteration: Current training iteration index.
-            result: Raw dict returned by `self.trainer.train()`.
-
+            iteration: Current training iteration.
+            result: Raw result dictionary from trainer.
+            
         Returns:
-            A small dict containing at least the following keys for unified logging:
-                - "reward": scalar reward metric (e.g., episode_reward_mean)
-                - "timesteps": cumulative or per-iteration timesteps metric
-
-        Subclasses decide the exact mapping from RLlib fields to these keys.
+            Result dictionary with added metadata.
         """
-        raise NotImplementedError("Subclasses must implement _filter_result()")
+        data = result.copy()
+        data["iteration"] = iteration
+        data["timestamp"] = time.time()
+        data["episodes"] = result.get("episodes_total", "N/A")
+        data["time_s"] = result.get("time_total_s", "N/A")
+        return data
+
+    def _get_buffer_stats(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract buffer statistics from the replay buffer.
+        
+        Uses `buffer.stats()` as the single source of truth. For custom compressed
+        buffers (e.g., RASPBERry), compression-related metrics are expected to be
+        included in the `stats()` output.
+        """
+        stats = {}
+        if hasattr(self.trainer, 'local_replay_buffer') and self.trainer.local_replay_buffer is not None:
+            buffer = self.trainer.local_replay_buffer
+            # Single-node mode
+            buffer_stats = buffer.stats()
+
+            # Normalize/alias common keys
+            # num_entries
+            if "num_entries" not in buffer_stats:
+                if "num_items" in buffer_stats and isinstance(buffer_stats["num_items"], (int, float)):
+                    buffer_stats["num_entries"] = buffer_stats["num_items"]
+                elif hasattr(buffer, '__len__'):
+                    try:
+                        buffer_stats["num_entries"] = len(buffer)
+                    except Exception:
+                        pass
+            # est_size_bytes
+            if "est_size_bytes" not in buffer_stats:
+                if hasattr(buffer, 'get_estimated_size_in_bytes'):
+                    try:
+                        buffer_stats["est_size_bytes"] = buffer.get_estimated_size_in_bytes()
+                    except Exception:
+                        pass
+                elif "size_bytes" in buffer_stats and isinstance(buffer_stats["size_bytes"], (int, float)):
+                    buffer_stats["est_size_bytes"] = buffer_stats["size_bytes"]
+                elif "total_size_bytes" in buffer_stats and isinstance(buffer_stats["total_size_bytes"], (int, float)):
+                    buffer_stats["est_size_bytes"] = buffer_stats["total_size_bytes"]
+
+            stats["buffer_stats"] = buffer_stats
+        elif "info" in result and "replay_shard_0" in result["info"]:
+            # Ape-X distributed mode (when available in `result`)
+            stats["buffer_stats"] = result["info"]["replay_shard_0"]
+        return stats
+
+    def _process_train_result(self, iteration: int, result: Dict[str, Any]) -> (Dict[str, Any], Dict[str, float]):
+        """Consolidates all result processing for logging and file saving.
+        
+        This is the new Single Source of Truth for handling the raw result dictionary.
+        
+        Args:
+            iteration: Current training iteration.
+            result: Raw result dictionary from trainer.
+            
+        Returns:
+            A tuple containing:
+            - full_log_data: A structured dict for file saving.
+            - mlflow_metrics: A flattened dict of numeric metrics for MLflow.
+        """
+        # 1. Prepare metadata and buffer stats
+        full_log_data = self._prepare_result_metadata(iteration, result)
+        buffer_stats = self._get_buffer_stats(result)
+        full_log_data.update(buffer_stats)
+
+        # 2. Prepare metrics for MLflow by flattening all nested dictionaries
+        sampler = result.get("sampler_results", {})
+        eva = result.get("evaluation", {})
+        info = result.get("info", {})
+
+        # Flatten all potential sources of numeric data
+        metrics: Dict[str, Any] = {}
+        metrics.update(flatten_dict(sampler))
+        metrics.update(flatten_dict(info))
+        metrics.update(flatten_dict(buffer_stats))
+
+        # Add derived/calculated metrics
+        if "buffer_stats_est_size_bytes" in metrics:
+            size_bytes = metrics["buffer_stats_est_size_bytes"]
+            if isinstance(size_bytes, (int, float)):
+                metrics["buffer_stats_est_size_gb"] = size_bytes / 1e9
+
+        # Add prefix for evaluation metrics
+        for k, v in flatten_dict(eva).items():
+            metrics[f"eval_{k}"] = v
+
+        # Filter for numeric types and remove non-finite values to prevent logger errors
+        mlflow_metrics = {
+            k: float(v)
+            for k, v in metrics.items()
+            if isinstance(v, (int, float)) and v is not None and math.isfinite(v)
+        }
+
+        return full_log_data, mlflow_metrics
+
+    def _save_result_file(self, full_log_data: Dict[str, Any]) -> None:
+        """Save the processed log data to a JSON file."""
+        if not self.log_path:
+            return
+
+        try:
+            iteration = full_log_data.get("iteration", 0)
+            processed_data = convert_np_arrays(full_log_data)
+            result_file = self.log_path / f"result_{iteration:06d}.json"
+
+            with open(result_file, "w", encoding="utf-8") as f:
+                json.dump(processed_data, f, indent=2)
+
+        except (IOError, OSError) as e:
+            self.log(f"结果文件保存失败: {e}", "BUFFER")
+        except Exception as e:
+            self.log(f"结果保存时发生意外错误: {e}", "BUFFER")
 
     def _train_single_iteration(self, iteration: int) -> None:
-        """Run a single `train()` step, log progress, and checkpoint if configured."""
+        """Run a single `train()` step, process results, log, and checkpoint."""
+        # 1. Run a single training step
         result = self.trainer.train()
         self.current_iteration = iteration + 1
-        stats = self._filter_result(iteration, result)
-        # Log progress controlled purely by log_freq
-        if self.log_freq and iteration % self.log_freq == 0:
-            reward = stats.get("reward", "N/A")
-            timesteps = stats.get("timesteps", "N/A")
-            self.log(f"Iter {iteration:4d} | Reward: {reward} | Timesteps: {timesteps}", "TRAIN")
-            # mlflow logging for this iteration (best-effort)
-            self.log_mlflow_iteration(iteration, result)
 
+        # 2. Check if we should skip logging based on the configured start iteration
+        if self.current_iteration < self.log_start_iteration:
+            if self.log_freq and iteration % self.log_freq == 0:
+                self.log(f"Iter {iteration:4d} | Skipping detailed logging until iteration {self.log_start_iteration}",
+                         "TRAIN")
+            return
+
+        # 3. Process the raw result ONCE to get all necessary outputs
+        full_log_data, mlflow_metrics = self._process_train_result(iteration, result)
+
+        # 4. Save the complete, processed result to a file
+        self._save_result_file(full_log_data)
+
+        # 5. Log to console
+        if self.log_freq and iteration % self.log_freq == 0:
+            reward = result.get("episode_reward_mean", "N/A")
+            timesteps = result.get("timesteps_total", "N/A")
+            self.log(f"Iter {iteration:4d} | Reward: {reward} | Timesteps: {timesteps}", "TRAIN")
+
+            # 6. Log processed metrics to MLflow
+            self.log_mlflow_iteration(iteration, result, mlflow_metrics)
+
+        # 7. Handle checkpointing
         if self.current_iteration > self.checkpoint_freq and iteration % self.checkpoint_freq == 0 and self.checkpoint_path:
             checkpoint_path = self.checkpoint_path / f"checkpoint_{iteration}"
             self.trainer.save(str(checkpoint_path))
             self.log(f"Checkpoint saved: {checkpoint_path}", "CHECKPOINT")
 
-        return result
-
     def _setup_mlflow(self) -> None:
-        """Initialize mlflow from separate config file."""
-        if not self.use_mlflow:
+        """Initialize mlflow from the provided config dictionary."""
+        if not self.mlflow_cfg:
             return
 
-        # Read separate mlflow configuration file
-        mlflow_cfg = load_config(self.use_mlflow)
-
-        if "tracking_uri" in mlflow_cfg:
-            mlflow.set_tracking_uri(mlflow_cfg["tracking_uri"])
-
-        mlflow.set_experiment(experiment_name=self.env_name)
-
-        run_tags = mlflow_cfg.get("run_tags", {})
-        self.mlflow_run = mlflow.start_run(run_name=self.run_name, tags=run_tags)
-
-        # Flatten and log hyperparameters
-        flat_params = flatten_dict(self.config["hyper_parameters"])
-        # Convert type objects to string names
-        clean_params = {}
-        for k, v in flat_params.items():
-            if isinstance(v, type):
-                clean_params[k] = str(v.__name__)
-            else:
-                clean_params[k] = v
-        mlflow.log_params(clean_params)
-
-        self.log("✓ mlflow ready", "TRAIN")
-
-    def log_mlflow_iteration(self, iteration: int, result: Dict[str, Any]) -> None:
-        """Log metrics to mlflow for a single iteration."""
-        if not self.use_mlflow:
-            return
-
-        # Assemble metrics
-        sampler = result.get("sampler_results", {})
-        eva = result.get("evaluation", {})
-        info = result.get("info", {})
-
-        # Replay buffer statistics (robust handling for single-node vs Ape-X distributed)
         try:
-            # Determine if using local buffer (single-node) vs distributed (Ape-X)
-            use_normal = (hasattr(self.trainer, 'local_replay_buffer') and 
-                         self.trainer.local_replay_buffer is not None)
-            
-            if use_normal:
-                # Single-node mode: use local buffer stats
-                buf = flatten_dict(self.trainer.local_replay_buffer.stats())
-                if "est_size_bytes" in buf:
-                    buf["est_size_gb"] = buf["est_size_bytes"] / 1e9
-            else:
-                # Ape-X distributed mode: extract from result info and scale by shard count
-                info_copy = info.copy() if hasattr(info, "copy") else dict(info)
-                shard0_stats = info_copy.get("replay_shard_0", {})
-                if shard0_stats:
-                    buf = flatten_dict(shard0_stats)
-                    # Get shard count from optimizer config
-                    try:
-                        optimizer_cfg = self.config["hyper_parameters"].get("optimizer", {})
-                        num_shards = int(optimizer_cfg.get("num_replay_buffer_shards", 1))
-                    except Exception:
-                        num_shards = 1
-                    
-                    # Scale single shard stats to total
-                    if "est_size_bytes" in buf:
-                        total_bytes = float(buf["est_size_bytes"]) * num_shards
-                        buf["est_size_bytes"] = total_bytes
-                        buf["est_size_gb"] = total_bytes / 1e9
+            import mlflow
+
+            if "tracking_uri" in self.mlflow_cfg:
+                mlflow.set_tracking_uri(self.mlflow_cfg["tracking_uri"])
+
+            mlflow.set_experiment(experiment_name=self.env_name)
+
+            run_tags = self.mlflow_cfg.get("run_tags", {})
+            self.mlflow_run = mlflow.start_run(run_name=self.run_name, tags=run_tags)
+
+            # Flatten and log hyperparameters
+            flat_params = flatten_dict(self.config["hyper_parameters"])
+            # Convert type objects to string names
+            clean_params = {}
+            for k, v in flat_params.items():
+                if isinstance(v, type):
+                    clean_params[k] = str(v.__name__)
                 else:
-                    # Fallback for missing replay stats
-                    buf = {"buffer_mode": "ape_x", "est_size_bytes": 0, "est_size_gb": 0.0}
-        except Exception as exc:
-            # Best-effort logging only; never fail training due to stats collection
-            self.log(f"replay buffer stats unavailable ({type(exc).__name__})", "BUFFER")
-            buf = {"buffer_error": str(exc)}
+                    clean_params[k] = v
+            mlflow.log_params(clean_params)
 
-        # Merge all numeric metrics
-        metrics: Dict[str, float] = {}
-        for d in [sampler, info, buf]:
-            for k, v in d.items():
-                if isinstance(v, (int, float)):
-                    metrics[k] = float(v)
+            self.log("✓ mlflow ready", "TRAIN")
+        except ImportError:
+            self.log("MLflow is configured, but the 'mlflow' package is not installed. Disabling MLflow.", "TRAIN")
+            self.mlflow_cfg = None
+        except Exception as e:
+            self.log(f"Failed to initialize MLflow (is the server running?): {e}", "TRAIN")
+            self.log("Disabling MLflow logging for this run.", "TRAIN")
+            self.mlflow_cfg = None
 
-        # Add prefix for evaluation metrics
-        for k, v in eva.items():
-            if isinstance(v, (int, float)):
-                metrics[f"eval_{k}"] = float(v)
-
-        # Filter out NaN/Inf values to avoid logger errors
-        import math
-        metrics = {k: v for k, v in metrics.items() if v is not None and math.isfinite(v)}
-
-        # Nothing to log
-        if not metrics:
+    def log_mlflow_iteration(self, iteration: int, result: Dict[str, Any], mlflow_metrics: Dict[str, float]) -> None:
+        """Log pre-processed metrics to mlflow for a single iteration."""
+        if not self.mlflow_cfg:
             return
 
         step = result.get("episodes_total", iteration)
-        mlflow.log_metrics(metrics, step=step)
+        mlflow.log_metrics(mlflow_metrics, step=step)
 
         # Periodically upload artifacts
-        mlflow_cfg = load_config(self.use_mlflow)
-        log_artifacts_every = mlflow_cfg.get("log_artifacts_every", 200)
+        log_artifacts_every = self.mlflow_cfg.get("log_artifacts_every", 200)
         if iteration % log_artifacts_every == 0:
             if self.log_path:
                 mlflow.log_artifacts(str(self.log_path))
@@ -265,7 +325,7 @@ class BaseTrainer(ABC):
 
     def finalize_mlflow(self) -> None:
         """Upload final artifacts and end mlflow run."""
-        if not self.use_mlflow:
+        if not self.mlflow_cfg:
             return
 
         # if self.log_path:
@@ -283,21 +343,32 @@ class BaseTrainer(ABC):
             num_cpus: Number of CPUs to allocate to Ray.
             num_gpus: Number of GPUs to allocate to Ray.
             include_dashboard: Whether to start the Ray dashboard.
-
-        Notes:
-            Tweaks `_system_config` for GC actor cache to avoid warnings on teardown.
         """
         warnings.filterwarnings("ignore", category=DeprecationWarning, module="ray")
 
         if not ray.is_initialized():
+            # Get Ray temp dir with timestamp
+            ray_temp_base = self.config["paths"].get("ray_temp_dir", "/tmp/ray/")
+            ray_temp_dir = f"{ray_temp_base}ray_{int(datetime.datetime.now().timestamp())}"
+
+            # Get system config
+            max_cached_count = self.config["ray_config"].get("max_gcs_destroyed_actor_cached_count", 100)
+
+            # Get object store memory setting (in GB, convert to bytes)
+            object_store_memory_gb = self.config["ray_config"].get("object_store_memory_gb", 100)
+            object_store_memory_bytes = object_store_memory_gb * 1024 * 1024 * 1024
+
             ray.init(
                 num_cpus=num_cpus,
                 num_gpus=num_gpus,
                 include_dashboard=include_dashboard,
-                _system_config={"maximum_gcs_destroyed_actor_cached_count": 200},
+                object_store_memory=object_store_memory_bytes,
+                _temp_dir=ray_temp_dir,
+                _system_config={"maximum_gcs_destroyed_actor_cached_count": max_cached_count},
                 ignore_reinit_error=True
             )
-            self.log(f"✓ Ray ready ({num_cpus} CPUs, {num_gpus} GPUs)")
+            self.log(
+                f"✓ Ray ready ({num_cpus} CPUs, {num_gpus} GPUs, {object_store_memory_gb}GB Object Store, temp: {ray_temp_dir})")
 
     @abstractmethod
     def init_algorithm(self) -> Any:
@@ -330,14 +401,14 @@ class BaseTrainer(ABC):
         self.log(f"🚀 Training {start_iter}→{end_iter}{time_info}", "TRAIN")
 
         # Setup mlflow on first train call
-        if self.current_iteration == start_iter and self.use_mlflow:
+        if self.current_iteration == start_iter and self.mlflow_cfg:
             self._setup_mlflow()
 
         for iteration in range(start_iter, end_iter):
             if max_time and (time.time() - train_start_time) >= max_time:
                 self.log(f"⏰ Time limit reached ({max_time}s), stopping training", "TRAIN")
                 break
-            result = self._train_single_iteration(iteration)
+            self._train_single_iteration(iteration)
 
         elapsed_time = time.time() - train_start_time
         self.log(f"✅ Done ({elapsed_time:.1f}s)", "TRAIN")
@@ -357,7 +428,8 @@ class BaseTrainer(ABC):
             initialize: If True, calls `setup_ray()` and `init_algorithm()` before training.
         """
         if initialize:
-            self.setup_ray(num_cpus=self.config["hyper_parameters"]["num_cpus"], num_gpus=self.config["hyper_parameters"]["num_gpus"])
+            self.setup_ray(num_cpus=self.config["hyper_parameters"]["num_cpus"],
+                           num_gpus=self.config["hyper_parameters"]["num_gpus"])
             self.init_algorithm()
 
         self.train(max_iterations=max_iterations, max_time=max_time)
