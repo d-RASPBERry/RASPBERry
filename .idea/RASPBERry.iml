@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <module type="PYTHON_MODULE" version="4">
   <component name="NewModuleRootManager">
-    <content url="file://$MODULE_DIR$" />
+    <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/.backups" />
+      <excludeFolder url="file://$MODULE_DIR$/2024" />
+      <excludeFolder url="file://$MODULE_DIR$/old" />
+    </content>
     <orderEntry type="jdk" jdkName="RASPBERRY" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="New_RASPBERry" />
