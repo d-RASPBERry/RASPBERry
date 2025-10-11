@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
 # Third-party imports
 import mlflow
 import ray
+from ray.rllib.models import ModelCatalog
 from ray.tune.registry import register_env
 
 # Local imports
@@ -28,8 +29,9 @@ from algorithms.sac_raspberry_algo import SACRaspberryAlgo
 from metrics import write_iteration_json
 from metrics.logger import setup_logger
 from metrics.mlflow_helper import prepare_metrics, setup_mlflow
+from models import SACImageEncoder, SACLightweightCNN
 from replay_buffer.d_raspberry_ray import MultiAgentPrioritizedBlockReplayBuffer
-from utils import env_creator, load_config
+from utils import env_creator, load_config, infer_env_type
 
 CONFIG_PATH = str((ROOT / "configs/sac_raspberry.yml").resolve())
 RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
@@ -50,6 +52,10 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> SACRaspberry
     """
 
     hyper = config["hyper_parameters"].copy()
+    
+    # Register custom CNN models
+    ModelCatalog.register_custom_model("SACImageEncoder", SACImageEncoder)
+    ModelCatalog.register_custom_model("SACLightweightCNN", SACLightweightCNN)
 
     env_config = {"id": env_name}
     game = env_creator(env_config)
@@ -83,8 +89,8 @@ def main() -> None:
     parser.add_argument(
         "--env",
         type=str,
-        default="Atari-Breakout",
-        help="Environment name (e.g., Breakout, Pong)",
+        default="Pendulum-Pendulum",
+        help="Environment name (e.g., Pendulum-Pendulum, CarRacing-v2)",
     )
     parser.add_argument("--gpu", type=str, default="0", help="CUDA device ID")
     args = parser.parse_args()
@@ -109,8 +115,10 @@ def main() -> None:
     max_iterations = run_cfg.get("max_iterations", 10000)
     log_every = config.get("logging_config", {}).get("log_freq", 10)
 
+    # Infer environment type and construct paths dynamically
+    env_type = infer_env_type(args.env)
     run_name = f"SAC-RASPBERry-{datetime.now().timestamp()}"
-    log_root = Path(paths["log_base_path"]) / args.env
+    log_root = Path(paths["log_base_path"]) / env_type / args.env
     log_dir = log_root / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -122,8 +130,9 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("SAC-RASPBERry Training Started")
     logger.info(
-        "Env: %s | GPU: %s | Max time: %ds | Max iter: %d",
+        "Env: %s (%s) | GPU: %s | Max time: %ds | Max iter: %d",
         args.env,
+        env_type,
         args.gpu,
         max_time_s,
         max_iterations,
@@ -178,6 +187,24 @@ def main() -> None:
 
             result = algo.train()
             iteration += 1
+            
+            # Attach replay buffer statistics to result
+            if hasattr(algo, 'local_replay_buffer'):
+                from utils import flatten_dict
+                buffer_stats = flatten_dict(algo.local_replay_buffer.stats())
+                # Convert bytes to GB for readability
+                if "est_size_bytes" in buffer_stats:
+                    buffer_stats["est_size_gb"] = buffer_stats["est_size_bytes"] / 1e9
+                if "est_compressed_bytes" in buffer_stats:
+                    buffer_stats["est_compressed_gb"] = buffer_stats["est_compressed_bytes"] / 1e9
+                if "est_raw_bytes" in buffer_stats:
+                    buffer_stats["est_raw_gb"] = buffer_stats["est_raw_bytes"] / 1e9
+                # Ensure num_entries is logged (usually already in stats)
+                if "num_entries" not in buffer_stats and hasattr(algo.local_replay_buffer, '_num_added'):
+                    buffer_stats["num_entries"] = min(algo.local_replay_buffer._num_added, 
+                                                      algo.local_replay_buffer.capacity)
+                result["buffer"] = buffer_stats
+            
             write_iteration_json(log_dir, iteration, result)
 
             if iteration % log_every == 0:

@@ -18,33 +18,52 @@ hyper_parameters:
   # Framework configuration
   framework: torch
 
-  # Core SAC parameters
+  # Model configuration for image inputs (Pendulum with PixelObservationWrapper)
+  model:
+    custom_model: SACLightweightCNN
+    custom_model_config:
+      feature_dim: 256              # Feature dimension after CNN encoder
+
+  # Core SAC parameters (tuned for Pendulum)
   lr: 3e-4
   gamma: 0.99
-  tau: 0.005                       # Soft target update coefficient
-  target_entropy: "auto"           # Auto-compute target entropy
-  initial_alpha: 1.0               # Initial temperature coefficient
+  tau: 0.005                        # Soft target update coefficient
+  target_entropy: -1.0              # For 1D continuous action (Pendulum)
+  initial_alpha: 0.2                # Lower initial temperature for image-based learning
   n_step: 1
 
   # Network architecture
-  hiddens: [256, 256]              # SAC typically uses deeper networks
+  hiddens: [256, 256]               # Applied to CNN features
 
-  # Learning schedule (align with rl-experiments SAC baseline)
-  num_steps_sampled_before_learning_starts: 10000
+  # Learning schedule (faster warmup for image-based learning)
+  num_steps_sampled_before_learning_starts: 5000
   min_sample_timesteps_per_iteration: 1000
   training_intensity: 1.0
 
   # Training batch configuration
-  train_batch_size: 256            # rl-experiments uses 256 for Mujoco SAC
-  rollout_fragment_length: 1       # step-wise fragments typical for SAC
+  train_batch_size: 256
+  rollout_fragment_length: 1
 
   # Resource configuration
   num_gpus: 1
   num_cpus: 10
-  num_workers: 5                   # Increase parallel sampling
+  num_workers: 5
   num_envs_per_worker: 8
   num_gpus_per_worker: 0.1
   num_cpus_per_worker: 1
+
+  # Common replay buffer parameters (overridden in specific configs)
+  replay_buffer_config:
+    prioritized_replay_alpha: 0.5
+    prioritized_replay_beta: 1.0
+    prioritized_replay_eps: 0.000001
+
+# Run configuration
+run_config:
+  use_mlflow: true
+  max_iterations: 10000
+  max_time_s: 36000  # 10 hours
+  # Note: run_name is dynamically generated in runner scripts (SAC-PER-{timestamp})
 
 # Logging strategy
 log_freq: 10

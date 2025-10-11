@@ -208,7 +208,7 @@ class CompressReplayNode(object):
                 except Exception:
                     pass
             # Compress and collect timing from inner routine
-            compressed_batch, pack_obs_ms, pack_new_obs_ms, contig_ms, assemble_ms = self._compress_sample_batch(prepared_batch)
+            compressed_batch, pack_obs_ms, pack_new_obs_ms, contig_ms, assemble_ms, raw_obs_bytes, raw_new_obs_bytes = self._compress_sample_batch(prepared_batch)
             # Expose detailed metrics for aggregators
             metrics = {
                 "prepare_ms": float(prep_ms),
@@ -217,21 +217,24 @@ class CompressReplayNode(object):
                 "compress_obs_ms": float(pack_obs_ms),
                 "compress_new_obs_ms": float(pack_new_obs_ms),
                 "assemble_ms": float(assemble_ms),
+                "raw_obs_bytes": float(raw_obs_bytes),
+                "raw_new_obs_bytes": float(raw_new_obs_bytes),
             }
             self.last_metrics = {
                 "compress_time_ms": float(prep_ms + contig_ms + pack_obs_ms + pack_new_obs_ms + assemble_ms),
                 **metrics,
             }
+            metrics["raw_total_bytes"] = float(raw_obs_bytes + raw_new_obs_bytes)
             return compressed_batch, block_weight, metrics
         except Exception as e:
             logger.exception("Compression failed")
             raise RuntimeError(f"Compression failed: {e}")
 
-    def _compress_sample_batch(self, sample_batch: SampleBatch) -> Tuple[SampleBatch, float, float, float, float]:
+    def _compress_sample_batch(self, sample_batch: SampleBatch) -> Tuple[SampleBatch, float, float, float, float, int, int]:
         """Compress the SampleBatch and return a compressed SampleBatch with timings.
 
         Returns:
-            tuple: (compressed_batch, pack_obs_ms, pack_new_obs_ms, contig_ms, assemble_ms)
+            tuple: (compressed_batch, pack_obs_ms, pack_new_obs_ms, contig_ms, assemble_ms, raw_obs_bytes, raw_new_obs_bytes)
         """
         obs_array = sample_batch["obs"]
         new_obs_array = sample_batch["new_obs"]
@@ -290,7 +293,10 @@ class CompressReplayNode(object):
             "compress_base": self.compress_base,
         })
         assemble_ms = (time.time() - t_asm0) * 1000.0
-        return out_batch, pack_obs_ms, pack_new_obs_ms, contig_ms, assemble_ms
+        raw_obs_bytes = int(obs_array.nbytes)
+        raw_new_obs_bytes = int(new_obs_array.nbytes)
+
+        return out_batch, pack_obs_ms, pack_new_obs_ms, contig_ms, assemble_ms, raw_obs_bytes, raw_new_obs_bytes
 
     def size(self) -> int:
         """Return current number of stored samples."""

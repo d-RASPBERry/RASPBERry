@@ -12,14 +12,8 @@ hyper_parameters:
     compress_base: -1
     worker_side_prioritization: false
     compress_pool_size: 400
-    compression_algorithm: "lz4"  # Options: zstd, lz4, lz4hc, blosclz
-    compression_level: 1           # 1-9, higher = better compression but slower
+    compression_algorithm: "lz4"
+    compression_level: 1
     compression_nthreads: 4
-    compression_mode: "D"          # "A": sync, "B": batch_pool, "D": batch_async
-    chunk_size: 20                 # Batch size for modes B and D (shared parameter)
-
-run_config:
-  use_mlflow: true
-  run_name_template: "{env_in}_RASPBERRY"
-  max_iterations: 10000
-  max_time_s: 7200
+    compression_mode: "D"
+    chunk_size: 20

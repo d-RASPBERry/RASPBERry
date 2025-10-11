@@ -5,7 +5,7 @@
 ```
 configs/
 ├── path.yml          ← 全局路径配置（所有算法共享）
-├── mlflow.yml        ← 全局 MLflow 配置（所有算法共享）
+├── mlflow.yml        ← 全局 mlflow 配置（所有算法共享）
 ├── templates/
 │   ├── ddqn_base.yml ← DDQN 基础配置
 │   └── sac_base.yml  ← SAC 基础配置
@@ -23,12 +23,12 @@ configs/
 # 1. 加载三个配置文件
 config = load_config("configs/sac_per.yml")      # 算法配置（自动继承 templates/）
 paths = load_paths("configs/path.yml")           # 全局路径
-mlflow_base = load_config("configs/mlflow.yml") # 全局 MLflow
+mlflow_base = load_config("configs/mlflow.yml") # 全局 mlflow
 
-# 2. 合并 MLflow 配置
+# 2. 合并 mlflow 配置
 mlflow_cfg = mlflow_base.copy()
 if "mlflow" in config:
-    mlflow_cfg.update(config["mlflow"])  # 算法特定的 MLflow 设置覆盖全局设置
+    mlflow_cfg.update(config["mlflow"])  # 算法特定的 mlflow 设置覆盖全局设置
 ```
 
 ## 📝 各配置文件职责
@@ -51,9 +51,9 @@ log_root = Path(paths["log_base_path"]) / config["logging"]["log_subdir"]
 # 例如：/home/seventheli/data/logging/New_RASPBERry/Atari/Breakout/
 ```
 
-### 2. `mlflow.yml` - 全局 MLflow 配置
+### 2. `mlflow.yml` - 全局 mlflow 配置
 
-**职责**：定义 MLflow 的通用设置（tracking URI、全局 tags）
+**职责**：定义 mlflow 的通用设置（tracking URI、全局 tags）
 
 ```yaml
 tracking_uri: "http://seventheli-mlflow-home.vip.cpolar.cn"
@@ -121,7 +121,7 @@ hyper_parameters:
 2. **命令行覆盖**：`python run_sac_per_algo.py --max-time 3600`
 3. **最终值**：3600（命令行优先）
 
-### 示例：MLflow tags 的合并
+### 示例：mlflow tags 的合并
 
 ```python
 # mlflow.yml
@@ -162,7 +162,7 @@ mlflow_cfg["tags"] = {
 - 便于不同环境部署
 
 ### 3. **配置覆盖**
-- MLflow 配置支持部分覆盖
+- mlflow 配置支持部分覆盖
 - `tags` 字段会合并而不是替换
 - `experiment`、`tracking_uri` 可以单独覆盖
 

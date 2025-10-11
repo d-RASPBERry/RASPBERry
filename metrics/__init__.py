@@ -1,6 +1,6 @@
 """实验观测与记录工具模块。
 
-包含日志记录、MLflow 跟踪和结果持久化等功能。
+包含日志记录、mlflow 跟踪和结果持久化等功能。
 """
 
 from __future__ import annotations

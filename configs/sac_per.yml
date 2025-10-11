@@ -4,13 +4,4 @@ extends: templates/sac_base.yml
 hyper_parameters:
   replay_buffer_config:
     capacity: 1000000
-    prioritized_replay_alpha: 0.5
-    prioritized_replay_beta: 1.0
-    prioritized_replay_eps: 0.000001
     type: MultiAgentPrioritizedReplayBuffer
-
-run_config:
-  use_mlflow: true
-  run_name_template: "{env_in}_PER"
-  max_iterations: 10000
-  max_time_s: 72000  # 20 hours

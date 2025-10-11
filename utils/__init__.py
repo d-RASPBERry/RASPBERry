@@ -1,5 +1,6 @@
 from gymnasium import spaces
-from gymnasium.wrappers import PixelObservationWrapper, ResizeObservation, TimeLimit
+from gymnasium.wrappers import ResizeObservation, TimeLimit, TransformObservation
+from gymnasium.wrappers.pixel_observation import PixelObservationWrapper
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
 from ray.rllib.env.wrappers.atari_wrappers import wrap_deepmind
 from typing import Dict, Tuple, Union
@@ -346,12 +347,38 @@ def env_creator(env_config):
         pixels_only = env_config.get("pixels_only", True)
         env = gymnasium.make(env_id, render_mode="rgb_array")
         env = PixelObservationWrapper(env, pixels_only=pixels_only)
+        if isinstance(env.observation_space, spaces.Dict):
+            pixel_space = env.observation_space["pixels"]
+            env = TransformObservation(env, lambda obs: obs["pixels"])
+            env.observation_space = pixel_space
         env = ResizeObservation(env, (img_size, img_size))
         return env
     elif env_config["id"][0:5] == "BOX2D":
         return gymnasium.make(env_config["id"].replace("BOX2D-", ""))
     else:
         raise NotImplementedError(f"Environment {env_config['id']} not supported")
+
+
+def infer_env_type(env_name: str) -> str:
+    """Infer environment type from environment name for path organization.
+    
+    Simply extracts the first part before '-' as the environment type.
+    
+    Args:
+        env_name: Environment name (e.g., "Atari-Breakout", "CarRacing-v2")
+        
+    Returns:
+        Environment type string (first part before '-', or full name if no '-')
+        
+    Examples:
+        >>> infer_env_type("Atari-Breakout")
+        'Atari'
+        >>> infer_env_type("CarRacing-v2")
+        'CarRacing'
+        >>> infer_env_type("MiniGrid-Empty-8x8-v0")
+        'MiniGrid'
+    """
+    return env_name.split("-")[0] if "-" in env_name else env_name
 
 
 def load_config(config_path: str) -> Dict:

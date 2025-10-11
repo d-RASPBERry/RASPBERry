@@ -31,7 +31,7 @@ class BaseTrainer(ABC):
             env_name: Short environment name used in the `run_name`.
             log_path: Optional root directory to store logs; a subfolder `run_name` is created.
             checkpoint_path: Optional root directory to store checkpoints; a subfolder `run_name` is created.
-            mlflow_cfg: Optional dictionary with MLflow configuration.
+            mlflow_cfg: Optional dictionary with mlflow configuration.
 
         Notes:
             - `run_name` is `{env_name}_YYYYMMDD_HHMMSS`.
@@ -182,14 +182,14 @@ class BaseTrainer(ABC):
         Returns:
             A tuple containing:
             - full_log_data: A structured dict for file saving.
-            - mlflow_metrics: A flattened dict of numeric metrics for MLflow.
+            - mlflow_metrics: A flattened dict of numeric metrics for mlflow.
         """
         # 1. Prepare metadata and buffer stats
         full_log_data = self._prepare_result_metadata(iteration, result)
         buffer_stats = self._get_buffer_stats(result)
         full_log_data.update(buffer_stats)
 
-        # 2. Prepare metrics for MLflow by flattening all nested dictionaries
+        # 2. Prepare metrics for mlflow by flattening all nested dictionaries
         sampler = result.get("sampler_results", {})
         eva = result.get("evaluation", {})
         info = result.get("info", {})
@@ -262,7 +262,7 @@ class BaseTrainer(ABC):
             timesteps = result.get("timesteps_total", "N/A")
             self.log(f"Iter {iteration:4d} | Reward: {reward} | Timesteps: {timesteps}", "TRAIN")
 
-            # 6. Log processed metrics to MLflow
+            # 6. Log processed metrics to mlflow
             self.log_mlflow_iteration(iteration, result, mlflow_metrics)
 
         # 7. Handle checkpointing
@@ -300,11 +300,11 @@ class BaseTrainer(ABC):
 
             self.log("✓ mlflow ready", "TRAIN")
         except ImportError:
-            self.log("MLflow is configured, but the 'mlflow' package is not installed. Disabling MLflow.", "TRAIN")
+            self.log("mlflow is configured, but the 'mlflow' package is not installed. Disabling mlflow.", "TRAIN")
             self.mlflow_cfg = None
         except Exception as e:
-            self.log(f"Failed to initialize MLflow (is the server running?): {e}", "TRAIN")
-            self.log("Disabling MLflow logging for this run.", "TRAIN")
+            self.log(f"Failed to initialize mlflow (is the server running?): {e}", "TRAIN")
+            self.log("Disabling mlflow logging for this run.", "TRAIN")
             self.mlflow_cfg = None
 
     def log_mlflow_iteration(self, iteration: int, result: Dict[str, Any], mlflow_metrics: Dict[str, float]) -> None:

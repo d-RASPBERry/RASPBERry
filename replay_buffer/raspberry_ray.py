@@ -90,11 +90,16 @@ def compress_node_batch_ray(nodes_data: List[dict],
             "compress_base": compress_config['compress_base'],
         })
         
+        raw_obs_bytes = int(node_data.get('raw_obs_bytes', obs.nbytes))
+        raw_new_obs_bytes = int(node_data.get('raw_new_obs_bytes', new_obs.nbytes))
         result = {
             'compressed_data': compressed_data,
             'weight': node_data['weight'],
             'obs_bytes': len(compressed_obs),
             'new_obs_bytes': len(compressed_new_obs),
+            'raw_obs_bytes': raw_obs_bytes,
+            'raw_new_obs_bytes': raw_new_obs_bytes,
+            'raw_total_bytes': raw_obs_bytes + raw_new_obs_bytes,
         }
         batch_results.append(result)
     
@@ -250,7 +255,12 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             "backpressure_wait_ms": 0.0,
             "decompress_time_ms": 0.0,
             "decompress_count": 0,
+            "raw_bytes": 0,
         }
+
+        # Track storage footprint (compressed vs estimated raw) to expose via stats.
+        self._est_compressed_bytes = 0
+        self._est_raw_bytes = 0
 
         # Persist compression configuration
         self._compression_config = {
@@ -278,15 +288,19 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
     def _node_to_dict(self, node: CompressReplayNode) -> dict:
         """Convert a CompressReplayNode to a serializable dict."""
         size = node.size()
+        obs_slice = node.obs[:size].copy()
+        new_obs_slice = node.new_obs[:size].copy()
         return {
-            'obs': node.obs[:size].copy(),
-            'new_obs': node.new_obs[:size].copy(),
+            'obs': obs_slice,
+            'new_obs': new_obs_slice,
             'actions': node.actions[:size].copy(),
             'rewards': node.rewards[:size].copy(),
             'terminateds': node.terminateds[:size].copy(),
             'truncateds': node.truncateds[:size].copy(),
             'weights': node.weights[:size].copy(),
             'weight': np.mean(node.weights[:size]),
+            'raw_obs_bytes': int(obs_slice.nbytes),
+            'raw_new_obs_bytes': int(new_obs_slice.nbytes),
         }
 
     def _compress_mode_A(self):
@@ -297,7 +311,9 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         self._metrics["compress_bytes_obs"] += len(compressed_data["obs"][0])
         self._metrics["compress_bytes_new_obs"] += len(compressed_data["new_obs"][0])
         self._metrics["compress_count"] += 1
-        self._add_single_batch(compressed_data, weight=weight)
+        self._add_compressed_batch(compressed_data, weight,
+                                   len(compressed_data["obs"][0]), len(compressed_data["new_obs"][0]),
+                                   metrics.get("raw_total_bytes"))
         self.compress_node.reset()
 
     def _compress_mode_B(self):
@@ -327,12 +343,15 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         # Flatten results and add to buffer
         for batch_results in all_results:
             for result in batch_results:
-                self._add_single_batch(
-                    result["compressed_data"], weight=result["weight"]
-                )
-                self._metrics["compress_bytes_obs"] += result["obs_bytes"]
-                self._metrics["compress_bytes_new_obs"] += result["new_obs_bytes"]
-                self._metrics["compress_count"] += 1
+                total_raw = result.get("raw_total_bytes")
+                if total_raw is None:
+                    raw_obs = result.get("raw_obs_bytes")
+                    raw_new_obs = result.get("raw_new_obs_bytes")
+                    if raw_obs is not None and raw_new_obs is not None:
+                        total_raw = int(raw_obs) + int(raw_new_obs)
+                self._add_compressed_batch(result["compressed_data"], result["weight"],
+                                           result["obs_bytes"], result["new_obs_bytes"],
+                                           total_raw)
         
         # Record wall time
         actual_wall_time = (time.time() - t_batch_start) * 1000.0
@@ -368,12 +387,15 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
                 for ref in ready_refs:
                     batch_results = ray.get(ref)
                     for result in batch_results:
-                        self._add_single_batch(
-                            result["compressed_data"], weight=result["weight"]
-                        )
-                        self._metrics["compress_bytes_obs"] += result["obs_bytes"]
-                        self._metrics["compress_bytes_new_obs"] += result["new_obs_bytes"]
-                        self._metrics["compress_count"] += 1
+                        total_raw = result.get("raw_total_bytes")
+                        if total_raw is None:
+                            raw_obs = result.get("raw_obs_bytes")
+                            raw_new_obs = result.get("raw_new_obs_bytes")
+                            if raw_obs is not None and raw_new_obs is not None:
+                                total_raw = int(raw_obs) + int(raw_new_obs)
+                        self._add_compressed_batch(result["compressed_data"], result["weight"],
+                                                   result["obs_bytes"], result["new_obs_bytes"],
+                                                   total_raw)
                 
                 drain_time = (time.time() - t_drain_start) * 1000.0
                 self._metrics["compress_time_ms"] += drain_time
@@ -394,12 +416,15 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             batch_results = ray.get(oldest_ref)
             
             for result in batch_results:
-                self._add_single_batch(
-                    result["compressed_data"], weight=result["weight"]
-                )
-                self._metrics["compress_bytes_obs"] += result["obs_bytes"]
-                self._metrics["compress_bytes_new_obs"] += result["new_obs_bytes"]
-                self._metrics["compress_count"] += 1
+                total_raw = result.get("raw_total_bytes")
+                if total_raw is None:
+                    raw_obs = result.get("raw_obs_bytes")
+                    raw_new_obs = result.get("raw_new_obs_bytes")
+                    if raw_obs is not None and raw_new_obs is not None:
+                        total_raw = int(raw_obs) + int(raw_new_obs)
+                self._add_compressed_batch(result["compressed_data"], result["weight"],
+                                           result["obs_bytes"], result["new_obs_bytes"],
+                                           total_raw)
             
             backpressure_time = (time.time() - t_backpressure_start) * 1000.0
             self._metrics["compress_time_ms"] += backpressure_time
@@ -426,6 +451,10 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
 
         out = {
             "est_size_bytes": total_size,
+            "est_compressed_bytes": self._est_compressed_bytes,
+            "est_raw_bytes": self._est_raw_bytes,
+            "compression_ratio": (self._est_compressed_bytes / self._est_raw_bytes)
+            if self._est_raw_bytes > 0 else 0.0,
             "num_entries": len(self._storage) * self.sub_buffer_size,
             "compress_time_ms": self._metrics.get("compress_time_ms", 0.0),
             "backpressure_wait_ms": self._metrics.get("backpressure_wait_ms", 0.0),
@@ -490,10 +519,15 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         
         for batch_results in all_results:
             for result in batch_results:
-                self._add_single_batch(result["compressed_data"], weight=result["weight"])
-                self._metrics["compress_bytes_obs"] += result["obs_bytes"]
-                self._metrics["compress_bytes_new_obs"] += result["new_obs_bytes"]
-                self._metrics["compress_count"] += 1
+                total_raw = result.get("raw_total_bytes")
+                if total_raw is None:
+                    raw_obs = result.get("raw_obs_bytes")
+                    raw_new_obs = result.get("raw_new_obs_bytes")
+                    if raw_obs is not None and raw_new_obs is not None:
+                        total_raw = int(raw_obs) + int(raw_new_obs)
+                self._add_compressed_batch(result["compressed_data"], result["weight"],
+                                           result["obs_bytes"], result["new_obs_bytes"],
+                                           total_raw)
         
         self._metrics["compress_time_ms"] += (time.time() - t_start) * 1000.0
 
@@ -560,4 +594,51 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         out["compress_base"] = compress_base_value
         
         return out
+
+    def _estimate_raw_bytes(self, sample_batch: SampleBatch) -> int:
+        """Estimate raw (uncompressed) bytes based on shapes and dtypes."""
+
+        def _bytes(array: np.ndarray) -> int:
+            return int(array.nbytes) if isinstance(array, np.ndarray) else 0
+
+        obs_bytes = _bytes(sample_batch["obs"])
+        new_obs_bytes = _bytes(sample_batch["new_obs"])
+        act_bytes = _bytes(sample_batch["actions"])
+        rew_bytes = _bytes(sample_batch["rewards"])
+        term_bytes = _bytes(sample_batch["terminateds"])
+        trunc_bytes = _bytes(sample_batch["truncateds"])
+        weight_bytes = _bytes(sample_batch["weights"])
+        return obs_bytes + new_obs_bytes + act_bytes + rew_bytes + term_bytes + trunc_bytes + weight_bytes
+
+    def _add_compressed_batch(
+        self,
+        compressed_batch: SampleBatch,
+        weight: float,
+        obs_bytes: int,
+        new_obs_bytes: int,
+        raw_bytes: Optional[int],
+    ) -> None:
+        """Insert compressed batch and update size accounting."""
+
+        prev_entry = None
+        if self._next_idx < len(self._storage):
+            prev_entry = self._storage[self._next_idx]
+        self._add_single_batch(compressed_batch, weight=weight)
+
+        total_comp = int(obs_bytes) + int(new_obs_bytes)
+        self._metrics["compress_bytes_obs"] += int(obs_bytes)
+        self._metrics["compress_bytes_new_obs"] += int(new_obs_bytes)
+        self._metrics["compress_count"] += 1
+        self._est_compressed_bytes += total_comp
+
+        if raw_bytes is None:
+            raw_bytes = self._estimate_raw_bytes(compressed_batch)
+        self._est_raw_bytes += int(raw_bytes)
+
+        if prev_entry is not None:
+            self._est_compressed_bytes -= getattr(prev_entry, "_compressed_bytes", 0)
+            self._est_raw_bytes -= getattr(prev_entry, "_raw_bytes", 0)
+
+        compressed_batch._compressed_bytes = total_comp
+        compressed_batch._raw_bytes = int(raw_bytes)
 

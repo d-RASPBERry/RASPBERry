@@ -30,7 +30,7 @@ from ray.tune.registry import register_env
 from metrics import write_iteration_json
 from metrics.logger import setup_logger
 from metrics.mlflow_helper import setup_mlflow, prepare_metrics
-from utils import env_creator, load_config
+from utils import env_creator, load_config, infer_env_type
 
 CONFIG_PATH = str((ROOT / "configs/ddqn_per.yml").resolve())
 RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
@@ -101,8 +101,10 @@ def main() -> None:
     max_iterations = run_cfg.get("max_iterations", 10000)
     log_every = config.get("logging_config", {}).get("log_freq", 10)
 
+    # Infer environment type and construct paths dynamically
+    env_type = infer_env_type(args.env)
     run_name = f"DDQN-PER-{datetime.now().timestamp()}"
-    log_root = Path(paths["log_base_path"]) / args.env
+    log_root = Path(paths["log_base_path"]) / env_type / args.env
     log_dir = log_root / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -113,8 +115,8 @@ def main() -> None:
     logger = setup_logger(run_name, log_dir)
     logger.info("=" * 60)
     logger.info("DDQN-PER Training Started")
-    logger.info("Env: %s | GPU: %s | Max time: %ds | Max iter: %d",
-                args.env, args.gpu, max_time_s, max_iterations)
+    logger.info("Env: %s (%s) | GPU: %s | Max time: %ds | Max iter: %d",
+                args.env, env_type, args.gpu, max_time_s, max_iterations)
     logger.info("Log dir: %s", log_dir)
     logger.info("=" * 60)
 
@@ -163,6 +165,16 @@ def main() -> None:
 
             result = algo.train()
             iteration += 1
+            
+            # Attach replay buffer statistics to result
+            if hasattr(algo, 'local_replay_buffer'):
+                from utils import flatten_dict
+                buffer_stats = flatten_dict(algo.local_replay_buffer.stats())
+                # Convert bytes to GB for readability
+                if "est_size_bytes" in buffer_stats:
+                    buffer_stats["est_size_gb"] = buffer_stats["est_size_bytes"] / 1e9
+                result["buffer"] = buffer_stats
+            
             write_iteration_json(log_dir, iteration, result)
 
             if iteration % log_every == 0:

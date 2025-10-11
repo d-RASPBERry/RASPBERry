@@ -72,7 +72,7 @@ export RAY_TMPDIR=/tmp/
    - Key innovation: Block-level compression reducing memory by ~28x
 
 2. **Training System** (`trainers/`)
-   - `base_trainer.py`: Abstract trainer with MLflow integration
+   - `base_trainer.py`: Abstract trainer with mlflow integration
    - `sac_raspberry_trainer.py`: SAC with RASPBERry buffer
    - `dqn_raspberry_trainer.py`: DQN with RASPBERry buffer
    - `*_per_trainer.py`: Baseline PER implementations
@@ -121,9 +121,9 @@ The system uses Blosc compression with configurable algorithms:
 - **LZ4HC**: High compression variant
 - Block-level compression with intelligent axis transposition
 
-### MLflow Integration
+### mlflow Integration
 
-Experiments are tracked using MLflow:
+Experiments are tracked using mlflow:
 - Automatic metric logging every training iteration
 - Artifact uploading every 1000 iterations
 - Checkpoint management with Ray Tune integration
@@ -162,6 +162,6 @@ All hyperparameters are externalized to YAML files. Use template inheritance to 
 
 The trainer automatically handles:
 - Configuration loading and validation
-- MLflow experiment setup
+- mlflow experiment setup
 - Ray initialization and cleanup
 - Path resolution and directory creation

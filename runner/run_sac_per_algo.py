@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Minimal training script for DDQN + RASPBERry.
+"""Minimal training script for SAC + PER.
 
-Direct algorithm construction without Trainer wrapper,
+Direct algorithm construction using standard RLlib SAC,
 suitable for quick experiments and debugging.
+Mirrors the structure of run_sac_raspberry_algo.py for easy comparison.
 """
 
 # Standard library imports
@@ -21,34 +22,40 @@ if str(ROOT) not in sys.path:
 # Third-party imports
 import mlflow
 import ray
+from ray.rllib.algorithms.sac import SAC
+from ray.rllib.models import ModelCatalog
+from ray.rllib.utils.replay_buffers import MultiAgentPrioritizedReplayBuffer
 from ray.tune.registry import register_env
 
 # Local imports
-from algorithms.dqn_raspberry_algo import DQNRaspberryAlgo
 from metrics import write_iteration_json
 from metrics.logger import setup_logger
 from metrics.mlflow_helper import setup_mlflow, prepare_metrics
-from replay_buffer.d_raspberry_ray import MultiAgentPrioritizedBlockReplayBuffer
+from models import SACImageEncoder, SACLightweightCNN
 from utils import env_creator, load_config, infer_env_type
 
-CONFIG_PATH = str((ROOT / "configs/ddqn_raspberry_atari.yml").resolve())
+CONFIG_PATH = str((ROOT / "configs/sac_per.yml").resolve())
 RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
 
 
-def build_algorithm(env_name: str, env_short: str, config: dict) -> DQNRaspberryAlgo:
-    """Build DQN RASPBERry algorithm instance.
+def build_algorithm(env_name: str, env_short: str, config: dict) -> SAC:
+    """Build SAC PER algorithm instance.
 
-    Uses dict-based config (not DQNConfig) for direct construction.
+    Uses dict-based config (matching RASPBERry version structure).
 
     Args:
-        env_name: Full environment name, e.g. "Atari-BreakoutNoFrameskip-v4"
-        env_short: Short name for registration, e.g. "Breakout"
+        env_name: Full environment name, e.g. "CarRacing-v2"
+        env_short: Short name for registration, e.g. "CarRacing"
         config: Complete config dict loaded from YAML
 
     Returns:
-        Configured DQNRaspberryAlgo instance
+        Configured SAC algorithm instance
     """
     hyper = config["hyper_parameters"].copy()
+    
+    # Register custom CNN models
+    ModelCatalog.register_custom_model("SACImageEncoder", SACImageEncoder)
+    ModelCatalog.register_custom_model("SACLightweightCNN", SACLightweightCNN)
 
     env_config = {"id": env_name}
     game = env_creator(env_config)
@@ -56,7 +63,7 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> DQNRaspberry
 
     replay_buffer_config = {
         **hyper["replay_buffer_config"],
-        "type": MultiAgentPrioritizedBlockReplayBuffer,
+        "type": MultiAgentPrioritizedReplayBuffer,
         "obs_space": game.observation_space,
         "action_space": game.action_space,
     }
@@ -70,13 +77,13 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> DQNRaspberry
     hyper["env_config"] = env_config
     game.close()
 
-    return DQNRaspberryAlgo(config=hyper, env=env_short)
+    return SAC(config=hyper, env=env_short)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="DDQN-RASPBERry training script")
-    parser.add_argument("--env", type=str, default="Atari-Breakout",
-                        help="Atari environment name (e.g., Breakout, Pong)")
+    parser = argparse.ArgumentParser(description="SAC-PER training script")
+    parser.add_argument("--env", type=str, default="Pendulum-Pendulum",
+                        help="Environment name (e.g., Pendulum-Pendulum, CarRacing-v2)")
     parser.add_argument("--gpu", type=str, default="0", help="CUDA device ID")
     args = parser.parse_args()
 
@@ -102,7 +109,7 @@ def main() -> None:
 
     # Infer environment type and construct paths dynamically
     env_type = infer_env_type(args.env)
-    run_name = f"DDQN-RASPBERry-{datetime.now().timestamp()}"
+    run_name = f"SAC-PER-{datetime.now().timestamp()}"
     log_root = Path(paths["log_base_path"]) / env_type / args.env
     log_dir = log_root / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -113,7 +120,7 @@ def main() -> None:
     # Setup logging
     logger = setup_logger(run_name, log_dir)
     logger.info("=" * 60)
-    logger.info("DDQN-RASPBERry Training Started")
+    logger.info("SAC-PER Training Started")
     logger.info("Env: %s (%s) | GPU: %s | Max time: %ds | Max iter: %d",
                 args.env, env_type, args.gpu, max_time_s, max_iterations)
     logger.info("Log dir: %s", log_dir)
@@ -127,8 +134,8 @@ def main() -> None:
             "run_name": run_name,
         }
         extra_tags = {
-            "algorithm": "DDQN",
-            "buffer": "RASPBERry",
+            "algorithm": "SAC",
+            "buffer": "PER",
             "env": args.env,
         }
         mlflow_run = setup_mlflow(mlflow_cfg, hyper, logger, extra_tags=extra_tags)
@@ -143,12 +150,13 @@ def main() -> None:
 
     ray.init(
         num_cpus=hyper.get("num_cpus", 5),
-        num_gpus=hyper["num_gpus"],
+        num_gpus=hyper.get("num_gpus", 0),
         include_dashboard=ray_cfg.get("include_dashboard", False),
         object_store_memory=object_store_bytes,
         _temp_dir=ray_temp_dir,
     )
-    logger.info("Ray initialized (CPUs=%d, GPUs=%d)", hyper["num_cpus"], hyper["num_gpus"])
+    logger.info("Ray initialized (CPUs=%d, GPUs=%d)", 
+                hyper.get("num_cpus", 5), hyper.get("num_gpus", 0))
 
     algo = build_algorithm(args.env, args.env, config)
     logger.info("Algorithm built, starting training...")
@@ -172,10 +180,10 @@ def main() -> None:
                 # Convert bytes to GB for readability
                 if "est_size_bytes" in buffer_stats:
                     buffer_stats["est_size_gb"] = buffer_stats["est_size_bytes"] / 1e9
-                if "est_compressed_bytes" in buffer_stats:
-                    buffer_stats["est_compressed_gb"] = buffer_stats["est_compressed_bytes"] / 1e9
-                if "est_raw_bytes" in buffer_stats:
-                    buffer_stats["est_raw_gb"] = buffer_stats["est_raw_bytes"] / 1e9
+                # Ensure num_entries is logged (usually already in stats)
+                if "num_entries" not in buffer_stats and hasattr(algo.local_replay_buffer, '_num_added'):
+                    buffer_stats["num_entries"] = min(algo.local_replay_buffer._num_added, 
+                                                      algo.local_replay_buffer.capacity)
                 result["buffer"] = buffer_stats
             
             write_iteration_json(log_dir, iteration, result)
@@ -221,3 +229,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

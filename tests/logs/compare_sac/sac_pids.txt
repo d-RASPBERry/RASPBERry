@@ -1,2 +1,0 @@
-LOG_PATH=/home/seventheli/research/RASPBERry/tests/logs/compare_sac/sac_pids.txt
-SAC_PER=2200286 SAC_RASP=2200398

@@ -1,4 +1,4 @@
-"""MLflow experiment tracking utilities."""
+"""mlflow experiment tracking utilities."""
 
 from __future__ import annotations
 
@@ -18,15 +18,15 @@ def setup_mlflow(
         logger: logging.Logger,
         extra_tags: dict | None = None,
 ):
-    """Initialize MLflow run based on configuration.
+    """Initialize mlflow run based on configuration.
     
     Args:
-        mlflow_cfg: MLflow config dict, must contain:
-            - tracking_uri: MLflow tracking server address
+        mlflow_cfg: mlflow config dict, must contain:
+            - tracking_uri: mlflow tracking server address
             - experiment: Experiment name
             - run_name: Run name
             - tags: (optional) Tags dict
-        hyper_params: Hyperparameters dict (will be flattened and logged as MLflow params)
+        hyper_params: Hyperparameters dict (will be flattened and logged as mlflow params)
         logger: Logger instance
         extra_tags: (optional) Additional tags to merge with config tags
         
@@ -68,7 +68,7 @@ def setup_mlflow(
         mlflow.set_experiment(experiment_name=experiment_name)
         mlflow.start_run(run_name=run_name, tags=tags or None)
     except Exception as exc:
-        logger.error("MLflow initialization failed: %s", exc, exc_info=True)
+        logger.error("mlflow initialization failed: %s", exc, exc_info=True)
         return None
 
     flat_params = flatten_dict(hyper_params)
@@ -78,12 +78,12 @@ def setup_mlflow(
     }
     mlflow.log_params(clean_params)
 
-    logger.info("[MLflow] Experiment: %s | Run: %s", experiment_name, run_name)
+    logger.info("[mlflow] Experiment: %s | Run: %s", experiment_name, run_name)
     return mlflow
 
 
 def prepare_metrics(result: dict) -> dict:
-    """Prepare metrics for MLflow logging.
+    """Prepare metrics for mlflow logging.
     
     Extracts numeric metrics from training result dict, filtering out non-finite
     values and non-numeric types.
@@ -96,7 +96,14 @@ def prepare_metrics(result: dict) -> dict:
     """
     metrics = {}
     metrics.update(flatten_dict(result.get("sampler_results", {})))
-    metrics.update(flatten_dict(result.get("info", {})))
+    info_flat = flatten_dict(result.get("info", {}))
+
+    # Replay buffer statistics可能嵌套在"buffer"或info中
+    buffer_stats = result.get("buffer") or info_flat.get("buffer")
+    if buffer_stats:
+        metrics.update(flatten_dict(buffer_stats))
+
+    metrics.update(info_flat)
 
     # Keep only numeric finite values
     return {

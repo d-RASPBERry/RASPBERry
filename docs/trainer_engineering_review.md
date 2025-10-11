@@ -108,7 +108,7 @@
   - 仅需新增对应 Adapter；RASPBERry/PER 的切换不影响算法适配器层。
 
 - 统一评测与日志
-  - 所有算法的 JSON/MLflow 度量结构一致，便于对比与可视化。
+  - 所有算法的 JSON/mlflow 度量结构一致，便于对比与可视化。
 
 - 降低维护成本
   - 减少跨文件同步修改风险（例如统一更改 `rollout_fragment_length` 处理）。
