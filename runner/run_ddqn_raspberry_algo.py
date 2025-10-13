@@ -165,6 +165,21 @@ def main() -> None:
             result = algo.train()
             iteration += 1
             
+            # Dump buffer storage at iteration 200 for verification
+            if iteration == 200:
+                from utils.buffer_dump_utils import dump_buffer_content
+                dump_file = log_dir / "buffer_storage_iter200.pkl"
+                try:
+                    # Dump完整的buffer _storage用于验证
+                    stats = dump_buffer_content(algo.local_replay_buffer, dump_file)
+                    logger.info("📦 Buffer content dumped to %s", dump_file)
+                    if stats:
+                        for policy_id, policy_stats in stats.items():
+                            logger.info(f"  [{policy_id}] Compression: {policy_stats.get('compression_ratio', 1.0):.2f}x, "
+                                      f"Est. Memory: {policy_stats.get('estimated_total_memory_mb', 0):.1f} MB")
+                except Exception as e:
+                    logger.warning("Failed to dump buffer content: %s", e)
+            
             # Attach replay buffer statistics to result
             if hasattr(algo, 'local_replay_buffer'):
                 from utils import flatten_dict
@@ -176,6 +191,10 @@ def main() -> None:
                     buffer_stats["est_compressed_gb"] = buffer_stats["est_compressed_bytes"] / 1e9
                 if "est_raw_bytes" in buffer_stats:
                     buffer_stats["est_raw_gb"] = buffer_stats["est_raw_bytes"] / 1e9
+                # Ensure num_entries is logged (usually already in stats)
+                if "num_entries" not in buffer_stats and hasattr(algo.local_replay_buffer, '_num_added'):
+                    buffer_stats["num_entries"] = min(algo.local_replay_buffer._num_added, 
+                                                      algo.local_replay_buffer.capacity)
                 result["buffer"] = buffer_stats
             
             write_iteration_json(log_dir, iteration, result)

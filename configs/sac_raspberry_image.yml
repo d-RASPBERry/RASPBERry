@@ -1,0 +1,20 @@
+# SAC-RASPBERry configuration for IMAGE observation environments
+# (Atari, MiniGrid, Pendulum, CarRacing)
+extends: templates/sac_image_base.yml
+
+hyper_parameters:
+  replay_buffer_config:
+    capacity: 1000000                 # Auto-converted to 62500 blocks (1M / 16) to match PER
+    prioritized_replay_alpha: 0.5
+    prioritized_replay_beta: 1.0
+    prioritized_replay_eps: 0.000001
+    type: MultiAgentPrioritizedBlockReplayBuffer
+    sub_buffer_size: 16
+    compress_base: -1
+    worker_side_prioritization: false
+    compress_pool_size: 400
+    compression_algorithm: "lz4"
+    compression_level: 1
+    compression_nthreads: 4
+    compression_mode: "D"
+    chunk_size: 20

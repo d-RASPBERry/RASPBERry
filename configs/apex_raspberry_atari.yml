@@ -1,6 +1,10 @@
 extends: templates/apex_base.yml
 
 hyper_parameters:
+  # Training batch - APEX directly samples this many blocks from buffer
+  # With sub_buffer_size=16, this means 512 transitions per batch
+  train_batch_size: 32
+  
   # Replay buffer (RASPBERry)
   replay_buffer_config:
     capacity: 1000000

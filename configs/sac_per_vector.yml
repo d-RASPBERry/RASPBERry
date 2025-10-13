@@ -1,0 +1,9 @@
+# SAC-PER configuration for VECTOR observation environments
+# (LunarLanderContinuous, BipedalWalker)
+extends: templates/sac_vector_base.yml
+
+hyper_parameters:
+  replay_buffer_config:
+    capacity: 100000
+    type: MultiAgentPrioritizedReplayBuffer
+

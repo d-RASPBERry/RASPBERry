@@ -9,6 +9,29 @@ import numpy as np
 import os
 import yaml
 
+
+class ClipObservationWrapper(gymnasium.Wrapper):
+    """包装器：裁剪观察值到观察空间的合法范围内。
+    
+    用于修复某些环境（如 LunarLanderContinuous）在极端情况下
+    返回超出定义范围的观察值的问题。
+    """
+    
+    def __init__(self, env):
+        super().__init__(env)
+        if not isinstance(env.observation_space, spaces.Box):
+            raise ValueError("ClipObservationWrapper 只支持 Box 观察空间")
+    
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        obs = np.clip(obs, self.observation_space.low, self.observation_space.high)
+        return obs, info
+    
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        obs = np.clip(obs, self.observation_space.low, self.observation_space.high)
+        return obs, reward, terminated, truncated, info
+
 agent_dir = {
     0: '>',
     1: 'V',
@@ -336,6 +359,10 @@ def env_creator(env_config):
         NotImplementedError: If environment type not supported
     """
     if env_config["id"][0:8] == "MiniGrid":
+        # Add default MiniGrid parameters if not provided (based on 2024 experiments)
+        env_config.setdefault("tile_size", 10)
+        env_config.setdefault("img_size", 80)
+        env_config.setdefault("max_steps", 100)
         return minigrid_env_creator(env_config)
     elif env_config["id"][0:5] == "Atari":
         env_id = env_config["id"].replace("Atari-", "")
@@ -353,8 +380,20 @@ def env_creator(env_config):
             env.observation_space = pixel_space
         env = ResizeObservation(env, (img_size, img_size))
         return env
-    elif env_config["id"][0:5] == "BOX2D":
-        return gymnasium.make(env_config["id"].replace("BOX2D-", ""))
+    elif env_config["id"][0:7] == "BOX2DV-":
+        # BOX2DV: Vector observation environments (LunarLander, BipedalWalker)
+        env_id = env_config["id"].replace("BOX2DV-", "")
+        env = gymnasium.make(env_id)
+        # Apply observation clipping wrapper to handle edge cases where
+        # the environment returns observations outside the defined space bounds
+        # (e.g., LunarLander angle/velocity can exceed bounds in extreme situations)
+        env = ClipObservationWrapper(env)
+        return env
+    elif env_config["id"][0:7] == "BOX2DI-":
+        # BOX2DI: Image observation environments (CarRacing)
+        env_id = env_config["id"].replace("BOX2DI-", "")
+        env = gymnasium.make(env_id)
+        return env
     else:
         raise NotImplementedError(f"Environment {env_config['id']} not supported")
 

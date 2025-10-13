@@ -110,7 +110,7 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
     """Decompress obs/new_obs using blosc and restore axes.
     
     Args:
-        ma_batch: Compressed batch with obs[0] and new_obs[0] as blosc-packed arrays
+        ma_batch: Compressed batch with obs/new_obs as blosc-packed arrays (single or multiple blocks)
         compress_base: Axis transposition hint (-1 for auto, 0 for none)
         
     Returns:
@@ -119,15 +119,37 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
     Note:
         weights/batch_indexes should already be expanded to transition-level
         by the buffer's sample() method before calling this function.
+        
+        Handles both single-block (DDQN via sample_min_n_steps_from_buffer)
+        and multi-block (APEX direct sample) cases.
     """
     t0 = time.time()
 
     # Prefer per-batch compress_base metadata if present
     compress_base_used = ma_batch.get("compress_base", compress_base)
 
-    # Unpack compressed arrays (will fail if not compressed - by design!)
-    decompressed_obs_transposed = blosc.unpack_array(ma_batch["obs"][0])
-    decompressed_new_obs_transposed = blosc.unpack_array(ma_batch["new_obs"][0])
+    # Unpack compressed arrays - handle both single and multiple blocks
+    obs_array = ma_batch["obs"]
+    new_obs_array = ma_batch["new_obs"]
+    
+    # Check if we have multiple compressed blocks (APEX) or single block (DDQN)
+    if len(obs_array) == 1 and isinstance(obs_array[0], bytes):
+        # Single compressed block
+        decompressed_obs_transposed = blosc.unpack_array(obs_array[0])
+        decompressed_new_obs_transposed = blosc.unpack_array(new_obs_array[0])
+    else:
+        # Multiple compressed blocks - decompress and concatenate
+        obs_blocks = [blosc.unpack_array(block) for block in obs_array if isinstance(block, bytes)]
+        new_obs_blocks = [blosc.unpack_array(block) for block in new_obs_array if isinstance(block, bytes)]
+        
+        if not obs_blocks:
+            # Fallback: try single block decompression
+            decompressed_obs_transposed = blosc.unpack_array(obs_array[0])
+            decompressed_new_obs_transposed = blosc.unpack_array(new_obs_array[0])
+        else:
+            # Concatenate along the batch dimension (axis 0 for transposed, last axis after transpose)
+            decompressed_obs_transposed = np.concatenate(obs_blocks, axis=-1)
+            decompressed_new_obs_transposed = np.concatenate(new_obs_blocks, axis=-1)
 
     # Rank info
     rank = len(decompressed_obs_transposed.shape)

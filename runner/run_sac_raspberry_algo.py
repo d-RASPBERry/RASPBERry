@@ -33,7 +33,7 @@ from models import SACImageEncoder, SACLightweightCNN
 from replay_buffer.d_raspberry_ray import MultiAgentPrioritizedBlockReplayBuffer
 from utils import env_creator, load_config, infer_env_type
 
-CONFIG_PATH = str((ROOT / "configs/sac_raspberry.yml").resolve())
+DEFAULT_CONFIG_PATH = str((ROOT / "configs/sac_raspberry_image.yml").resolve())
 RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
 
 
@@ -93,10 +93,16 @@ def main() -> None:
         help="Environment name (e.g., Pendulum-Pendulum, CarRacing-v2)",
     )
     parser.add_argument("--gpu", type=str, default="0", help="CUDA device ID")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=DEFAULT_CONFIG_PATH,
+        help="Path to config file (default: sac_raspberry_image.yml for CNN, or use sac_raspberry_vector.yml for MLP)",
+    )
     args = parser.parse_args()
 
     # Load configs
-    config = load_config(CONFIG_PATH)
+    config = load_config(args.config)
     runtime = load_config(RUNTIME_CONFIG)
 
     required_runtime = ["paths", "ray"]
@@ -187,6 +193,21 @@ def main() -> None:
 
             result = algo.train()
             iteration += 1
+            
+            # Dump buffer storage at iteration 200 for verification
+            if iteration == 200:
+                from utils.buffer_dump_utils import dump_buffer_content
+                dump_file = log_dir / "buffer_storage_iter200.pkl"
+                try:
+                    # Dump完整的buffer _storage用于验证
+                    stats = dump_buffer_content(algo.local_replay_buffer, dump_file)
+                    logger.info("📦 Buffer content dumped to %s", dump_file)
+                    if stats:
+                        for policy_id, policy_stats in stats.items():
+                            logger.info(f"  [{policy_id}] Compression: {policy_stats.get('compression_ratio', 1.0):.2f}x, "
+                                      f"Est. Memory: {policy_stats.get('estimated_total_memory_mb', 0):.1f} MB")
+                except Exception as e:
+                    logger.warning("Failed to dump buffer content: %s", e)
             
             # Attach replay buffer statistics to result
             if hasattr(algo, 'local_replay_buffer'):

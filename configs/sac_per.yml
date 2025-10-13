@@ -1,7 +1,0 @@
-# Inherit base configuration
-extends: templates/sac_base.yml
-
-hyper_parameters:
-  replay_buffer_config:
-    capacity: 1000000
-    type: MultiAgentPrioritizedReplayBuffer

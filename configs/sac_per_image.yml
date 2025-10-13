@@ -1,0 +1,8 @@
+# SAC-PER configuration for IMAGE observation environments
+# (Atari, MiniGrid, Pendulum, CarRacing)
+extends: templates/sac_image_base.yml
+
+hyper_parameters:
+  replay_buffer_config:
+    capacity: 1000000
+    type: MultiAgentPrioritizedReplayBuffer

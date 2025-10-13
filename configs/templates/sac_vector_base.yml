@@ -1,0 +1,68 @@
+# Basic path configuration for vector observation environments
+paths:
+  log_path: "logs"
+  checkpoint_path: "checkpoints"
+  tmp_dir: "/tmp/"
+  log_base_path: "/home/seventheli/data/logging/New_RASPBERry/BOX2D/"
+  checkpoint_base_path: "/home/seventheli/data/checkpoints/New_RASPBERry/BOX2D/"
+  ray_temp_dir: "/home/seventheli/ray/"
+
+# Ray configuration
+ray_config:
+  object_store_memory_gb: 100
+  include_dashboard: false
+  ignore_reinit_error: true
+  max_gcs_destroyed_actor_cached_count: 100
+
+hyper_parameters:
+  # Framework configuration
+  framework: torch
+
+  # Model configuration for VECTOR inputs (no custom model, use RLlib default MLP)
+  model:
+    fcnet_hiddens: [256, 256]        # MLP hidden layers
+    fcnet_activation: relu
+    vf_share_layers: false           # Separate value function network
+
+  # Core SAC parameters (tuned for continuous control)
+  lr: 3e-4
+  gamma: 0.99
+  tau: 0.005                         # Soft target update coefficient
+  target_entropy: auto               # Auto-tune based on action space
+  initial_alpha: 1.0                 # Higher initial temperature for exploration
+  n_step: 1
+
+  # Learning schedule
+  num_steps_sampled_before_learning_starts: 10000
+  min_sample_timesteps_per_iteration: 1000
+  training_intensity: 1.0
+
+  # Training batch configuration
+  train_batch_size: 256
+  rollout_fragment_length: 1
+
+  # Resource configuration
+  num_gpus: 1
+  num_cpus: 10
+  num_workers: 5
+  num_envs_per_worker: 8
+  num_gpus_per_worker: 0.1
+  num_cpus_per_worker: 1
+
+  # Common replay buffer parameters
+  replay_buffer_config:
+    prioritized_replay_alpha: 0.6
+    prioritized_replay_beta: 0.4
+    prioritized_replay_eps: 0.000001
+
+# Run configuration
+run_config:
+  use_mlflow: true
+  max_iterations: 10000
+  max_time_s: 36000  # 10 hours
+
+# Logging strategy
+log_freq: 10
+checkpoint_freq: 100
+log_start_iteration: 10
+
