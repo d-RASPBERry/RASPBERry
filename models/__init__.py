@@ -5,10 +5,22 @@ This module provides custom model architectures optimized for different
 observation types (images, vectors) and algorithms (SAC, DQN, etc.).
 """
 
+import math
 import torch
 import torch.nn as nn
 from ray.rllib.models.torch.torch_modelv2 import TorchModelV2
 from ray.rllib.utils.annotations import override
+
+
+def _ensure_int_outputs(num_outputs):
+    """将 RLlib 传入的输出维度规范化为整数。"""
+    if isinstance(num_outputs, (tuple, list)):
+        if not num_outputs:
+            raise ValueError("num_outputs 维度为空，无法构建线性层")
+        return int(math.prod(num_outputs))
+    if isinstance(num_outputs, (int, float)):
+        return int(num_outputs)
+    raise TypeError(f"无法解析的 num_outputs 类型: {type(num_outputs)}")
 
 
 class SACImageEncoder(TorchModelV2, nn.Module):
@@ -19,9 +31,11 @@ class SACImageEncoder(TorchModelV2, nn.Module):
     Nature CNN architecture adapted for SAC.
     """
     
-    def __init__(self, obs_space, action_space, num_outputs, model_config, name):
+    def __init__(self, obs_space, action_space, num_outputs, model_config, name, **kwargs):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
+        # Store additional keyword arguments (e.g., policy_model_config) for compatibility
+        self._extra_model_kwargs = kwargs
         
         # Extract image dimensions
         h, w, c = obs_space.shape
@@ -48,7 +62,13 @@ class SACImageEncoder(TorchModelV2, nn.Module):
             nn.ReLU(),
         )
         
-        self.output_layer = nn.Linear(self.feature_dim, num_outputs)
+        output_dim = _ensure_int_outputs(num_outputs)
+        if output_dim == 0:
+            self.output_layer = nn.Identity()
+            self._logits_dim = self.feature_dim
+        else:
+            self.output_layer = nn.Linear(self.feature_dim, output_dim)
+            self._logits_dim = output_dim
         self._features = None
     
     @override(TorchModelV2)
@@ -66,7 +86,9 @@ class SACImageEncoder(TorchModelV2, nn.Module):
     
     @override(TorchModelV2)
     def value_function(self):
-        return torch.zeros(self._features.shape[0])
+        device = self._features.device if self._features is not None else torch.device("cpu")
+        batch = self._features.shape[0] if self._features is not None else 1
+        return torch.zeros(batch, device=device)
 
 
 class SACLightweightCNN(TorchModelV2, nn.Module):
@@ -76,9 +98,10 @@ class SACLightweightCNN(TorchModelV2, nn.Module):
     Suitable for 64x64 or 80x80 images. Faster training than Nature CNN.
     """
     
-    def __init__(self, obs_space, action_space, num_outputs, model_config, name):
+    def __init__(self, obs_space, action_space, num_outputs, model_config, name, **kwargs):
         TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
         nn.Module.__init__(self)
+        self._extra_model_kwargs = kwargs
         
         h, w, c = obs_space.shape
         
@@ -100,7 +123,13 @@ class SACLightweightCNN(TorchModelV2, nn.Module):
             nn.ReLU(),
         )
         
-        self.output_layer = nn.Linear(self.feature_dim, num_outputs)
+        output_dim = _ensure_int_outputs(num_outputs)
+        if output_dim == 0:
+            self.output_layer = nn.Identity()
+            self._logits_dim = self.feature_dim
+        else:
+            self.output_layer = nn.Linear(self.feature_dim, output_dim)
+            self._logits_dim = output_dim
         self._features = None
     
     @override(TorchModelV2)
@@ -118,7 +147,9 @@ class SACLightweightCNN(TorchModelV2, nn.Module):
     
     @override(TorchModelV2)
     def value_function(self):
-        return torch.zeros(self._features.shape[0])
+        device = self._features.device if self._features is not None else torch.device("cpu")
+        batch = self._features.shape[0] if self._features is not None else 1
+        return torch.zeros(batch, device=device)
 
 
 __all__ = [
