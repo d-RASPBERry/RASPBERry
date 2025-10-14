@@ -1,18 +1,5 @@
-# Basic path configuration for vector observation environments
-paths:
-  log_path: "logs"
-  checkpoint_path: "checkpoints"
-  tmp_dir: "/tmp/"
-  log_base_path: "/home/seventheli/data/logging/New_RASPBERry/BOX2D/"
-  checkpoint_base_path: "/home/seventheli/data/checkpoints/New_RASPBERry/BOX2D/"
-  ray_temp_dir: "/home/seventheli/ray/"
-
-# Ray configuration
-ray_config:
-  object_store_memory_gb: 100
-  include_dashboard: false
-  ignore_reinit_error: true
-  max_gcs_destroyed_actor_cached_count: 100
+# SAC Vector Base Template
+# Note: Path and Ray configurations are now in runtime.yml
 
 hyper_parameters:
   # Framework configuration

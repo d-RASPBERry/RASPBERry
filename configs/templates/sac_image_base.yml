@@ -1,18 +1,5 @@
-# Basic path configuration
-paths:
-  log_path: "logs"                                     # Relative log path within base
-  checkpoint_path: "checkpoints"                      # Relative checkpoint path within base
-  tmp_dir: "/tmp/"                                    # Temporary directory base
-  log_base_path: "/home/seventheli/data/logging/New_RASPBERry/Atari/"      # Base path for logging
-  checkpoint_base_path: "/home/seventheli/data/checkpoints/New_RASPBERry/Atari/"  # Base path for checkpoints
-  ray_temp_dir: "/home/seventheli/ray/"               # Ray temporary directory base
-
-# Ray configuration (integrated with path settings)
-ray_config:
-  object_store_memory_gb: 100                          # Object store memory in GB (100 * 1024 * 1024 * 1024 bytes)
-  include_dashboard: false                             # Whether to start Ray dashboard
-  ignore_reinit_error: true                           # Ignore reinit errors
-  max_gcs_destroyed_actor_cached_count: 100           # Maximum cached destroyed actors count (from path.yml)
+# SAC Image Base Template
+# Note: Path and Ray configurations are now in runtime.yml
 
 hyper_parameters:
   # Framework configuration
