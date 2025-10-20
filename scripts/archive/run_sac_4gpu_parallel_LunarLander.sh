@@ -59,6 +59,9 @@ GPU_IDS=(0 1 2 3)
 PER_CONFIG="configs/experiments/sac/per/lunarlander.yml"
 RASP_CONFIG="configs/experiments/sac/raspberry/lunarlander.yml"
 
+LAUNCH_DELAY_BETWEEN_GPUS=10  # GPU组之间间隔10秒
+LAUNCH_DELAY_SAME_GPU=5       # 同一GPU上两个实验间隔5秒
+
 for gpu in "${GPU_IDS[@]}"; do
     replicate=$((gpu + 1))
     header="┌────────────────────────────────────────────────────────────────────────────┐"
@@ -80,6 +83,8 @@ for gpu in "${GPU_IDS[@]}"; do
     ALL_NAMES+=("GPU${gpu}-SAC-PER-LunarLander")
     echo "       PID: ${pid_per}"
     echo "       配置: ${PER_CONFIG}"
+    echo "       ⏳ 等待 ${LAUNCH_DELAY_SAME_GPU} 秒后启动 RASPBERry..."
+    sleep ${LAUNCH_DELAY_SAME_GPU}
 
     echo "  [2/2] 启动 SAC-RASPBERry-LunarLander (GPU ${gpu})..."
     python runner/run_sac_raspberry_algo.py \
@@ -91,6 +96,12 @@ for gpu in "${GPU_IDS[@]}"; do
     ALL_NAMES+=("GPU${gpu}-SAC-RASPBERry-LunarLander")
     echo "       PID: ${pid_rasp}"
     echo "       配置: ${RASP_CONFIG}"
+    
+    # 如果不是最后一个GPU，等待间隔后再启动下一组
+    if [ ${gpu} -lt ${GPU_IDS[-1]} ]; then
+        echo "       ⏳ 等待 ${LAUNCH_DELAY_BETWEEN_GPUS} 秒后启动下一组 GPU 实验..."
+        sleep ${LAUNCH_DELAY_BETWEEN_GPUS}
+    fi
     echo ""
 done
 

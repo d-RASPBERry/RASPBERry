@@ -141,10 +141,12 @@ def main() -> None:
         mlflow_experiment = mlflow_cfg_from_yaml.get("experiment", env_name)
         mlflow_tags_from_yaml = mlflow_cfg_from_yaml.get("tags", {})
         
+        # Combine env_alias with GPU and timestamp for better readability
+        mlflow_run_name = f"{env_alias}-{args.gpu}-{timestamp}"
         mlflow_cfg = {
             **mlflow_base,
             "experiment": mlflow_experiment,
-            "run_name": run_name,  # Use the GPU-ID + timestamp run name
+            "run_name": mlflow_run_name,
         }
         extra_tags = {
             "algorithm": mlflow_tags_from_yaml.get("algorithm", "SAC"),
