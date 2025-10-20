@@ -115,7 +115,8 @@ def main() -> None:
 
     # Infer environment type and construct paths dynamically
     env_type = infer_env_type(env_name)
-    run_name = f"SAC-PER-{datetime.now().timestamp()}"
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    run_name = f"SAC-PER-{args.gpu}-{timestamp}"
     log_root = Path(paths["log_base_path"]) / env_type / env_name
     log_dir = log_root / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -132,8 +133,9 @@ def main() -> None:
     logger.info("Log dir: %s", log_dir)
     logger.info("=" * 60)
 
-    # Setup mlflow (if configured)
-    if mlflow_base:
+    # Setup mlflow (if configured and enabled)
+    use_mlflow = run_cfg.get("use_mlflow", False)  # 从run_config读取
+    if mlflow_base and use_mlflow:
         # Get mlflow config from YAML (with experiment and tags)
         mlflow_cfg_from_yaml = config.get("mlflow", {})
         mlflow_experiment = mlflow_cfg_from_yaml.get("experiment", env_name)
@@ -142,19 +144,24 @@ def main() -> None:
         mlflow_cfg = {
             **mlflow_base,
             "experiment": mlflow_experiment,
-            "run_name": env_alias,
+            "run_name": run_name,  # Use the GPU-ID + timestamp run name
         }
         extra_tags = {
             "algorithm": mlflow_tags_from_yaml.get("algorithm", "SAC"),
             "buffer": mlflow_tags_from_yaml.get("buffer", "PER"),
             "env": mlflow_tags_from_yaml.get("environment", env_name),
+            "env_alias": env_alias,
             "obs_type": mlflow_tags_from_yaml.get("obs_type", "unknown"),
+            "gpu": args.gpu,
         }
         mlflow_run = setup_mlflow(mlflow_cfg, hyper, logger, extra_tags=extra_tags)
     else:
         mlflow_run = None
         mlflow_cfg = None
-        logger.info("[mlflow] Not configured, skipping experiment tracking")
+        if not use_mlflow:
+            logger.info("[mlflow] Disabled in run_config")
+        else:
+            logger.info("[mlflow] Not configured, skipping experiment tracking")
 
     # Initialize Ray
     ray_temp_dir = f"{paths['ray_temp_dir']}ray_{int(time.time())}"

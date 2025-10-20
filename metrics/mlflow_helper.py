@@ -65,7 +65,7 @@ def setup_mlflow(
         # Simple connectivity check by getting tracking URI
         client = MlflowClient()
         _ = client.get_experiment_by_name(experiment_name)  # Verify connection
-        mlflow.set_experiment(experiment_name="default")
+        mlflow.set_experiment(experiment_name=experiment_name)
         mlflow.start_run(run_name=run_name, tags=tags or None)
     except Exception as exc:
         logger.error("mlflow initialization failed: %s", exc, exc_info=True)

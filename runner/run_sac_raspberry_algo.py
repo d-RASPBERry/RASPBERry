@@ -123,7 +123,8 @@ def main() -> None:
 
     # Infer environment type and construct paths dynamically
     env_type = infer_env_type(env_name)
-    run_name = f"SAC-RASPBERry-{datetime.now().timestamp()}"
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    run_name = f"SAC-RASPBERry-{args.gpu}-{timestamp}"
     log_root = Path(paths["log_base_path"]) / env_type / env_name
     log_dir = log_root / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -157,13 +158,15 @@ def main() -> None:
         mlflow_cfg = {
             **mlflow_base,
             "experiment": mlflow_experiment,
-            "run_name": env_alias,
+            "run_name": f"{env_alias}-{args.gpu}-{timestamp}",  # env_alias + GPU + timestamp
         }
         extra_tags = {
             "algorithm": mlflow_tags_from_yaml.get("algorithm", "SAC"),
             "buffer": mlflow_tags_from_yaml.get("buffer", "RASPBERry"),
             "env": mlflow_tags_from_yaml.get("environment", env_name),
+            "env_alias": env_alias,
             "obs_type": mlflow_tags_from_yaml.get("obs_type", "unknown"),
+            "gpu": args.gpu,
         }
         mlflow_run = setup_mlflow(mlflow_cfg, hyper, logger, extra_tags=extra_tags)
     else:
