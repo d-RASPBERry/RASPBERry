@@ -18,12 +18,12 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  max_time_s: 14400  # 4小时
+  max_time_s: 360000
 
 hyper_parameters:
   # Replay buffer (RASPBERry-specific)
   replay_buffer_config:
-    capacity: 100000
+    capacity: 1000000
     type: MultiAgentPrioritizedBlockReplayBuffer
     sub_buffer_size: 16
     compress_base: -1
@@ -35,6 +35,6 @@ hyper_parameters:
     compression_mode: "D"
     chunk_size: 20
   
-  # 资源配置（为4GPU并行实验降低资源占用）
-  num_workers: 2
-  num_envs_per_worker: 2
+  # Resource
+  num_workers: 4
+  num_envs_per_worker: 5

@@ -1,5 +1,4 @@
 # SAC-PER: Pendulum-Pendulum (Image observation)
-# 只覆盖与 template 不同的配置参数
 extends: ../../../templates/sac_image_base.yml
 
 env_config:
@@ -18,14 +17,14 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  max_time_s: 14400  # 4小时
+  max_time_s: 360000
 
 hyper_parameters:
   # Replay buffer (PER baseline)
   replay_buffer_config:
-    capacity: 100000
+    capacity: 1000000
     type: MultiAgentPrioritizedReplayBuffer
   
-  # 资源配置（与 RASPBERry 保持一致）
-  num_workers: 2
-  num_envs_per_worker: 2
+  # Resource
+  num_workers: 4
+  num_envs_per_worker: 5
