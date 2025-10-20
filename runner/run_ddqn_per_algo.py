@@ -31,6 +31,7 @@ from metrics import write_iteration_json
 from metrics.logger import setup_logger
 from metrics.mlflow_helper import setup_mlflow, prepare_metrics
 from utils import env_creator, load_config, infer_env_type
+from utils.config_helper import load_buffer_dump_config
 
 CONFIG_PATH = str((ROOT / "configs/ddqn_per.yml").resolve())
 RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
@@ -165,6 +166,22 @@ def main() -> None:
 
             result = algo.train()
             iteration += 1
+            
+            # Dump buffer storage for verification (controlled by runtime.yml)
+            dump_config = load_buffer_dump_config('ddqn', RUNTIME_CONFIG)
+            if dump_config['enable_dump'] and iteration == dump_config['dump_iteration']:
+                from utils.buffer_dump_utils import dump_buffer_content
+                dump_file = log_dir / f"buffer_storage_iter{dump_config['dump_iteration']}.pkl"
+                try:
+                    # Dump完整的buffer _storage用于验证
+                    stats = dump_buffer_content(algo.local_replay_buffer, dump_file)
+                    logger.info("📦 Buffer content dumped to %s", dump_file)
+                    if stats:
+                        for policy_id, policy_stats in stats.items():
+                            logger.info(f"  [{policy_id}] Compression: {policy_stats.get('compression_ratio', 1.0):.2f}x, "
+                                      f"Est. Memory: {policy_stats.get('estimated_total_memory_mb', 0):.1f} MB")
+                except Exception as e:
+                    logger.warning("Failed to dump buffer content: %s", e)
             
             # Attach replay buffer statistics to result
             if hasattr(algo, 'local_replay_buffer'):

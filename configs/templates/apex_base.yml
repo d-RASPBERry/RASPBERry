@@ -47,8 +47,8 @@ hyper_parameters:
 
 # Default run configuration (can be overridden in experiment configs)
 run_config:
-  max_iterations: 1000
-  max_time_s: 7200  # 2 hours
+  max_iterations: 100000  # Large enough to let max_time_s control
+  max_time_s: 3600
 
 # Logging strategy
 logging_config:

@@ -7,7 +7,7 @@ hyper_parameters:
   
   # Replay buffer (RASPBERry)
   replay_buffer_config:
-    capacity: 1000000
+    capacity: 500000
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
@@ -27,5 +27,5 @@ hyper_parameters:
 run_config:
   use_mlflow: true
   run_name_template: "{env_in}_APEX_RASPBERRY"
-  max_iterations: 1000
-  max_time_s: 3600 # 1 hour
+  max_iterations: 500
+  max_time_s: 3600

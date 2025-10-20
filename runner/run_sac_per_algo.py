@@ -31,8 +31,9 @@ from ray.tune.registry import register_env
 from metrics import write_iteration_json
 from metrics.logger import setup_logger
 from metrics.mlflow_helper import setup_mlflow, prepare_metrics
-from models import SACImageEncoder, SACLightweightCNN
-from utils import env_creator, load_config, infer_env_type
+from models import SACLightweightCNN
+from utils import env_creator, infer_env_type, ConfigLoader
+from utils.config_helper import load_buffer_dump_config
 
 DEFAULT_CONFIG_PATH = str((ROOT / "configs/sac_per_image.yml").resolve())
 RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
@@ -53,8 +54,7 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> SAC:
     """
     hyper = config["hyper_parameters"].copy()
     
-    # Register custom CNN models
-    ModelCatalog.register_custom_model("SACImageEncoder", SACImageEncoder)
+    # Register custom CNN model
     ModelCatalog.register_custom_model("SACLightweightCNN", SACLightweightCNN)
 
     env_config = {"id": env_name}
@@ -93,19 +93,15 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Load configs
-    config = load_config(args.config)
-    runtime = load_config(RUNTIME_CONFIG)
+    # Load configs with ConfigLoader (简化版)
+    loader = ConfigLoader(runtime_config_path=RUNTIME_CONFIG)
+    config = loader.load(args.config)
 
-    required_runtime = ["paths", "ray"]
-    missing = [k for k in required_runtime if k not in runtime]
-    if missing:
-        raise ValueError(f"runtime.yml missing required configs: {missing}")
-
-    paths = runtime["paths"]
-    ray_cfg = runtime["ray"]
-    mlflow_base = runtime.get("mlflow", None)
-
+    # Extract configs (统一访问 config['runtime'])
+    paths = config['runtime']['paths']
+    ray_cfg = config['runtime']['ray']
+    mlflow_base = config['runtime'].get('mlflow', None)
+    
     run_cfg = config["run_config"]
     hyper = config["hyper_parameters"]
 
@@ -113,10 +109,14 @@ def main() -> None:
     max_iterations = run_cfg.get("max_iterations", 10000)
     log_every = config.get("logging_config", {}).get("log_freq", 10)
 
+    # Get environment name from config (override command-line default)
+    env_name = config.get("env_config", {}).get("env_name", args.env)
+    env_alias = config.get("env_config", {}).get("env_alias", env_name)
+
     # Infer environment type and construct paths dynamically
-    env_type = infer_env_type(args.env)
+    env_type = infer_env_type(env_name)
     run_name = f"SAC-PER-{datetime.now().timestamp()}"
-    log_root = Path(paths["log_base_path"]) / env_type / args.env
+    log_root = Path(paths["log_base_path"]) / env_type / env_name
     log_dir = log_root / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -128,21 +128,27 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("SAC-PER Training Started")
     logger.info("Env: %s (%s) | GPU: %s | Max time: %ds | Max iter: %d",
-                args.env, env_type, args.gpu, max_time_s, max_iterations)
+                env_name, env_type, args.gpu, max_time_s, max_iterations)
     logger.info("Log dir: %s", log_dir)
     logger.info("=" * 60)
 
     # Setup mlflow (if configured)
     if mlflow_base:
+        # Get mlflow config from YAML (with experiment and tags)
+        mlflow_cfg_from_yaml = config.get("mlflow", {})
+        mlflow_experiment = mlflow_cfg_from_yaml.get("experiment", env_name)
+        mlflow_tags_from_yaml = mlflow_cfg_from_yaml.get("tags", {})
+        
         mlflow_cfg = {
             **mlflow_base,
-            "experiment": args.env,
-            "run_name": run_name,
+            "experiment": mlflow_experiment,
+            "run_name": env_alias,
         }
         extra_tags = {
-            "algorithm": "SAC",
-            "buffer": "PER",
-            "env": args.env,
+            "algorithm": mlflow_tags_from_yaml.get("algorithm", "SAC"),
+            "buffer": mlflow_tags_from_yaml.get("buffer", "PER"),
+            "env": mlflow_tags_from_yaml.get("environment", env_name),
+            "obs_type": mlflow_tags_from_yaml.get("obs_type", "unknown"),
         }
         mlflow_run = setup_mlflow(mlflow_cfg, hyper, logger, extra_tags=extra_tags)
     else:
@@ -164,7 +170,7 @@ def main() -> None:
     logger.info("Ray initialized (CPUs=%d, GPUs=%d)", 
                 hyper.get("num_cpus", 5), hyper.get("num_gpus", 0))
 
-    algo = build_algorithm(args.env, args.env, config)
+    algo = build_algorithm(env_name, env_name, config)
     logger.info("Algorithm built, starting training...")
 
     start_time = time.time()
@@ -178,6 +184,22 @@ def main() -> None:
 
             result = algo.train()
             iteration += 1
+            
+            # Dump buffer storage for verification (controlled by runtime.yml)
+            dump_config = load_buffer_dump_config('sac', RUNTIME_CONFIG)
+            if dump_config['enable_dump'] and iteration == dump_config['dump_iteration']:
+                from utils.buffer_dump_utils import dump_buffer_content
+                dump_file = log_dir / f"buffer_storage_iter{dump_config['dump_iteration']}.pkl"
+                try:
+                    # Dump完整的buffer _storage用于验证
+                    stats = dump_buffer_content(algo.local_replay_buffer, dump_file)
+                    logger.info("📦 Buffer content dumped to %s", dump_file)
+                    if stats:
+                        for policy_id, policy_stats in stats.items():
+                            logger.info(f"  [{policy_id}] Compression: {policy_stats.get('compression_ratio', 1.0):.2f}x, "
+                                      f"Est. Memory: {policy_stats.get('estimated_total_memory_mb', 0):.1f} MB")
+                except Exception as e:
+                    logger.warning("Failed to dump buffer content: %s", e)
             
             # Attach replay buffer statistics to result
             if hasattr(algo, 'local_replay_buffer'):

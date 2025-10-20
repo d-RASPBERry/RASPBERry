@@ -1,0 +1,31 @@
+# SAC-PER: BOX2DI-CarRacing (Image observation)
+# 只覆盖与 template 不同的配置参数
+extends: ../../../templates/sac_image_base.yml
+
+env_config:
+  env_name: "BOX2DI-CarRacing-v2"
+  env_alias: "SAC-PER-CarRacing"
+
+logging:
+  log_subdir: "BOX2DI/CarRacing"
+
+mlflow:
+  experiment: "SAC-CarRacing"
+  tags:
+    algorithm: "SAC"
+    buffer: "PER"
+    environment: "CarRacing"
+    obs_type: "image"
+
+run_config:
+  max_time_s: 14400  # 4小时
+
+hyper_parameters:
+  # Replay buffer (PER baseline)
+  replay_buffer_config:
+    capacity: 100000
+    type: MultiAgentPrioritizedReplayBuffer
+  
+  # 资源配置
+  num_workers: 2
+  num_envs_per_worker: 2

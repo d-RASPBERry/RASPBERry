@@ -1,0 +1,40 @@
+# SAC-RASPBERry: BOX2DI-CarRacing (Image observation)
+# 只覆盖与 template 不同的配置参数
+extends: ../../../templates/sac_image_base.yml
+
+env_config:
+  env_name: "BOX2DI-CarRacing-v2"
+  env_alias: "SAC-RASPBERry-CarRacing"
+
+logging:
+  log_subdir: "BOX2DI/CarRacing"
+
+mlflow:
+  experiment: "SAC-CarRacing"
+  tags:
+    algorithm: "SAC"
+    buffer: "RASPBERry"
+    environment: "CarRacing"
+    obs_type: "image"
+
+run_config:
+  max_time_s: 14400  # 4小时
+
+hyper_parameters:
+  # Replay buffer (RASPBERry-specific)
+  replay_buffer_config:
+    capacity: 100000
+    type: MultiAgentPrioritizedBlockReplayBuffer
+    sub_buffer_size: 16
+    compress_base: -1
+    worker_side_prioritization: false
+    compress_pool_size: 400
+    compression_algorithm: "lz4"
+    compression_level: 1
+    compression_nthreads: 4
+    compression_mode: "D"
+    chunk_size: 20
+  
+  # 资源配置
+  num_workers: 2
+  num_envs_per_worker: 2

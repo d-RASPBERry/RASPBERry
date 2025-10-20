@@ -36,9 +36,22 @@ class ApexDQNRaspberryAlgo(ApexDQN):
         - Averages TD errors within each block
         """
         sub_buffer_size = self.config["replay_buffer_config"]["sub_buffer_size"]
+        train_batch_size = self.config.get("train_batch_size", 512)
         num_samples_trained_this_itr = 0
         
-        for _ in range(self.learner_thread.outqueue.qsize()):
+        queue_size = self.learner_thread.outqueue.qsize()
+        
+        # Log every 10 updates
+        current_iter = self._iteration if hasattr(self, '_iteration') else 0
+        should_log = (current_iter % 10 == 0) and queue_size > 0
+        
+        if should_log:
+            logger.info(f"[APEX-RASPBERry Learner Debug] Iteration {current_iter}")
+            logger.info(f"  Queue size: {queue_size}")
+            logger.info(f"  Config train_batch_size: {train_batch_size}")
+            logger.info(f"  Config sub_buffer_size: {sub_buffer_size}")
+        
+        for update_idx in range(queue_size):
             if self.learner_thread.is_alive():
                 (
                     replay_actor_id,
@@ -47,10 +60,32 @@ class ApexDQNRaspberryAlgo(ApexDQN):
                     agent_steps,
                 ) = self.learner_thread.outqueue.get(timeout=0.001)
                 
+                # Log first update details
+                if should_log and update_idx == 0:
+                    logger.info(f"  Update {update_idx}: env_steps={env_steps}, agent_steps={agent_steps}")
+                    for policy_id in priority_dict:
+                        original_indices = priority_dict[policy_id][0]
+                        original_td_error = priority_dict[policy_id][1]
+                        logger.info(f"    Policy {policy_id}:")
+                        logger.info(f"      Original batch_indices shape: {original_indices.shape}")
+                        logger.info(f"      Original td_error shape: {original_td_error.shape}")
+                        logger.info(f"      Total transitions in batch: {len(original_indices)}")
+                
                 # Convert sample-level priorities to block-level priorities
                 for policy_id in priority_dict:
-                    batch_indices = priority_dict[policy_id][0].reshape(-1, sub_buffer_size)[:, 0]
-                    td_error = priority_dict[policy_id][1].reshape([-1, sub_buffer_size]).mean(axis=1)
+                    original_indices = priority_dict[policy_id][0]
+                    original_td_error = priority_dict[policy_id][1]
+                    
+                    batch_indices = original_indices.reshape(-1, sub_buffer_size)[:, 0]
+                    td_error = original_td_error.reshape([-1, sub_buffer_size]).mean(axis=1)
+                    
+                    if should_log and update_idx == 0:
+                        logger.info(f"      After reshape to blocks:")
+                        logger.info(f"        Block indices shape: {batch_indices.shape}")
+                        logger.info(f"        Block td_error shape: {td_error.shape}")
+                        logger.info(f"        Num blocks: {len(batch_indices)}")
+                        logger.info(f"        Expected: {len(original_indices)} transitions / {sub_buffer_size} = {len(original_indices)//sub_buffer_size} blocks")
+                    
                     priority_dict[policy_id] = (batch_indices, td_error)
                 
                 # Update priorities in distributed replay actors
@@ -70,6 +105,11 @@ class ApexDQNRaspberryAlgo(ApexDQN):
                 )
             else:
                 raise RuntimeError("Learner thread died during training")
+        
+        if should_log and queue_size > 0:
+            logger.info(f"  Total samples trained this iteration: {num_samples_trained_this_itr}")
+            logger.info(f"  Cumulative env_steps_trained: {self._counters[NUM_ENV_STEPS_TRAINED]}")
+            logger.info(f"  Cumulative agent_steps_trained: {self._counters[NUM_AGENT_STEPS_TRAINED]}")
 
         self._timers["learner_dequeue"] = self.learner_thread.queue_timer
         self._timers["learner_grad"] = self.learner_thread.grad_timer

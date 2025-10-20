@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ################################################################################
-# SAC 4-GPU 并行实验脚本
+# SAC 4-GPU 并行实验脚本 (LunarLanderContinuous)
 # 
 # 实验计划:
 #   GPU 0-3: 全部运行 LunarLanderContinuous (向量环境, 8维状态 → 2维动作)
@@ -10,6 +10,11 @@
 #   - SAC-PER (基线)
 #   - SAC-RASPBERry (压缩版本)
 #
+# 配置系统:
+#   使用 configs/experiments/sac/ 下的实验配置
+#   环境配置已包含在实验配置文件中
+#   日志路径由 runtime.yml 统一管理
+#
 # 使用方法:
 #   ./run_sac_4gpu_parallel_LunarLander.sh
 #
@@ -17,21 +22,32 @@
 
 set -euo pipefail
 
+# 获取项目根目录
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "${PROJECT_ROOT}"
+
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-LOG_DIR="./logs"
+SCRIPT_LOG_DIR="./logs/scripts"
 
-mkdir -p ${LOG_DIR}
+mkdir -p ${SCRIPT_LOG_DIR}
 
 echo "================================================================================"
-echo "🚀 启动 SAC 4-GPU 并行实验"
+echo "🚀 启动 SAC 4-GPU 并行实验 (LunarLanderContinuous)"
 echo "================================================================================"
+echo "项目目录: ${PROJECT_ROOT}"
 echo "时间戳: ${TIMESTAMP}"
-echo "日志目录: ${LOG_DIR}"
+echo "脚本日志: ${SCRIPT_LOG_DIR}"
 echo ""
 echo "实验配置:"
-echo "  GPU 0-3: LunarLanderContinuous (向量)"
+echo "  环境: BOX2DV-LunarLanderContinuous (8维状态 → 2维动作)"
+echo "  GPU: 0-3 (4个重复实验)"
+echo "  算法: SAC-PER + SAC-RASPBERry"
 echo ""
-echo "每个GPU运行: SAC-PER + SAC-RASPBERry"
+echo "配置文件:"
+echo "  PER:       configs/experiments/sac/per/lunarlander.yml"
+echo "  RASPBERry: configs/experiments/sac/raspberry/lunarlander.yml"
+echo ""
+echo "注意: 训练日志路径将由 runner 在启动时打印"
 echo "================================================================================"
 echo ""
 
@@ -40,9 +56,8 @@ declare -a ALL_PIDS
 declare -a ALL_NAMES
 
 GPU_IDS=(0 1 2 3)
-ENV_NAME="BOX2DV-LunarLanderContinuous"
-PER_CONFIG="configs/sac_per_vector.yml"
-RASP_CONFIG="configs/sac_raspberry_vector.yml"
+PER_CONFIG="configs/experiments/sac/per/lunarlander.yml"
+RASP_CONFIG="configs/experiments/sac/raspberry/lunarlander.yml"
 
 for gpu in "${GPU_IDS[@]}"; do
     replicate=$((gpu + 1))
@@ -57,25 +72,25 @@ for gpu in "${GPU_IDS[@]}"; do
 
     echo "  [1/2] 启动 SAC-PER-LunarLander (GPU ${gpu})..."
     python runner/run_sac_per_algo.py \
-        --env ${ENV_NAME} \
         --config ${PER_CONFIG} \
         --gpu ${gpu} \
-        > ${LOG_DIR}/sac_per_${log_suffix}.log 2>&1 &
+        > ${SCRIPT_LOG_DIR}/sac_per_${log_suffix}.log 2>&1 &
     pid_per=$!
     ALL_PIDS+=($pid_per)
     ALL_NAMES+=("GPU${gpu}-SAC-PER-LunarLander")
     echo "       PID: ${pid_per}"
+    echo "       配置: ${PER_CONFIG}"
 
     echo "  [2/2] 启动 SAC-RASPBERry-LunarLander (GPU ${gpu})..."
     python runner/run_sac_raspberry_algo.py \
-        --env ${ENV_NAME} \
         --config ${RASP_CONFIG} \
         --gpu ${gpu} \
-        > ${LOG_DIR}/sac_raspberry_${log_suffix}.log 2>&1 &
+        > ${SCRIPT_LOG_DIR}/sac_raspberry_${log_suffix}.log 2>&1 &
     pid_rasp=$!
     ALL_PIDS+=($pid_rasp)
     ALL_NAMES+=("GPU${gpu}-SAC-RASPBERry-LunarLander")
     echo "       PID: ${pid_rasp}"
+    echo "       配置: ${RASP_CONFIG}"
     echo ""
 done
 
@@ -93,32 +108,41 @@ for idx in "${!GPU_IDS[@]}"; do
     rasp_name="GPU${gpu}-SAC-RASPBERry-LunarLander"
     per_pid=${ALL_PIDS[$((idx * 2))]}
     rasp_pid=${ALL_PIDS[$((idx * 2 + 1))]}
-    printf "  GPU %d: PID %s (PER)  + %s (RASPBERry)  [LunarLander重复实验 #%d]\n" \
+    printf "  GPU %d: PID %s (PER)  + %s (RASPBERry)  [重复 #%d]\n" \
         "${gpu}" "${per_pid}" "${rasp_pid}" "$((gpu + 1))"
 done
 echo ""
-echo "监控日志:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "监控命令"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "1. 查看脚本日志 (查看启动状态和训练日志路径):"
 for gpu in "${GPU_IDS[@]}"; do
     log_suffix="lunarlander_gpu${gpu}_${TIMESTAMP}"
-    echo "  # GPU ${gpu} - LunarLander (重复实验 #$((gpu + 1)))"
-    echo "  tail -f ${LOG_DIR}/sac_per_${log_suffix}.log"
-    echo "  tail -f ${LOG_DIR}/sac_raspberry_${log_suffix}.log"
+    echo "   # GPU ${gpu} (重复 #$((gpu + 1)))"
+    echo "   tail -f ${SCRIPT_LOG_DIR}/sac_per_${log_suffix}.log"
+    echo "   tail -f ${SCRIPT_LOG_DIR}/sac_raspberry_${log_suffix}.log"
     echo ""
 done
 echo ""
-echo "快速监控 (所有实验最新进展):"
-echo "  watch -n 5 'tail -n 2 ${LOG_DIR}/*_${TIMESTAMP}.log | grep -E \"Iter|reward\"'"
+echo "2. 快速监控 (所有实验):"
+echo "   watch -n 5 'tail -n 2 ${SCRIPT_LOG_DIR}/*_${TIMESTAMP}.log | grep -E \"Iter|reward\"'"
 echo ""
-echo "检查进程状态:"
+echo "3. 检查进程状态:"
 ps_args=()
 for idx in "${!ALL_PIDS[@]}"; do
     ps_args+=(${ALL_PIDS[$idx]})
 done
-echo "  ps -p ${ps_args[*]}"
+echo "   ps -p ${ps_args[*]}"
 echo ""
-echo "================================================================================"
+echo "4. GPU 使用情况:"
+echo "   watch -n 1 nvidia-smi"
+echo ""
+echo "提示: 训练日志的实际路径已由各个 runner 打印在脚本日志中"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "⏳ 等待所有实验完成..."
-echo "================================================================================"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
 ################################################################################

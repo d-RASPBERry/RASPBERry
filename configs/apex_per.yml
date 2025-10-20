@@ -3,7 +3,7 @@ extends: templates/apex_base.yml
 
 hyper_parameters:
   replay_buffer_config:
-    capacity: 1000000
+    capacity: 500000
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
@@ -15,5 +15,5 @@ hyper_parameters:
 run_config:
   use_mlflow: true
   run_name_template: "{env_in}_APEX_PER"
-  max_iterations: 200
-  max_time_s: 18000  # 5 hours
+  max_iterations: 500
+  max_time_s: 3600

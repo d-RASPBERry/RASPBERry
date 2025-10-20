@@ -5,7 +5,8 @@ hyper_parameters:
   # Framework configuration
   framework: torch
 
-  # Model configuration for image inputs (Pendulum with PixelObservationWrapper)
+  # Model configuration for image inputs
+  # SACLightweightCNN now properly inherits from SACTorchModel
   model:
     custom_model: SACLightweightCNN
     custom_model_config:
@@ -31,12 +32,12 @@ hyper_parameters:
   train_batch_size: 256
   rollout_fragment_length: 1
 
-  # Resource configuration
+  # Resource configuration (aligned with sac_vector_base.yml)
   num_gpus: 1
   num_cpus: 10
-  num_workers: 5
-  num_envs_per_worker: 8
-  num_gpus_per_worker: 0.1
+  num_workers: 3         # Reduced for parallel execution
+  num_envs_per_worker: 4 # Reduced for GPU memory
+  num_gpus_per_worker: 0.05  # Reduced GPU allocation per worker
   num_cpus_per_worker: 1
 
   # Common replay buffer parameters (overridden in specific configs)
@@ -48,8 +49,8 @@ hyper_parameters:
 # Run configuration
 run_config:
   use_mlflow: true
-  max_iterations: 10000
-  max_time_s: 36000  # 10 hours
+  max_iterations: 100000  # Large enough to let max_time_s control
+  max_time_s: 3600
   # Note: run_name is dynamically generated in runner scripts (SAC-PER-{timestamp})
 
 # Logging strategy

@@ -394,6 +394,12 @@ def env_creator(env_config):
         env_id = env_config["id"].replace("BOX2DI-", "")
         env = gymnasium.make(env_id)
         return env
+    elif env_config["id"][0:4] == "GYM-":
+        # GYM: Generic Gymnasium environments (Pendulum, MountainCar, etc.)
+        env_id = env_config["id"].replace("GYM-", "")
+        # gymnasium.make will automatically select the latest version
+        env = gymnasium.make(env_id)
+        return env
     else:
         raise NotImplementedError(f"Environment {env_config['id']} not supported")
 
@@ -465,5 +471,82 @@ def deep_merge_config(base: Dict, override: Dict) -> Dict:
         else:
             result[key] = value
     return result
+
+
+class ConfigLoader:
+    """简化的配置加载器 - 统一配置管理的最小化实现。
+    
+    设计原则:
+        - 简单: 只做必要的事（加载、合并、统一访问）
+        - 直接: 不做隐式转换和魔法操作
+        - 明确: 必须显式指定 runtime 路径
+    
+    核心功能:
+        1. 加载实验配置（自动处理 extends 继承）
+        2. 合并 runtime 配置
+        3. 提供统一的访问接口
+    
+    使用方法:
+        loader = ConfigLoader(runtime_config_path="configs/runtime.yml")
+        config = loader.load("configs/experiments/sac/raspberry/pendulum.yml")
+        
+        # 统一访问路径
+        paths = config['runtime']['paths']
+        ray_cfg = config['runtime']['ray']
+        hyper = config['hyper_parameters']
+        log_freq = config.get('log_freq', 10)  # 不强制规范化
+    
+    返回结构:
+        {
+            'runtime': {              # 来自 runtime.yml
+                'paths': {...},
+                'ray': {...},
+                'mlflow': {...},
+                'logging': {...}
+            },
+            'env_config': {...},      # 来自 experiment.yml
+            'hyper_parameters': {...},
+            'run_config': {...},
+            'mlflow': {...},
+            'logging': {...}          # 如果存在
+            # ... 其他字段保持不变
+        }
+    """
+    
+    def __init__(self, runtime_config_path: str):
+        """初始化 ConfigLoader.
+        
+        Args:
+            runtime_config_path: runtime.yml 的完整路径（必须显式指定）
+        
+        Raises:
+            FileNotFoundError: 如果 runtime.yml 不存在
+        """
+        if not os.path.exists(runtime_config_path):
+            raise FileNotFoundError(f"Runtime config not found: {runtime_config_path}")
+        
+        self.runtime_config = load_config(runtime_config_path)
+    
+    def load(self, experiment_config_path: str) -> Dict:
+        """加载并合并配置.
+        
+        Args:
+            experiment_config_path: 实验配置文件路径
+            
+        Returns:
+            合并后的完整配置字典
+            
+        处理步骤:
+            1. 加载实验配置（load_config 自动处理 extends）
+            2. 注入 runtime 配置到 config['runtime']
+            3. 返回合并后的配置
+        """
+        # Step 1: 加载实验配置（load_config 自动处理 extends）
+        config = load_config(experiment_config_path)
+        
+        # Step 2: 注入 runtime 配置
+        config['runtime'] = self.runtime_config
+        
+        return config
 
 

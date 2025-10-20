@@ -1,0 +1,33 @@
+# SAC-PER: BOX2DV-LunarLanderContinuous  
+# 只覆盖与 template 不同的配置参数
+extends: ../../../templates/sac_vector_base.yml
+
+env_config:
+  env_name: "BOX2DV-LunarLanderContinuous"
+  env_alias: "SAC-PER-LunarLander"
+
+logging:
+  log_subdir: "BOX2DV/LunarLander"
+
+mlflow:
+  experiment: "SAC-LunarLander"
+  tags:
+    algorithm: "SAC"
+    buffer: "PER"
+    environment: "LunarLander"
+    obs_type: "vector"
+
+run_config:
+  max_time_s: 14400  # 4小时
+
+hyper_parameters:
+  # 只覆盖 replay buffer 和资源配置
+  
+  # Replay buffer (PER baseline)
+  replay_buffer_config:
+    capacity: 100000
+    type: MultiAgentPrioritizedReplayBuffer
+  
+  # 资源配置（与 RASPBERry 保持一致以确保公平对比）
+  num_workers: 2
+  num_envs_per_worker: 2

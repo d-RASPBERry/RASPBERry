@@ -1,0 +1,31 @@
+# SAC-PER: BOX2DV-BipedalWalker (Vector observation)
+# 只覆盖与 template 不同的配置参数
+extends: ../../../templates/sac_vector_base.yml
+
+env_config:
+  env_name: "BOX2DV-BipedalWalker"
+  env_alias: "SAC-PER-BipedalWalker"
+
+logging:
+  log_subdir: "BOX2DV/BipedalWalker"
+
+mlflow:
+  experiment: "SAC-BipedalWalker"
+  tags:
+    algorithm: "SAC"
+    buffer: "PER"
+    environment: "BipedalWalker"
+    obs_type: "vector"
+
+run_config:
+  max_time_s: 14400  # 4小时
+
+hyper_parameters:
+  # Replay buffer (PER baseline)
+  replay_buffer_config:
+    capacity: 100000
+    type: MultiAgentPrioritizedReplayBuffer
+  
+  # 资源配置
+  num_workers: 2
+  num_envs_per_worker: 2
