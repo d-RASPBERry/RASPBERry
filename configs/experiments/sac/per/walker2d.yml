@@ -26,7 +26,7 @@ hyper_parameters:
 
   # Replay buffer (PER baseline)
   replay_buffer_config:
-    capacity: 1000000
+    capacity: 5000000
     type: MultiAgentPrioritizedReplayBuffer
 
   # Resource
