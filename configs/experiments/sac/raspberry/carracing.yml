@@ -20,11 +20,15 @@ run_config:
   max_time_s: 360000
 
 hyper_parameters:
+  train_batch_size: 512
+  min_sample_timesteps_per_iteration: 2000
+  training_intensity: 2.0
+
   # Replay buffer (RASPBERry-specific)
   replay_buffer_config:
     capacity: 1000000
     type: MultiAgentPrioritizedBlockReplayBuffer
-    sub_buffer_size: 16
+    sub_buffer_size: 32
     compress_base: -1
     worker_side_prioritization: false
     compress_pool_size: 400
@@ -33,7 +37,7 @@ hyper_parameters:
     compression_nthreads: 4
     compression_mode: "D"
     chunk_size: 20
-  
+
   # Resource
-  num_workers: 4
-  num_envs_per_worker: 5
+  num_workers: 6
+  num_envs_per_worker: 8

@@ -1,23 +1,24 @@
-# SAC-RASPBERry: BOX2DV-BipedalWalker (Vector observation)
+# SAC-RASPBERry: GYM-Walker2d-v4 (Vector observation, MuJoCo)
 extends: ../../../templates/sac_vector_base.yml
 
 env_config:
-  env_name: "BOX2DV-BipedalWalker"
-  env_alias: "SAC-RASPBERry-BipedalWalker"
+  env_name: "GYM-Walker2d"
+  env_alias: "SAC-RASPBERry-Walker2d"
 
 logging:
-  log_subdir: "BOX2DV/BipedalWalker"
+  log_subdir: "MuJoCo/Walker2d"
 
 mlflow:
-  experiment: "SAC-BipedalWalker"
+  experiment: "SAC-Walker2d"
   tags:
     algorithm: "SAC"
     buffer: "RASPBERry"
-    environment: "BipedalWalker"
+    environment: "Walker2d"
     obs_type: "vector"
+    framework: "MuJoCo"
 
 run_config:
-  max_time_s: 72000
+  max_time_s: 86400
 
 hyper_parameters:
   train_batch_size: 512
