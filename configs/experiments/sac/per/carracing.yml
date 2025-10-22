@@ -30,5 +30,5 @@ hyper_parameters:
     type: MultiAgentPrioritizedReplayBuffer
 
   # Resource
-  num_workers: 3
-  num_envs_per_worker: 5
+  num_workers: 2
+  num_envs_per_worker: 8

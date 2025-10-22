@@ -21,7 +21,7 @@ hyper_parameters:
   n_step: 1
 
   # Network architecture
-  hiddens: [256, 256]               # Applied to CNN features
+  hiddens: [128, 128]               # Applied to CNN features
 
   # Learning schedule (faster warmup for image-based learning)
   num_steps_sampled_before_learning_starts: 5000
@@ -35,8 +35,8 @@ hyper_parameters:
   # Resource configuration (aligned with sac_vector_base.yml)
   num_gpus: 1
   num_cpus: 10
-  num_workers: 3         # Reduced for parallel execution
-  num_envs_per_worker: 4 # Reduced for GPU memory
+  num_workers: 2         # Reduced for parallel execution
+  num_envs_per_worker: 8 # Adjusted for throughput with fewer workers
   num_gpus_per_worker: 0.01  # Reduced GPU allocation per worker
   num_cpus_per_worker: 1
 
