@@ -52,7 +52,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             compression_algorithm: str = 'zstd',
             compression_level: int = 5,
             compression_nthreads: int = 1,
-            compression_mode: str = "B",  # "A": sync, "B": batch_ray, "D": async_ray
+            compression_mode: str = "D",  # "A": sync, "B": batch_ray, "D": async_ray, "C": no compression (control)
             chunk_size: int = 10,
             **kwargs
     ):

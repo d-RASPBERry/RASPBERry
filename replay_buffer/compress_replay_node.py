@@ -32,6 +32,7 @@ class CompressReplayNode(object):
             cname: str = 'zstd',
             shuffle: int = blosc.BITSHUFFLE,
             nthreads: int = 4,
+            enable_compression: bool = True,
     ):
         """
         Initialize the compressed replay node.
@@ -44,6 +45,7 @@ class CompressReplayNode(object):
                  0: no transpose (preserve current layout)
                 >0: move that axis to the end (if < rank)
             compression_level: compression level (1-9, default 5)
+            enable_compression: whether to enable compression (False for Mode C - Control)
         """
         if buffer_size <= 0:
             raise ValueError(f"buffer_size must be > 0, got: {buffer_size}")
@@ -56,6 +58,8 @@ class CompressReplayNode(object):
         self.cname = cname
         self.shuffle = shuffle
         self.nthreads = max(1, int(nthreads))
+        self.enable_compression = enable_compression
+        
         try:
             blosc.set_nthreads(self.nthreads)
         except Exception:
@@ -245,7 +249,33 @@ class CompressReplayNode(object):
         new_obs_array = np.ascontiguousarray(new_obs_array)
         contig_ms = (time.time() - t_contig0) * 1000.0
 
-        # Compress with blosc, honoring compression level/algorithm/shuffle
+        raw_obs_bytes = int(obs_array.nbytes)
+        raw_new_obs_bytes = int(new_obs_array.nbytes)
+
+        # Mode C: No compression, just wrap in object array for compatibility
+        if not self.enable_compression:
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    f"[Mode C - No Compression] obs_bytes={raw_obs_bytes}, "
+                    f"new_obs_bytes={raw_new_obs_bytes}"
+                )
+            
+            t_asm0 = time.time()
+            out_batch = SampleBatch({
+                "obs": np.array([obs_array], dtype=object),
+                "new_obs": np.array([new_obs_array], dtype=object),
+                "actions": sample_batch["actions"],
+                "rewards": sample_batch["rewards"],
+                "terminateds": sample_batch["terminateds"],
+                "truncateds": sample_batch["truncateds"],
+                "weights": sample_batch["weights"],
+                "compress_base": self.compress_base,
+                "is_compressed": False,  # Mark as uncompressed
+            })
+            assemble_ms = (time.time() - t_asm0) * 1000.0
+            return out_batch, 0.0, 0.0, contig_ms, assemble_ms, raw_obs_bytes, raw_new_obs_bytes
+
+        # Standard path: Compress with blosc
         t_obs0 = time.time()
         compressed_obs = blosc.pack_array(
             obs_array,
@@ -266,15 +296,13 @@ class CompressReplayNode(object):
 
         if logger.isEnabledFor(logging.DEBUG):
             try:
-                obs_raw_bytes = int(obs_array.nbytes)
-                new_obs_raw_bytes = int(new_obs_array.nbytes)
                 obs_comp_bytes = int(len(compressed_obs))
                 new_obs_comp_bytes = int(len(compressed_new_obs))
                 logger.debug(
                     f"[Compress.pack] pack_obs_ms={(t_obs1 - t_obs0)*1000.0:.2f}, "
                     f"pack_new_obs_ms={(t_obs2 - t_obs1)*1000.0:.2f}, "
-                    f"obs_bytes={obs_comp_bytes}/{obs_raw_bytes} ({obs_comp_bytes/max(obs_raw_bytes,1):.3f}), "
-                    f"new_obs_bytes={new_obs_comp_bytes}/{new_obs_raw_bytes} ({new_obs_comp_bytes/max(new_obs_raw_bytes,1):.3f}), "
+                    f"obs_bytes={obs_comp_bytes}/{raw_obs_bytes} ({obs_comp_bytes/max(raw_obs_bytes,1):.3f}), "
+                    f"new_obs_bytes={new_obs_comp_bytes}/{raw_new_obs_bytes} ({new_obs_comp_bytes/max(raw_new_obs_bytes,1):.3f}), "
                     f"algo={self.cname}, clevel={self.compression_level}, nthreads={self.nthreads}"
                 )
             except Exception:
@@ -291,10 +319,9 @@ class CompressReplayNode(object):
             "truncateds": sample_batch["truncateds"],
             "weights": sample_batch["weights"],
             "compress_base": self.compress_base,
+            "is_compressed": True,  # Mark as compressed
         })
         assemble_ms = (time.time() - t_asm0) * 1000.0
-        raw_obs_bytes = int(obs_array.nbytes)
-        raw_new_obs_bytes = int(new_obs_array.nbytes)
 
         return out_batch, pack_obs_ms, pack_new_obs_ms, contig_ms, assemble_ms, raw_obs_bytes, raw_new_obs_bytes
 

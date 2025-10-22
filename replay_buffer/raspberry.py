@@ -25,17 +25,52 @@ def decompress_sample_batch(
 
     Supports arbitrary observation ranks, not limited to images.
 
-    IMPORTANT: This function assumes the input is ALWAYS compressed.
-    If you pass uncompressed data, it will fail with a clear error.
+    IMPORTANT: This function checks if data is compressed before decompressing.
+    Mode C data (uncompressed) will be handled differently.
 
     Args:
-        ma_batch: compressed batch data (must be compressed!)
+        ma_batch: batch data (compressed or uncompressed)
         compress_base: axis moved to the end during compression
                        -1: smart default (move axis 0 to the end when compressing)
                        >=0: move the last axis back to the given position
     """
     t0 = time.time()
 
+    # Check if data is compressed (Mode C check)
+    is_compressed = ma_batch.get("is_compressed", True)
+    
+    if not is_compressed:
+        # Mode C: Data is not compressed, need to properly extract and concatenate
+        # ma_batch["obs"] is shape (N, sub_buffer_size, ...) where N is num blocks
+        # We need to flatten to (N * sub_buffer_size, ...)
+        
+        # Extract arrays from object array wrapper
+        obs_list = [ma_batch["obs"][i] for i in range(len(ma_batch["obs"]))]
+        new_obs_list = [ma_batch["new_obs"][i] for i in range(len(ma_batch["new_obs"]))]
+        
+        # Concatenate along batch dimension
+        decompressed_obs = np.concatenate(obs_list, axis=0)
+        decompressed_new_obs = np.concatenate(new_obs_list, axis=0)
+        
+        t1 = time.time()
+        logger.debug(f"[Mode C Decompression] Direct unwrap took: {t1 - t0:.4f}s")
+        
+        data_dict = {
+            "obs": decompressed_obs,
+            "new_obs": decompressed_new_obs,
+            "actions": ma_batch["actions"],
+            "rewards": ma_batch["rewards"],
+            "terminateds": ma_batch["terminateds"],
+            "truncateds": ma_batch["truncateds"],
+            "weights": ma_batch["weights"],
+        }
+        
+        if "batch_indexes" in ma_batch:
+            data_dict["batch_indexes"] = ma_batch["batch_indexes"]
+        
+        return SampleBatch(data_dict)
+
+    # Standard path: decompress compressed data
     # Prefer per-batch compress_base metadata if present
     compress_base_used = ma_batch.get("compress_base", compress_base)
 
@@ -113,7 +148,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         compression_algorithm: str = "zstd",
         compression_level: int = 5,
         compression_nthreads: int = 1,
-        compression_mode: str = "A",  # "A": sync, "B": batch_pool, "D": batch_async
+        compression_mode: str = "A",  # "A": sync, "B": batch_pool, "D": batch_async, "C": no compression (control)
         chunk_size: int = 10,
         **kwargs,
     ):
@@ -129,12 +164,15 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
 
         # Compression mode configuration
         self._compression_mode = compression_mode.upper()
+        
+        # Mode C: No compression (for ablation study)
+        self._enable_compression = self._compression_mode != "C"
 
         self._chunk_size = max(1, int(chunk_size))
 
         # Thread pool setup based on mode
-        if self._compression_mode == "A":
-            self._compress_pool = None  # No pool for pure sync
+        if self._compression_mode in ["A", "C"]:
+            self._compress_pool = None  # No pool for pure sync or no compression
         elif self._compression_mode in ["B", "D"]:
             # Both B and D use compress_pool_size
             pool_size = max(4, int(compress_pool_size)) if compress_pool_size > 0 else 8
@@ -172,6 +210,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             cname=self._compression_algorithm,
             compression_level=self._compression_level,
             nthreads=self._compression_nthreads,
+            enable_compression=self._enable_compression,
         )
 
     def _compress_mode_A(self):
@@ -348,11 +387,28 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         total_size = 0
         for sample_batch in self._storage:
             if "obs" in sample_batch and hasattr(sample_batch["obs"], "__getitem__"):
-                total_size += len(sample_batch["obs"][0])
-            if "new_obs" in sample_batch and hasattr(
-                sample_batch["new_obs"], "__getitem__"
-            ):
-                total_size += len(sample_batch["new_obs"][0])
+                # Mode C: obs is object array containing numpy arrays
+                if not self._enable_compression:
+                    # Sum up actual numpy array sizes
+                    for i in range(len(sample_batch["obs"])):
+                        obs_arr = sample_batch["obs"][i]
+                        if hasattr(obs_arr, 'nbytes'):
+                            total_size += obs_arr.nbytes
+                else:
+                    # Compressed: obs[0] is bytes
+                    total_size += len(sample_batch["obs"][0])
+                    
+            if "new_obs" in sample_batch and hasattr(sample_batch["new_obs"], "__getitem__"):
+                # Mode C: new_obs is object array containing numpy arrays
+                if not self._enable_compression:
+                    # Sum up actual numpy array sizes
+                    for i in range(len(sample_batch["new_obs"])):
+                        new_obs_arr = sample_batch["new_obs"][i]
+                        if hasattr(new_obs_arr, 'nbytes'):
+                            total_size += new_obs_arr.nbytes
+                else:
+                    # Compressed: new_obs[0] is bytes
+                    total_size += len(sample_batch["new_obs"][0])
 
         out = {
             "est_size_bytes": total_size,
@@ -451,7 +507,8 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             idx += take
 
             if self.compress_node.is_ready():
-                if self._compression_mode == "A":
+                if self._compression_mode == "A" or self._compression_mode == "C":
+                    # Mode A and C: Synchronous processing (C skips actual compression)
                     self._compress_mode_A()
                 elif self._compression_mode == "B":
                     # Mode B: Batch processing (accumulate then process)
@@ -473,16 +530,21 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             self._hit_count[i] += 1
             compressed_list.append(self._storage[i])
 
-        # Remove compress_base metadata before concat (it's scalar, can't be concatenated)
+        # Remove metadata fields before concat (they're scalars, can't be concatenated)
         compress_base_value = compressed_list[0].get("compress_base", self.compress_base) if compressed_list else self.compress_base
+        is_compressed_value = compressed_list[0].get("is_compressed", True) if compressed_list else True
+        
         for batch in compressed_list:
             if "compress_base" in batch:
                 del batch["compress_base"]
+            if "is_compressed" in batch:
+                del batch["is_compressed"]
         
         # Concatenate compressed batches
         out = concat_samples(compressed_list)
         
-        # Add compress_base metadata back
+        # Add metadata back (after concatenation)
         out["compress_base"] = compress_base_value
+        out["is_compressed"] = is_compressed_value
 
         return out

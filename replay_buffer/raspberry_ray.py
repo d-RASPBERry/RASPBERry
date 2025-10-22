@@ -226,7 +226,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             compression_algorithm: str = "zstd",
             compression_level: int = 5,
             compression_nthreads: int = 1,
-            compression_mode: str = "B",  # "A": sync, "B": batch_ray, "D": async_ray
+            compression_mode: str = "D",  # "A": sync, "B": batch_ray, "D": async_ray, "C": no compression (control)
             chunk_size: int = 10,
             **kwargs,
     ):
@@ -256,9 +256,12 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         self._compression_mode = compression_mode.upper()
         self._chunk_size = max(1, int(chunk_size))
         
+        # Mode C: No compression (for ablation study)
+        self._enable_compression = self._compression_mode != "C"
+        
         # Ray setup based on mode
-        if self._compression_mode == "A":
-            self._num_ray_workers = 0  # No Ray for pure sync
+        if self._compression_mode in ["A", "C"]:
+            self._num_ray_workers = 0  # No Ray for pure sync or no compression
         elif self._compression_mode in ["B", "D"]:
             self._num_ray_workers = max(4, int(compress_pool_size)) if compress_pool_size > 0 else 5
             if not ray.is_initialized():
@@ -305,6 +308,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             cname=self._compression_config['cname'],
             compression_level=self._compression_config['clevel'],
             nthreads=self._compression_config['nthreads'],
+            enable_compression=self._enable_compression,
         )
 
     def _node_to_dict(self, node: CompressReplayNode) -> dict:
@@ -574,7 +578,8 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             idx += take
 
             if self.compress_node.is_ready():
-                if self._compression_mode == "A":
+                if self._compression_mode == "A" or self._compression_mode == "C":
+                    # Mode A and C: Synchronous processing (C skips actual compression)
                     self._compress_mode_A()
                 elif self._compression_mode == "B":
                     # Mode B: Accumulate nodes then batch process
@@ -603,18 +608,23 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             self._hit_count[i] += 1
             compressed_list.append(self._storage[i])
 
-        # Remove compress_base metadata before concat (it's scalar, can't be concatenated)
+        # Remove metadata fields before concat (they're scalars, can't be concatenated)
         compress_base_value = compressed_list[0].get("compress_base", self.compress_base) if compressed_list else self.compress_base
+        is_compressed_value = compressed_list[0].get("is_compressed", True) if compressed_list else True
+        
         for batch in compressed_list:
             if "compress_base" in batch:
                 del batch["compress_base"]
+            if "is_compressed" in batch:
+                del batch["is_compressed"]
         
         # Concatenate compressed batches
         out = concat_samples(compressed_list)
         
-        # Add compress_base metadata back
+        # Add metadata back (after concatenation)
         out["compress_base"] = compress_base_value
-        
+        out["is_compressed"] = is_compressed_value
+
         return out
 
     def _estimate_raw_bytes(self, sample_batch: SampleBatch) -> int:
