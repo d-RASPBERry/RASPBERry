@@ -1,0 +1,45 @@
+# SAC-PBER: BOX2DV-LunarLanderContinuous
+# PBER = Block Experience Replay without compression (RASPBERry中间态)
+extends: ../../../templates/sac_vector_base.yml
+
+env_config:
+  env_name: "BOX2DV-LunarLanderContinuous"
+  env_alias: "SAC-PBER-LunarLander"
+
+logging:
+  log_subdir: "BOX2DV/LunarLander-PBER"
+
+mlflow:
+  experiment: "SAC-LunarLander-PBER"
+  tags:
+    algorithm: "SAC"
+    buffer: "PBER"
+    environment: "LunarLander"
+    obs_type: "vector"
+    compression: "none"
+
+run_config:
+  max_time_s: 48000
+
+hyper_parameters:
+  train_batch_size: 512
+  min_sample_timesteps_per_iteration: 2000
+  training_intensity: 2.0
+
+  # Replay buffer (PBER: Block-based without compression)
+  replay_buffer_config:
+    capacity: 1000000
+    type: MultiAgentPrioritizedBlockReplayBuffer
+    sub_buffer_size: 32
+    compress_base: -1
+    worker_side_prioritization: false
+    compress_pool_size: 0  # 不使用（Mode C不需要）
+    compression_algorithm: "lz4"  # 不使用（Mode C不压缩）
+    compression_level: 1  # 不使用（Mode C不压缩）
+    compression_nthreads: 4  # 不使用（Mode C不压缩）
+    compression_mode: "C"  # Mode C = PBER (无压缩)
+    chunk_size: 20
+
+  # Resource
+  num_workers: 6
+  num_envs_per_worker: 8
