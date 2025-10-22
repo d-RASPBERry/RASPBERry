@@ -10,7 +10,7 @@ logging:
   log_subdir: "BOX2DV/LunarLander-PBER"
 
 mlflow:
-  experiment: "SAC-LunarLander-PBER"
+  experiment: "SAC-LunarLander"
   tags:
     algorithm: "SAC"
     buffer: "PBER"

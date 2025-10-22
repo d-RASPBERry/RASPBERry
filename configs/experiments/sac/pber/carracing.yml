@@ -10,7 +10,7 @@ logging:
   log_subdir: "BOX2DI/CarRacing-PBER"
 
 mlflow:
-  experiment: "SAC-CarRacing-PBER"
+  experiment: "SAC-CarRacing"
   tags:
     algorithm: "SAC"
     buffer: "PBER"

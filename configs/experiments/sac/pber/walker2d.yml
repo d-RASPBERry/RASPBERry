@@ -10,7 +10,7 @@ logging:
   log_subdir: "MuJoCo/Walker2d-PBER"
 
 mlflow:
-  experiment: "SAC-Walker2d-PBER"
+  experiment: "SAC-Walker2d"
   tags:
     algorithm: "SAC"
     buffer: "PBER"

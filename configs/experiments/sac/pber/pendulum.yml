@@ -10,7 +10,7 @@ logging:
   log_subdir: "Pendulum/Pendulum-PBER"
 
 mlflow:
-  experiment: "SAC-Pendulum-PBER"
+  experiment: "SAC-Pendulum"
   tags:
     algorithm: "SAC"
     buffer: "PBER"
