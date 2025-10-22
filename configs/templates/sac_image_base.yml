@@ -37,7 +37,7 @@ hyper_parameters:
   num_cpus: 10
   num_workers: 3         # Reduced for parallel execution
   num_envs_per_worker: 4 # Reduced for GPU memory
-  num_gpus_per_worker: 0.05  # Reduced GPU allocation per worker
+  num_gpus_per_worker: 0.01  # Reduced GPU allocation per worker
   num_cpus_per_worker: 1
 
   # Common replay buffer parameters (overridden in specific configs)
