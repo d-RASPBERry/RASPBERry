@@ -22,7 +22,7 @@ run_config:
   max_time_s: 360000
 
 hyper_parameters:
-  train_batch_size: 512
+  train_batch_size: 256
   min_sample_timesteps_per_iteration: 2000
   training_intensity: 2.0
 
@@ -30,7 +30,7 @@ hyper_parameters:
   replay_buffer_config:
     capacity: 500000
     type: MultiAgentPrioritizedBlockReplayBuffer
-    sub_buffer_size: 32
+    sub_buffer_size: 16
     compress_base: -1
     worker_side_prioritization: false
     compress_pool_size: 0  # 不使用（Mode C不需要）
