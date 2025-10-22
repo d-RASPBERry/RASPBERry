@@ -29,7 +29,7 @@ hyper_parameters:
   training_intensity: 1.0
 
   # Training batch configuration
-  train_batch_size: 128
+  train_batch_size: 64
   rollout_fragment_length: 1
 
   # Resource configuration (aligned with sac_vector_base.yml)

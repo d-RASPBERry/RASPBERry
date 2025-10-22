@@ -7,7 +7,7 @@ hyper_parameters:
 
   # Model configuration for VECTOR inputs (no custom model, use RLlib default MLP)
   model:
-    fcnet_hiddens: [256, 256]        # MLP hidden layers
+    fcnet_hiddens: [256, 128]        # MLP hidden layers
     fcnet_activation: relu
     vf_share_layers: false           # Separate value function network
 
@@ -31,8 +31,8 @@ hyper_parameters:
   # Resource configuration
   num_gpus: 1
   num_cpus: 10
-  num_workers: 5
-  num_envs_per_worker: 8
+  num_workers: 4
+  num_envs_per_worker: 5
   num_gpus_per_worker: 0.1
   num_cpus_per_worker: 1
 
