@@ -20,7 +20,7 @@ run_config:
   max_time_s: 360000
 
 hyper_parameters:
-  train_batch_size: 256
+  train_batch_size: 128
   min_sample_timesteps_per_iteration: 2000
   training_intensity: 2.0
 
@@ -40,4 +40,4 @@ hyper_parameters:
 
   # Resource
   num_workers: 4
-  num_envs_per_worker: 8
+  num_envs_per_worker: 5
