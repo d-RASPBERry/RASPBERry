@@ -17,8 +17,8 @@
 set -euo pipefail
 
 NUM_GPUS=4
-LAUNCH_DELAY_BETWEEN_GPUS=10
-LAUNCH_DELAY_SAME_GPU=5
+LAUNCH_DELAY_BETWEEN_GPUS=60
+LAUNCH_DELAY_SAME_GPU=120
 
 while getopts "n:h" opt; do
     case $opt in
