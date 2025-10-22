@@ -39,5 +39,5 @@ hyper_parameters:
     chunk_size: 20
 
   # Resource
-  num_workers: 4
+  num_workers: 3
   num_envs_per_worker: 5
