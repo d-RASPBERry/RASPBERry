@@ -144,7 +144,9 @@ class CompressReplayNode(object):
         t_tr0 = time.time()
         transpose_ms = 0.0
         rank = len(obs_data.shape)
-        if rank > 1:
+        
+        # Only transpose if compression is enabled
+        if self.enable_compression and rank > 1:
             if self.compress_base == -1:
                 # Smart default: move batch dimension to the end
                 axes = list(range(1, rank)) + [0]

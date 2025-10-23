@@ -124,7 +124,16 @@ def main() -> None:
     # Infer environment type and construct paths dynamically
     env_type = infer_env_type(env_name)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    run_name = f"SAC-RASPBERry-{args.gpu}-{timestamp}"
+    
+    # Get compression mode to distinguish between PBER and RASPBERry
+    compression_mode = hyper.get("replay_buffer_config", {}).get("compression_mode", "D").upper()
+    if compression_mode == "A":
+        # Mode A: PBER (no compression)
+        run_name = f"SAC-PBER-{args.gpu}-{timestamp}"
+    else:
+        # Mode B/C/D: RASPBERry (with compression)
+        run_name = f"SAC-RASPBERry-{args.gpu}-{timestamp}"
+    
     log_root = Path(paths["log_base_path"]) / env_type / env_name
     log_dir = log_root / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -134,15 +143,17 @@ def main() -> None:
 
     # Setup logging
     logger = setup_logger(run_name, log_dir)
+    algo_name = "SAC-PBER" if compression_mode == "A" else "SAC-RASPBERry"
     logger.info("=" * 60)
-    logger.info("SAC-RASPBERry Training Started")
+    logger.info("%s Training Started", algo_name)
     logger.info(
-        "Env: %s (%s) | GPU: %s | Max time: %ds | Max iter: %d",
+        "Env: %s (%s) | GPU: %s | Max time: %ds | Max iter: %d | Mode: %s",
         env_name,
         env_type,
         args.gpu,
         max_time_s,
         max_iterations,
+        compression_mode,
     )
     logger.info("Log dir: %s", log_dir)
     logger.info("=" * 60)
@@ -160,9 +171,12 @@ def main() -> None:
             "experiment": mlflow_experiment,
             "run_name": f"{env_alias}-{args.gpu}-{timestamp}",  # env_alias + GPU + timestamp
         }
+        # Set buffer type based on compression mode
+        buffer_type = "PBER" if compression_mode == "A" else mlflow_tags_from_yaml.get("buffer", "RASPBERry")
         extra_tags = {
             "algorithm": mlflow_tags_from_yaml.get("algorithm", "SAC"),
-            "buffer": mlflow_tags_from_yaml.get("buffer", "RASPBERry"),
+            "buffer": buffer_type,
+            "compression_mode": compression_mode,
             "env": mlflow_tags_from_yaml.get("environment", env_name),
             "env_alias": env_alias,
             "obs_type": mlflow_tags_from_yaml.get("obs_type", "unknown"),
@@ -280,8 +294,14 @@ def main() -> None:
         ray.shutdown()
 
         if mlflow_run is not None:
-            mlflow.log_artifacts(str(log_dir))
-            mlflow.end_run()
+            try:
+                mlflow.log_artifacts(str(log_dir))
+            except Exception as e:
+                logger.warning("[mlflow] log_artifacts failed: %s", e)
+            try:
+                mlflow.end_run()
+            except Exception as e:
+                logger.warning("[mlflow] end_run failed: %s", e)
             logger.info("mlflow run ended")
 
         logger.info("=" * 60)

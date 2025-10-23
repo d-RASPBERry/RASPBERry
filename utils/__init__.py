@@ -1,6 +1,5 @@
 from gymnasium import spaces
-from gymnasium.wrappers import ResizeObservation, TimeLimit, TransformObservation
-from gymnasium.wrappers.pixel_observation import PixelObservationWrapper
+from gymnasium.wrappers import ResizeObservation, TimeLimit, TransformObservation, PixelObservationWrapper
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
 from ray.rllib.env.wrappers.atari_wrappers import wrap_deepmind
 from typing import Dict, Tuple, Union

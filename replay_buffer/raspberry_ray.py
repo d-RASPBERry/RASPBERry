@@ -40,19 +40,49 @@ def compress_node_batch_ray(nodes_data: List[dict],
     
     Args:
         nodes_data: List of node data dicts (obs, new_obs, actions, etc.)
-        compress_config: Compression config (cname, clevel, shuffle, compress_base)
+        compress_config: Compression config (cname, clevel, shuffle, compress_base, enable_compression)
         
     Returns:
-        List of dicts with compressed_data, weight, and byte counts
+        List of dicts with compressed_data (SampleBatch), weight, and byte counts
     """
     batch_results = []
+    enable_compression = compress_config.get('enable_compression', True)
     
     for node_data in nodes_data:
         # Reconstruct arrays
         obs = node_data['obs']
         new_obs = node_data['new_obs']
         
-        # Transpose for better compression (move batch dimension to end)
+        raw_obs_bytes = int(node_data.get('raw_obs_bytes', obs.nbytes))
+        raw_new_obs_bytes = int(node_data.get('raw_new_obs_bytes', new_obs.nbytes))
+        
+        # Mode C: No compression
+        if not enable_compression:
+            # Just wrap arrays in object array for compatibility (no transpose, no compression)
+            compressed_data = SampleBatch({
+                "obs": np.array([obs], dtype=object),
+                "new_obs": np.array([new_obs], dtype=object),
+                "actions": node_data['actions'],
+                "rewards": node_data['rewards'],
+                "terminateds": node_data['terminateds'],
+                "truncateds": node_data['truncateds'],
+                "weights": node_data['weights'],
+                "compress_base": compress_config['compress_base'],
+                "is_compressed": False,
+            })
+            result = {
+                'compressed_data': compressed_data,
+                'weight': node_data['weight'],
+                'obs_bytes': raw_obs_bytes,  # No compression
+                'new_obs_bytes': raw_new_obs_bytes,
+                'raw_obs_bytes': raw_obs_bytes,
+                'raw_new_obs_bytes': raw_new_obs_bytes,
+                'raw_total_bytes': raw_obs_bytes + raw_new_obs_bytes,
+            }
+            batch_results.append(result)
+            continue
+        
+        # Compression mode: Transpose for better compression (move batch dimension to end)
         rank = len(obs.shape)
         if rank > 1:
             if compress_config['compress_base'] == -1:
@@ -88,10 +118,9 @@ def compress_node_batch_ray(nodes_data: List[dict],
             "truncateds": node_data['truncateds'],
             "weights": node_data['weights'],
             "compress_base": compress_config['compress_base'],
+            "is_compressed": True,
         })
         
-        raw_obs_bytes = int(node_data.get('raw_obs_bytes', obs.nbytes))
-        raw_new_obs_bytes = int(node_data.get('raw_new_obs_bytes', new_obs.nbytes))
         result = {
             'compressed_data': compressed_data,
             'weight': node_data['weight'],
@@ -128,10 +157,36 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
     # Prefer per-batch compress_base metadata if present
     compress_base_used = ma_batch.get("compress_base", compress_base)
 
-    # Unpack compressed arrays - handle both single and multiple blocks
+    # Mode C (no compression): unwrap object arrays directly
+    is_compressed = ma_batch.get("is_compressed", True)
     obs_array = ma_batch["obs"]
     new_obs_array = ma_batch["new_obs"]
-    
+    if not is_compressed:
+        # obs/new_obs are object arrays containing numpy arrays per block; flatten along batch
+        try:
+            obs_list = [obs_array[i] for i in range(len(obs_array))]
+            new_obs_list = [new_obs_array[i] for i in range(len(new_obs_array))]
+            decompressed_obs = np.concatenate(obs_list, axis=0)
+            decompressed_new_obs = np.concatenate(new_obs_list, axis=0)
+        except Exception:
+            # Fallback: single object element
+            decompressed_obs = obs_array[0]
+            decompressed_new_obs = new_obs_array[0]
+
+        data_dict = {
+            "obs": decompressed_obs,
+            "new_obs": decompressed_new_obs,
+            "actions": ma_batch["actions"],
+            "rewards": ma_batch["rewards"],
+            "terminateds": ma_batch["terminateds"],
+            "truncateds": ma_batch["truncateds"],
+            "weights": ma_batch["weights"],
+        }
+        if "batch_indexes" in ma_batch:
+            data_dict["batch_indexes"] = ma_batch["batch_indexes"]
+        return SampleBatch(data_dict)
+
+    # Compressed path: Unpack compressed arrays - handle both single and multiple blocks
     # Check if we have multiple compressed blocks (APEX) or single block (DDQN)
     if len(obs_array) == 1 and isinstance(obs_array[0], bytes):
         # Single compressed block
@@ -226,7 +281,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             compression_algorithm: str = "zstd",
             compression_level: int = 5,
             compression_nthreads: int = 1,
-            compression_mode: str = "D",  # "A": sync, "B": batch_ray, "D": async_ray, "C": no compression (control)
+            compression_mode: str = "D",  # "A": PBER (no compression), "B": sync, "C": batch_ray, "D": async_ray
             chunk_size: int = 10,
             **kwargs,
     ):
@@ -241,7 +296,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             compression_algorithm: Blosc algorithm (zstd, lz4, etc.)
             compression_level: Compression level (1-9)
             compression_nthreads: Blosc compression threads
-            compression_mode: "A" (sync), "B" (batch Ray), "D" (async Ray)
+            compression_mode: "A" (PBER/no compression), "B" (sync), "C" (batch Ray), "D" (async Ray)
             chunk_size: Number of nodes per Ray task batch
             **kwargs: Additional args for PrioritizedReplayBuffer
         """
@@ -256,13 +311,13 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         self._compression_mode = compression_mode.upper()
         self._chunk_size = max(1, int(chunk_size))
         
-        # Mode C: No compression (for ablation study)
-        self._enable_compression = self._compression_mode != "C"
+        # Mode A: PBER baseline (no compression)
+        self._enable_compression = self._compression_mode != "A"
         
         # Ray setup based on mode
-        if self._compression_mode in ["A", "C"]:
-            self._num_ray_workers = 0  # No Ray for pure sync or no compression
-        elif self._compression_mode in ["B", "D"]:
+        if self._compression_mode in ["A", "B"]:
+            self._num_ray_workers = 0  # No Ray for PBER or sync compression
+        elif self._compression_mode in ["C", "D"]:
             self._num_ray_workers = max(4, int(compress_pool_size)) if compress_pool_size > 0 else 5
             if not ray.is_initialized():
                 logger.debug("Initializing Ray with %d CPUs for compression", self._num_ray_workers)
@@ -294,6 +349,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             'nthreads': compression_nthreads,
             'compress_base': compress_base,
             'shuffle': blosc.BITSHUFFLE,
+            'enable_compression': self._enable_compression,
         }
 
         self.compress_node = self._create_compress_node()
@@ -330,7 +386,30 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         }
 
     def _compress_mode_A(self):
-        """Mode A: Pure synchronous compression (no Ray)."""
+        """Mode A: PBER - No compression, direct storage."""
+        # Directly extract raw data without any compression
+        size = self.compress_node.size()
+        raw_batch = SampleBatch({
+            "obs": self.compress_node.obs[:size].copy(),
+            "new_obs": self.compress_node.new_obs[:size].copy(),
+            "actions": self.compress_node.actions[:size].copy(),
+            "rewards": self.compress_node.rewards[:size].copy(),
+            "terminateds": self.compress_node.terminateds[:size].copy(),
+            "truncateds": self.compress_node.truncateds[:size].copy(),
+            "weights": self.compress_node.weights[:size].copy(),
+        })
+        
+        # Calculate block-level weight
+        weight = float(np.mean(raw_batch["weights"]))
+        if np.isnan(weight) or weight <= 0:
+            weight = 0.01
+        
+        # Add directly to storage (no compression, no metadata)
+        self._add_single_batch(raw_batch, weight=weight)
+        self.compress_node.reset()
+
+    def _compress_mode_B(self):
+        """Mode B: Synchronous compression (no Ray)."""
         t0 = time.time()
         compressed_data, weight, metrics = self.compress_node.sample()
         self._metrics["compress_time_ms"] += (time.time() - t0) * 1000.0
@@ -342,8 +421,8 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
                                    metrics.get("raw_total_bytes"))
         self.compress_node.reset()
 
-    def _compress_mode_B(self):
-        """Mode B: Batch processing with Ray (synchronous)."""
+    def _compress_mode_C(self):
+        """Mode C: Batch processing with Ray (synchronous wait)."""
         nodes = self._pending_nodes[:]
         
         t_batch_start = time.time()
@@ -469,11 +548,34 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         total_size = 0
         for sample_batch in self._storage:
             if "obs" in sample_batch and hasattr(sample_batch["obs"], "__getitem__"):
-                total_size += len(sample_batch["obs"][0])
+                obs_data = sample_batch["obs"]
+                # Check data structure:
+                # Mode A: obs is numpy array (batch_size, *obs_shape) - entire block
+                # Mode B/C/D: obs is object array [bytes] - compressed block in obs[0]
+                if isinstance(obs_data[0], bytes):
+                    # Mode B/C/D: obs[0] is bytes containing entire compressed block
+                    total_size += len(obs_data[0])
+                elif hasattr(obs_data, 'nbytes'):
+                    # Mode A: obs is numpy array containing entire block
+                    total_size += obs_data.nbytes
+                else:
+                    # Fallback
+                    total_size += len(obs_data) if hasattr(obs_data, '__len__') else 0
+                    
             if "new_obs" in sample_batch and hasattr(
                 sample_batch["new_obs"], "__getitem__"
             ):
-                total_size += len(sample_batch["new_obs"][0])
+                new_obs_data = sample_batch["new_obs"]
+                # Same logic for new_obs
+                if isinstance(new_obs_data[0], bytes):
+                    # Mode B/C/D: new_obs[0] is bytes containing entire compressed block
+                    total_size += len(new_obs_data[0])
+                elif hasattr(new_obs_data, 'nbytes'):
+                    # Mode A: new_obs is numpy array containing entire block
+                    total_size += new_obs_data.nbytes
+                else:
+                    # Fallback
+                    total_size += len(new_obs_data) if hasattr(new_obs_data, '__len__') else 0
 
         out = {
             "est_size_bytes": total_size,
@@ -578,48 +680,56 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             idx += take
 
             if self.compress_node.is_ready():
-                if self._compression_mode == "A" or self._compression_mode == "C":
-                    # Mode A and C: Synchronous processing (C skips actual compression)
+                if self._compression_mode == "A":
+                    # Mode A: PBER - no compression
                     self._compress_mode_A()
                 elif self._compression_mode == "B":
-                    # Mode B: Accumulate nodes then batch process
+                    # Mode B: Synchronous compression (no Ray)
+                    self._compress_mode_B()
+                elif self._compression_mode == "C":
+                    # Mode C: Accumulate nodes then batch process with Ray
                     self._pending_nodes.append(self.compress_node)
                     self.compress_node = self._create_compress_node()
                     if len(self._pending_nodes) >= self._chunk_size:
-                        self._compress_mode_B()
+                        self._compress_mode_C()
                         self._reset_pool()
                 elif self._compression_mode == "D":
-                    # Mode D: True async processing
+                    # Mode D: True async processing with Ray
                     self._pending_nodes.append(self.compress_node)
                     self.compress_node = self._create_compress_node()
                     self._compress_mode_D()
 
     def _encode_sample(self, idxes: List[int]) -> SampleBatch:
-        """Encode samples - returns COMPRESSED data (decompression at higher level).
+        """Encode samples - returns data (compressed for B/C/D, raw for A).
         
         Args:
             idxes: Block indices to retrieve
             
         Returns:
-            Concatenated compressed SampleBatch with compress_base metadata
+            Concatenated SampleBatch (with compress_base metadata for compressed modes)
         """
-        compressed_list = []
+        batch_list = []
         for i in idxes:
             self._hit_count[i] += 1
-            compressed_list.append(self._storage[i])
+            batch_list.append(self._storage[i])
 
-        # Remove metadata fields before concat (they're scalars, can't be concatenated)
-        compress_base_value = compressed_list[0].get("compress_base", self.compress_base) if compressed_list else self.compress_base
-        is_compressed_value = compressed_list[0].get("is_compressed", True) if compressed_list else True
+        # Mode A: Raw data, no metadata needed
+        if self._compression_mode == "A":
+            return concat_samples(batch_list)
         
-        for batch in compressed_list:
+        # Modes B/C/D: Compressed data with metadata
+        # Remove metadata fields before concat (they're scalars, can't be concatenated)
+        compress_base_value = batch_list[0].get("compress_base", self.compress_base) if batch_list else self.compress_base
+        is_compressed_value = batch_list[0].get("is_compressed", True) if batch_list else True
+        
+        for batch in batch_list:
             if "compress_base" in batch:
                 del batch["compress_base"]
             if "is_compressed" in batch:
                 del batch["is_compressed"]
         
-        # Concatenate compressed batches
-        out = concat_samples(compressed_list)
+        # Concatenate batches
+        out = concat_samples(batch_list)
         
         # Add metadata back (after concatenation)
         out["compress_base"] = compress_base_value

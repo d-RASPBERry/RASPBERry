@@ -52,7 +52,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             compression_algorithm: str = 'zstd',
             compression_level: int = 5,
             compression_nthreads: int = 1,
-            compression_mode: str = "D",  # "A": sync, "B": batch_ray, "D": async_ray, "C": no compression (control)
+            compression_mode: str = "D",  # "A": PBER (no compression), "B": sync, "C": batch_ray, "D": async_ray
             chunk_size: int = 10,
             **kwargs
     ):
@@ -199,7 +199,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
     def sample(
             self, num_items: int, policy_id: Optional[PolicyID] = None, **kwargs
     ) -> Optional[SampleBatchType]:
-        """Sample from buffer and decompress (weights already expanded by underlying buffer)."""
+        """Sample from buffer and decompress (Mode A returns raw data, B/C/D decompress)."""
         kwargs = merge_dicts_with_warning(self.underlying_buffer_call_args, kwargs)
 
         beta = kwargs.pop("beta", None) or getattr(self, "prioritized_replay_beta", None) or 0.4
@@ -208,13 +208,18 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             if self.replay_mode == ReplayMode.LOCKSTEP:
                 assert policy_id is None, "`policy_id` specifier not allowed in `lockstep` mode!"
                 raw_sample = self.replay_buffers["__all__"].sample(num_items, beta=beta, **kwargs)
+                # Mode A: raw data, no decompression needed
+                if self._is_mode_a():
+                    return raw_sample
                 return decompress_sample_batch(raw_sample, self.compress_base) if raw_sample else None
 
             elif policy_id is not None:
                 sample = self.replay_buffers[policy_id].sample(num_items, beta=beta, **kwargs)
                 if sample is None:
                     return None
-                sample = decompress_sample_batch(sample, self.compress_base)
+                # Mode A: raw data, no decompression needed
+                if not self._is_mode_a():
+                    sample = decompress_sample_batch(sample, self.compress_base)
                 return MultiAgentBatch({policy_id: sample}, sample.count)
 
             else:
@@ -222,11 +227,22 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 for pid, replay_buffer in self.replay_buffers.items():
                     sample = replay_buffer.sample(num_items, beta=beta, **kwargs)
                     if sample is not None:
-                        samples[pid] = decompress_sample_batch(sample, self.compress_base)
+                        # Mode A: raw data, no decompression needed
+                        if not self._is_mode_a():
+                            sample = decompress_sample_batch(sample, self.compress_base)
+                        samples[pid] = sample
                 
                 if samples:
                     return MultiAgentBatch(samples, sum(s.count for s in samples.values()))
                 return None
+
+    def _is_mode_a(self) -> bool:
+        """Check if underlying buffer is in Mode A (PBER, no compression)."""
+        # Check first buffer's compression mode
+        if self.replay_buffers:
+            first_buffer = next(iter(self.replay_buffers.values()))
+            return getattr(first_buffer, '_compression_mode', 'D') == 'A'
+        return False
 
     def stats(self, debug: bool = False) -> Dict[str, Any]:
         """Return replay buffer statistics."""
