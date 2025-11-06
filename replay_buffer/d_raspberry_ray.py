@@ -13,7 +13,7 @@ See docs/raspberr_design.md for architecture details.
 import logging
 import numpy as np
 from gymnasium.spaces import Space
-from replay_buffer.raspberry_ray import PrioritizedBlockReplayBuffer, decompress_sample_batch
+from replay_buffer.raspberry_ray import RASPBERryReplayBuffer, decompress_sample_batch
 from typing import Dict, Optional, Any
 from ray.rllib.utils.typing import PolicyID, SampleBatchType
 from ray.rllib.utils.annotations import override, DeveloperAPI
@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 
 
 @DeveloperAPI
-class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
-    """Multi-agent prioritized block replay buffer with Ray-based compression."""
+class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
+    """Multi-agent RASPBERry replay buffer with block-level storage and compression."""
 
     def __init__(
             self,
@@ -52,7 +52,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             compression_algorithm: str = 'zstd',
             compression_level: int = 5,
             compression_nthreads: int = 1,
-            compression_mode: str = "D",  # "A": PBER (no compression), "B": sync, "C": batch_ray, "D": async_ray
+            compression_mode: str = "D",  # "B": sync, "C": batch_ray, "D": async_ray
             chunk_size: int = 10,
             **kwargs
     ):
@@ -71,7 +71,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         self.prioritized_replay_eps = float(prioritized_replay_eps)
 
         pber_config = {
-            "type": PrioritizedBlockReplayBuffer,
+            "type": RASPBERryReplayBuffer,
             "action_space": action_space,
             "obs_space": obs_space,
             "storage_unit": StorageUnit.FRAGMENTS,
@@ -89,9 +89,19 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         }
 
         # Track configured capacity (in transitions) and effective capacity (in blocks)
-        self._configured_capacity_transitions = int(capacity)
+        configured_capacity_transitions = int(capacity)
+        effective_block_capacity = max(1, int(capacity // max(1, sub_buffer_size)))
+
+        logger.info(
+            "MultiAgentRASPBERry capacity init: transitions=%d sub_buffer_size=%d blocks=%d",
+            configured_capacity_transitions,
+            self.sub_buffer_size,
+            effective_block_capacity,
+        )
+
+        self._configured_capacity_transitions = configured_capacity_transitions
         # Protect against divide-by-zero
-        self._effective_block_capacity = max(1, int(capacity // max(1, sub_buffer_size)))
+        self._effective_block_capacity = effective_block_capacity
         # Record top-level storage unit for debug/metrics
         self._top_storage_unit = storage_unit
 
@@ -199,7 +209,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
     def sample(
             self, num_items: int, policy_id: Optional[PolicyID] = None, **kwargs
     ) -> Optional[SampleBatchType]:
-        """Sample from buffer and decompress (Mode A returns raw data, B/C/D decompress)."""
+        """Sample from buffer and decompress."""
         kwargs = merge_dicts_with_warning(self.underlying_buffer_call_args, kwargs)
 
         beta = kwargs.pop("beta", None) or getattr(self, "prioritized_replay_beta", None) or 0.4
@@ -208,18 +218,13 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             if self.replay_mode == ReplayMode.LOCKSTEP:
                 assert policy_id is None, "`policy_id` specifier not allowed in `lockstep` mode!"
                 raw_sample = self.replay_buffers["__all__"].sample(num_items, beta=beta, **kwargs)
-                # Mode A: raw data, no decompression needed
-                if self._is_mode_a():
-                    return raw_sample
                 return decompress_sample_batch(raw_sample, self.compress_base) if raw_sample else None
 
             elif policy_id is not None:
                 sample = self.replay_buffers[policy_id].sample(num_items, beta=beta, **kwargs)
                 if sample is None:
                     return None
-                # Mode A: raw data, no decompression needed
-                if not self._is_mode_a():
-                    sample = decompress_sample_batch(sample, self.compress_base)
+                sample = decompress_sample_batch(sample, self.compress_base)
                 return MultiAgentBatch({policy_id: sample}, sample.count)
 
             else:
@@ -227,22 +232,12 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 for pid, replay_buffer in self.replay_buffers.items():
                     sample = replay_buffer.sample(num_items, beta=beta, **kwargs)
                     if sample is not None:
-                        # Mode A: raw data, no decompression needed
-                        if not self._is_mode_a():
-                            sample = decompress_sample_batch(sample, self.compress_base)
+                        sample = decompress_sample_batch(sample, self.compress_base)
                         samples[pid] = sample
                 
                 if samples:
                     return MultiAgentBatch(samples, sum(s.count for s in samples.values()))
                 return None
-
-    def _is_mode_a(self) -> bool:
-        """Check if underlying buffer is in Mode A (PBER, no compression)."""
-        # Check first buffer's compression mode
-        if self.replay_buffers:
-            first_buffer = next(iter(self.replay_buffers.values()))
-            return getattr(first_buffer, '_compression_mode', 'D') == 'A'
-        return False
 
     def stats(self, debug: bool = False) -> Dict[str, Any]:
         """Return replay buffer statistics."""

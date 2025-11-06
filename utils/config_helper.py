@@ -57,7 +57,7 @@ def load_buffer_dump_config(algorithm: str, runtime_config_path: str = None) -> 
     # Algorithm-specific defaults for dump_iteration
     algo_defaults = {
         'sac': {'dump_iteration': 200, 'dump_timesteps': 100000, 'dump_type': 'full'},
-        'ddqn': {'dump_iteration': 200, 'dump_timesteps': 100000, 'dump_type': 'full'},
+        'ddqn': {'dump_iteration': 100, 'dump_timesteps': 100000, 'dump_type': 'full'},
         'apex': {'dump_iteration': 50, 'dump_timesteps': 100000, 'dump_type': 'summary'},
     }
     

@@ -1,217 +1,183 @@
-# 实验脚本说明
+# RASPBERry 实验脚本
 
-## 📋 脚本列表
-
-### 完整实验脚本 (4小时)
-每个脚本运行一个环境的 **RASPBERry + PER** 对比实验：
-
-| 脚本 | 环境 | GPU | 类型 | 说明 |
-|------|------|-----|------|------|
-| `run_sac_pendulum_4h.sh` | Pendulum | 0 | 图像 (84×84×3) | CNN, 简单环境 |
-| `run_sac_lunarlander_4h.sh` | LunarLander | 1 | 向量 (8维) | MLP, 中等难度 |
-| `run_sac_bipedalwalker_4h.sh` | BipedalWalker | 2 | 向量 (24维) | MLP, 困难环境 |
-| `run_sac_carracing_4h.sh` | CarRacing | 3 | 图像 (96×96×3) | CNN, 复杂图像 |
-
-### 统一启动脚本
-| 脚本 | 功能 |
-|------|------|
-| `run_all_sac_4gpu_4h.sh` | 一键启动所有4个环境的实验（推荐） |
-
-### 快速测试脚本 (30分钟)
-用于快速验证配置：
-
-| 脚本 | 内容 | 说明 |
-|------|------|------|
-| `run_quick_test_batch1.sh` | Pendulum + LunarLander | 测试图像和向量环境 |
-| `run_quick_test_batch2.sh` | BipedalWalker + CarRacing | 测试复杂环境 |
-
-### 工具脚本
-
-| 脚本 | 功能 |
-|------|------|
-| `monitor_experiments.sh` | 实时监控运行中的实验 |
+本目录包含 RASPBERry 项目的所有实验、测试和验证脚本。
 
 ---
 
-## 🚀 使用方法
+## 📁 目录结构
 
-### 1. 一键启动所有实验（推荐⭐）
+### 根目录脚本
 
+- **`validate_pber_configs.sh`** - 验证所有PBER配置文件的完整性和正确性
+
+### `ablation/` - 消融实验脚本
+
+完整的 **PER vs PBER vs RASPBERry** 对比实验，用于正式的消融实验研究。
+
+**可用脚本**：
+- `run_sac_ablation_CarRacing.sh` - CarRacing 环境（图像输入）
+- `run_sac_ablation_LunarLander.sh` - LunarLander 环境（向量输入）
+- `run_sac_ablation_BipedalWalker.sh` - BipedalWalker 环境（向量输入）
+- `run_sac_ablation_Pendulum.sh` - Pendulum 环境（向量输入）
+- `run_sac_ablation_Walker2d.sh` - Walker2d 环境（向量输入）
+
+**使用方法**：
 ```bash
-# 自动在4个GPU上并行运行所有环境
-bash scripts/run_all_sac_4gpu_4h.sh
+# 使用4个GPU进行完整消融实验
+bash scripts/ablation/run_sac_ablation_CarRacing.sh -n 4
+
+# 使用1个GPU进行测试
+bash scripts/ablation/run_sac_ablation_CarRacing.sh -n 1
+
+# 查看帮助
+bash scripts/ablation/run_sac_ablation_CarRacing.sh -h
 ```
 
-**GPU分配**:
-- GPU 0: Pendulum (图像)
-- GPU 1: LunarLander (向量)
-- GPU 2: BipedalWalker (向量)
-- GPU 3: CarRacing (图像)
+**实验设计**：
+每个脚本会在指定的 GPU 上运行三个对比实验：
+1. **SAC-PER** - 基线算法（Prioritized Experience Replay）
+2. **SAC-PBER** - 分块经验回放（无压缩）
+3. **SAC-RASPBERry** - 分块+压缩经验回放
 
-**预计时间**: 4小时（并行）  
-**总实验数**: 8个（4环境 × 2算法）  
-**GPU显存**: 每个GPU约3-8GB
+---
 
-### 2. 单个环境实验
+### `test/` - 测试和验证脚本
 
+用于快速验证、端到端测试和实验监控。
+
+**主要脚本**：
+- `quick_test_modes_e2e.sh` - 快速验证所有压缩模式（10分钟/模式）
+- `test_all_modes_e2e.sh` - 完整端到端测试（可配置时长）
+- `validate_test_scripts.sh` - 验证脚本和环境完整性
+- `monitor_apex.sh` - APEX分布式训练监控（支持 -q/-v 模式）
+
+**快速开始**：
 ```bash
-# GPU 0: Pendulum (4小时)
-bash scripts/run_sac_pendulum_4h.sh
+# 快速验证所有模式（~40分钟）
+bash scripts/test/quick_test_modes_e2e.sh
 
-# GPU 1: LunarLander (4小时)
-bash scripts/run_sac_lunarlander_4h.sh
+# 完整测试（1小时）
+bash scripts/test/test_all_modes_e2e.sh -n 1 -t 3600
 
-# GPU 2: BipedalWalker (4小时)
-bash scripts/run_sac_bipedalwalker_4h.sh
-
-# GPU 3: CarRacing (4小时)
-bash scripts/run_sac_carracing_4h.sh
-```
-
-**每个脚本会运行 2 个实验**：
-- SAC-RASPBERry (压缩buffer)
-- SAC-PER (基线)
-
-**注意**: 每个脚本的GPU已固定，无需指定GPU参数
-
-### 4. 快速测试 (验证配置)
-
-```bash
-# 测试批次1 (Pendulum + LunarLander, 30分钟)
-bash scripts/run_quick_test_batch1.sh
-
-# 测试批次2 (BipedalWalker + CarRacing, 30分钟)
-bash scripts/run_quick_test_batch2.sh
+# 监控APEX实验
+bash scripts/test/monitor_apex.sh -v
 ```
 
 ---
 
-## 📊 监控实验
+## 🚀 使用场景
 
-### 查看实时日志
+### 场景1：验证配置文件
+在运行实验前检查配置文件的完整性。
 
 ```bash
-# 监控Pendulum实验
-LOG_DIR=$(ls -td logs/sac_pendulum_2h_*/ | head -1)
-tail -f ${LOG_DIR}/pendulum_raspberry.log
+# 验证PBER配置
+bash scripts/validate_pber_configs.sh
 
-# 同时监控两个算法
-tail -f ${LOG_DIR}/*.log
+# 验证测试脚本
+bash scripts/test/validate_test_scripts.sh
 ```
 
-### 快速查看进度
+### 场景2：正式消融实验
+使用 `ablation/` 中的脚本进行完整的 PER vs PBER vs RASPBERry 对比实验。
 
 ```bash
-# 查看最新迭代次数和奖励
-watch -n 10 'grep "Iter" logs/sac_*_2h_*/*.log | tail -8'
+# 在4个GPU上并行运行CarRacing消融实验
+bash scripts/ablation/run_sac_ablation_CarRacing.sh -n 4
+
+# 监控实验进度
+watch -n 2 'nvidia-smi; echo; ps aux | grep "run_sac"'
 ```
 
-### 使用监控脚本
+### 场景3：快速功能验证
+使用 `test/` 中的快速测试脚本验证代码改动。
 
 ```bash
-# 自动监控所有运行中的实验
-bash scripts/monitor_experiments.sh
+# 验证所有压缩模式是否正常工作（40分钟）
+bash scripts/test/quick_test_modes_e2e.sh
+
+# 监控实验
+bash scripts/test/monitor_apex.sh -q
 ```
 
 ---
 
-## 📁 日志结构
+## 📊 实验对比
 
-每次运行会创建一个时间戳命名的日志目录：
-
-```
-logs/
-├── sac_pendulum_4h_20251019_193000/
-│   ├── pendulum_raspberry.log     # RASPBERry实验日志
-│   └── pendulum_per.log            # PER基线日志
-├── sac_lunarlander_4h_20251019_193001/
-│   ├── lunarlander_raspberry.log
-│   └── lunarlander_per.log
-├── sac_bipedalwalker_4h_20251019_193002/
-│   ├── bipedalwalker_raspberry.log
-│   └── bipedalwalker_per.log
-└── sac_carracing_4h_20251019_193003/
-    ├── carracing_raspberry.log
-    └── carracing_per.log
-```
+| 类型 | 位置 | 用途 | 时长 | GPU需求 |
+|------|------|------|------|---------|
+| **配置验证** | `validate_*.sh` | 检查配置 | <1分钟 | 0 |
+| **快速测试** | `test/quick_*` | 功能验证 | 10-40分钟 | 1 |
+| **完整测试** | `test/test_all_*` | 全面验证 | 可配置 | 1-2 |
+| **消融实验** | `ablation/` | 论文实验数据 | 数小时 | 1-4+ |
 
 ---
 
-## 🔍 故障排查
+## 📝 日志位置
 
-### 检查进程状态
+- **消融实验日志**: `logs/scripts/sac_{per,pber,raspberry}_*.log`
+- **测试日志**: `logs/test/`
+- **实验数据**: `/home/seventheli/data/logging/New_RASPBERry/`
 
+---
+
+## 🎯 脚本特点
+
+### 统一标准
+所有脚本遵循统一的代码风格：
+- ✅ 使用 `set -euo pipefail` 确保错误处理
+- ✅ 标准化的 header 注释（功能、用法）
+- ✅ 一致的分隔线样式（80字符）
+- ✅ 清晰的帮助信息（`-h` 选项）
+- ✅ 详细的进度和状态反馈
+- ✅ 彩色输出提升可读性
+
+### 错误处理
+- 参数验证
+- 文件存在性检查
+- GPU资源检测
+- 进程状态监控
+
+---
+
+## 🔍 常见问题
+
+**Q: ablation/ 和 test/ 的区别？**  
+A: `ablation/` 用于正式的完整消融实验（论文数据），`test/` 用于快速验证和功能测试。
+
+**Q: 应该使用哪个脚本？**  
+A: 
+- 日常开发和验证 → `test/`
+- 正式实验和论文数据 → `ablation/`
+- 配置检查 → `validate_*.sh`
+
+**Q: 如何监控实验进度？**  
+A: 
+- APEX实验: `bash scripts/test/monitor_apex.sh -v`
+- GPU监控: `watch -n 2 nvidia-smi`
+- 日志查看: `tail -f logs/scripts/sac_*.log`
+
+**Q: 如何清理测试环境？**  
+A: 
 ```bash
-# 查看所有SAC实验进程
-ps aux | grep "run_sac.*algo.py" | grep -v grep
-```
+# 杀死所有运行中的实验
+pkill -f "run_sac.*algo.py"
+pkill -f "run_apex.*algo.py"
 
-### 检查GPU使用
-
-```bash
-# 查看GPU状态
-nvidia-smi
-
-# 持续监控
-watch -n 1 nvidia-smi
-```
-
-### 常见问题
-
-**Q: 实验启动后立即退出**  
-A: 检查日志文件开头的错误信息，通常是配置或环境问题。
-
-**Q: GPU内存不足**  
-A: 减少并行实验数量，或调整配置中的 `num_workers` 和 `num_envs_per_worker`。
-
-**Q: CarRacing启动慢**  
-A: 正常现象，图像环境初始化需要1-2分钟。
-
----
-
-## 📈 预期结果
-
-基于30分钟快速测试的结果：
-
-| 环境 | 迭代数 (30min) | 预计迭代数 (4h) | 最终Reward范围 |
-|------|----------------|-----------------|----------------|
-| Pendulum | ~200 | ~1600 | -200 ~ -100 |
-| LunarLander | ~400 | ~3200 | 200 ~ 250 |
-| BipedalWalker | ~450 | ~3600 | 100 ~ 300 |
-| CarRacing | ~180 | ~1440 | -20 ~ 800+ |
-
-**性能对比**:
-- RASPBERry ≈ PER (相近的最终性能)
-- RASPBERry 内存占用 < 10% PER
-- RASPBERry 采样效率 ≥ PER
-
----
-
-## 🗂️ 已归档脚本
-
-旧版脚本已移至 `scripts/archive/`:
-- `run_sac_4gpu_parallel_LunarLander.sh` - 旧的4GPU并行脚本
-
----
-
-## 🎯 推荐工作流
-
-```bash
-# 1. 一键启动所有实验 (4小时)
-bash scripts/run_all_sac_4gpu_4h.sh
-
-# 2. 在另一个终端监控进度
-watch -n 10 'grep "Iter" logs/sac_*_4h_*/*.log 2>/dev/null | tail -16'
-
-# 3. 查看GPU使用情况
-watch -n 2 nvidia-smi
-
-# 4. 实验完成后，查看结果汇总
-ls -lh logs/sac_*_4h_*/
+# 清理临时配置
+rm -rf /tmp/raspberry_*
 ```
 
 ---
 
-**最后更新**: 2025-10-19  
-**版本**: v3.0 - 4小时完整实验，4GPU并行
+**最后更新**: 2025-10-27  
+**维护者**: RASPBERry Team
+
+---
+
+## 📦 已归档/移除的脚本
+
+以下脚本已被移除（一次性使用或已过时）：
+- ~~`monitor_pber_10min.sh`~~ - 包含硬编码路径的临时监控脚本
+- ~~`clean_pber_configs.py`~~ - 一次性配置清理脚本（已完成任务）
 

@@ -20,13 +20,13 @@ run_config:
   max_time_s: 48000
 
 hyper_parameters:
-  train_batch_size: 512
+  train_batch_size: 256
   min_sample_timesteps_per_iteration: 2000
   training_intensity: 2.0
 
   # Replay buffer (RASPBERry-specific)
   replay_buffer_config:
-    capacity: 1000000
+    capacity: 5000000
     type: MultiAgentPrioritizedBlockReplayBuffer
     sub_buffer_size: 32
     compress_base: -1

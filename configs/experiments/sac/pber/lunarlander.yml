@@ -22,23 +22,16 @@ run_config:
   max_time_s: 48000
 
 hyper_parameters:
-  train_batch_size: 512
+  train_batch_size: 256
   min_sample_timesteps_per_iteration: 2000
   training_intensity: 2.0
 
   # Replay buffer (PBER: Block-based without compression)
   replay_buffer_config:
-    capacity: 1000000
+    capacity: 5000000
     type: MultiAgentPrioritizedBlockReplayBuffer
     sub_buffer_size: 32
-    compress_base: -1
     worker_side_prioritization: false
-    compress_pool_size: 0  # 不使用（Mode A不需要）
-    compression_algorithm: "lz4"  # 不使用（Mode A不压缩）
-    compression_level: 1  # 不使用（Mode A不压缩）
-    compression_nthreads: 4  # 不使用（Mode A不压缩）
-    compression_mode: "A"  # Mode A = PBER (无压缩)
-    chunk_size: 20
 
   # Resource
   num_workers: 6

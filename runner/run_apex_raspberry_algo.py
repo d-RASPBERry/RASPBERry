@@ -29,7 +29,7 @@ from algorithms.apex_dqn_raspberry_algo import ApexDQNRaspberryAlgo
 from metrics import write_iteration_json
 from metrics.logger import setup_logger
 from metrics.mlflow_helper import setup_mlflow, prepare_metrics
-from replay_buffer.d_raspberry_ray import MultiAgentPrioritizedBlockReplayBuffer
+from replay_buffer.d_raspberry_ray import MultiAgentRASPBERryReplayBuffer
 from utils import env_creator, load_config, infer_env_type
 from utils.config_helper import load_buffer_dump_config
 
@@ -58,7 +58,7 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> ApexDQNRaspb
 
     replay_buffer_config = {
         **hyper["replay_buffer_config"],
-        "type": MultiAgentPrioritizedBlockReplayBuffer,
+        "type": MultiAgentRASPBERryReplayBuffer,
         "obs_space": game.observation_space,
         "action_space": game.action_space,
     }

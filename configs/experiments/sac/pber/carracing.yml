@@ -1,5 +1,5 @@
 # SAC-PBER: BOX2DI-CarRacing (Image observation)
-# PBER = Block Experience Replay without compression (RASPBERry中间态)
+# PBER = Block Experience Replay without compression (Chapter 3: PBER)
 extends: ../../../templates/sac_image_base.yml
 
 env_config:
@@ -22,23 +22,22 @@ run_config:
   max_time_s: 360000
 
 hyper_parameters:
-  train_batch_size: 64
+  train_batch_size: 128
   min_sample_timesteps_per_iteration: 2000
   training_intensity: 2.0
 
   # Replay buffer (PBER: Block-based without compression)
   replay_buffer_config:
+    # Standard PER parameters
     capacity: 500000
-    type: MultiAgentPrioritizedBlockReplayBuffer
-    sub_buffer_size: 16
-    compress_base: -1
+    prioritized_replay_alpha: 0.5
+    prioritized_replay_beta: 1.0
+    prioritized_replay_eps: 0.000001
     worker_side_prioritization: false
-    compress_pool_size: 0  # 不使用（Mode A不需要）
-    compression_algorithm: "lz4"  # 不使用（Mode A不压缩）
-    compression_level: 1  # 不使用（Mode A不压缩）
-    compression_nthreads: 4  # 不使用（Mode A不压缩）
-    compression_mode: "A"  # Mode A = PBER (无压缩)
-    chunk_size: 20
+    
+    # PBER-specific parameters
+    type: MultiAgentPrioritizedBlockReplayBuffer
+    sub_buffer_size: 16  # Transitions per block
 
   # Resource
   num_workers: 4

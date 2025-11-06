@@ -20,7 +20,7 @@ run_config:
   max_time_s: 72000
 
 hyper_parameters:
-  train_batch_size: 512
+  train_batch_size: 256
   min_sample_timesteps_per_iteration: 2000
   training_intensity: 2.0
 

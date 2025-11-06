@@ -34,6 +34,7 @@ from metrics.mlflow_helper import setup_mlflow, prepare_metrics
 from models import SACLightweightCNN
 from utils import env_creator, infer_env_type, ConfigLoader
 from utils.config_helper import load_buffer_dump_config
+from utils.dump_helper import build_run_name, prepare_dump_dir, should_dump
 
 DEFAULT_CONFIG_PATH = str((ROOT / "configs/sac_per_image.yml").resolve())
 RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
@@ -116,10 +117,19 @@ def main() -> None:
     # Infer environment type and construct paths dynamically
     env_type = infer_env_type(env_name)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    run_name = f"SAC-PER-{args.gpu}-{timestamp}"
+    run_name, run_name_base = build_run_name(
+        env_alias,
+        Path(args.config),
+        args.gpu,
+        timestamp,
+        default_alias="SAC-PER",
+    )
     log_root = Path(paths["log_base_path"]) / env_type / env_name
     log_dir = log_root / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
+
+    dump_root = Path(ROOT) / "logs" / "sub_buffer_size_test"
+    dump_dir = prepare_dump_dir(dump_root, run_name)
 
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     os.environ["TUNE_RESULTS_DIR"] = str(log_root)
@@ -184,6 +194,7 @@ def main() -> None:
 
     start_time = time.time()
     iteration = 0
+    dump_history = set()
 
     try:
         while iteration < max_iterations:
@@ -196,17 +207,23 @@ def main() -> None:
             
             # Dump buffer storage for verification (controlled by runtime.yml)
             dump_config = load_buffer_dump_config('sac', RUNTIME_CONFIG)
-            if dump_config['enable_dump'] and iteration == dump_config['dump_iteration']:
+            do_dump, key, label = should_dump(dump_config, iteration, result, dump_history)
+            if do_dump and key is not None:
                 from utils.buffer_dump_utils import dump_buffer_content
-                dump_file = log_dir / f"buffer_storage_iter{dump_config['dump_iteration']}.pkl"
+                dump_history.add(key)
+                dump_file = dump_dir / f"{label}.pkl" if label else dump_dir / "buffer_dump.pkl"
                 try:
-                    # Dump完整的buffer _storage用于验证
                     stats = dump_buffer_content(algo.local_replay_buffer, dump_file)
                     logger.info("📦 Buffer content dumped to %s", dump_file)
                     if stats:
                         for policy_id, policy_stats in stats.items():
-                            logger.info(f"  [{policy_id}] Compression: {policy_stats.get('compression_ratio', 1.0):.2f}x, "
-                                      f"Est. Memory: {policy_stats.get('estimated_total_memory_mb', 0):.1f} MB")
+                            logger.info(
+                                "  [%s] Blocks: %s, Transitions: %s, Est. Memory: %.1f MB",
+                                policy_id,
+                                policy_stats.get('num_blocks', 0),
+                                policy_stats.get('num_transitions', 0),
+                                policy_stats.get('estimated_total_memory_mb', 0.0),
+                            )
                 except Exception as e:
                     logger.warning("Failed to dump buffer content: %s", e)
             
