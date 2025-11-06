@@ -7,7 +7,7 @@ hyper_parameters:
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
-    type: MultiAgentPrioritizedBlockReplayBuffer
+    type: MultiAgentRASPBERryReplayBuffer
     sub_buffer_size: 8
     compress_base: -1
     worker_side_prioritization: false
