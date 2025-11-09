@@ -77,7 +77,7 @@ for gpu in "${GPU_IDS[@]}"; do
     sleep ${LAUNCH_DELAY_SAME_GPU}
 
     echo "  [2/3] PBER..."
-    python runner/run_sac_raspberry_algo.py --config ${PBER_CONFIG} --gpu ${gpu} \
+    python runner/run_sac_pber_algo.py --config ${PBER_CONFIG} --gpu ${gpu} \
         > ${SCRIPT_LOG_DIR}/sac_pber_${log_suffix}.log 2>&1 &
     ALL_PIDS+=($!)
     ALL_NAMES+=("GPU${gpu}-PBER")
