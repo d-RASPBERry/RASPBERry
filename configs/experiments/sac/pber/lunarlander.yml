@@ -19,18 +19,18 @@ mlflow:
     compression: "none"
 
 run_config:
-  max_time_s: 48000
+  max_time_s: 36000
 
 hyper_parameters:
-  train_batch_size: 256
+  train_batch_size: 512
   min_sample_timesteps_per_iteration: 2000
   training_intensity: 2.0
 
   # Replay buffer (PBER: Block-based without compression)
   replay_buffer_config:
-    capacity: 5000000
+    capacity: 1000000
     type: MultiAgentPrioritizedBlockReplayBuffer
-    sub_buffer_size: 32
+    sub_buffer_size: 16
     worker_side_prioritization: false
 
   # Resource
