@@ -5,11 +5,13 @@ from gymnasium.wrappers import (
     TransformObservation,
     PixelObservationWrapper,
     GrayScaleObservation,
-    NormalizeObservation,
-    FrameStack,
 )
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
-from ray.rllib.env.wrappers.atari_wrappers import wrap_deepmind
+from ray.rllib.env.wrappers.atari_wrappers import (
+    FrameStack as RLlibFrameStack,
+    ScaledFloatFrame,
+    wrap_deepmind,
+)
 from typing import Dict, Tuple, Union
 import gymnasium
 import numpy as np
@@ -64,25 +66,34 @@ def split_list_into_n_parts(lst, n=10):
     return [lst[i::n] for i in range(n)]
 
 
+def resolve_dtype(dtype_value):
+    """Resolve dtype from string or numpy dtype spec."""
+    if dtype_value is None:
+        return None
+    if isinstance(dtype_value, str):
+        return np.dtype(dtype_value).type
+    return dtype_value
+
+
 def apply_image_wrappers(
     env,
     *,
     img_size: int = 84,
     frame_stack: int = 4,
     grayscale: bool = True,
-    normalize: bool = True,
+    normalize: bool = False,
+    dtype=None,
 ):
-    """Apply standard image preprocessing wrappers.
-    
-    顺序: Resize → GrayScale → FrameStack → Normalize。
-    """
+    """Apply Resize → GrayScale → RLlib FrameStack (channel-last)."""
     env = ResizeObservation(env, img_size)
     if grayscale:
         env = GrayScaleObservation(env, keep_dim=True)
     if frame_stack and frame_stack > 1:
-        env = FrameStack(env, frame_stack)
+        env = RLlibFrameStack(env, frame_stack)
     if normalize:
-        env = NormalizeObservation(env)
+        env = ScaledFloatFrame(env)
+    elif dtype is not None:
+        env = TransformObservation(env, lambda obs: np.asarray(obs).astype(dtype))
     return env
 
 
@@ -402,7 +413,7 @@ def env_creator(env_config):
         img_size = env_config.get("img_size", 84)
         frame_stack = max(1, int(env_config.get("frame_stack", 4)))
         grayscale = env_config.get("grayscale", True)
-        normalize = env_config.get("normalize", True)
+        normalize = env_config.get("normalize", False)
         pixels_only = env_config.get("pixels_only", True)
         env = gymnasium.make(env_id, render_mode="rgb_array")
         env = PixelObservationWrapper(env, pixels_only=pixels_only)
@@ -416,6 +427,7 @@ def env_creator(env_config):
             frame_stack=frame_stack,
             grayscale=grayscale,
             normalize=normalize,
+            dtype=resolve_dtype(env_config.get("dtype")),
         )
         return env
     elif env_config["id"][0:7] == "BOX2DV-":
@@ -441,6 +453,7 @@ def env_creator(env_config):
             frame_stack=frame_stack,
             grayscale=grayscale,
             normalize=normalize,
+            dtype=resolve_dtype(env_config.get("dtype")),
         )
         return env
     elif env_config["id"][0:4] == "GYM-":
