@@ -1,5 +1,13 @@
 from gymnasium import spaces
-from gymnasium.wrappers import ResizeObservation, TimeLimit, TransformObservation, PixelObservationWrapper
+from gymnasium.wrappers import (
+    ResizeObservation,
+    TimeLimit,
+    TransformObservation,
+    PixelObservationWrapper,
+    GrayScaleObservation,
+    NormalizeObservation,
+    FrameStack,
+)
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
 from ray.rllib.env.wrappers.atari_wrappers import wrap_deepmind
 from typing import Dict, Tuple, Union
@@ -54,6 +62,28 @@ def split_list_into_n_parts(lst, n=10):
         [[0,2,4], [1,3,5]]
     """
     return [lst[i::n] for i in range(n)]
+
+
+def apply_image_wrappers(
+    env,
+    *,
+    img_size: int = 84,
+    frame_stack: int = 4,
+    grayscale: bool = True,
+    normalize: bool = True,
+):
+    """Apply standard image preprocessing wrappers.
+    
+    顺序: Resize → GrayScale → FrameStack → Normalize。
+    """
+    env = ResizeObservation(env, img_size)
+    if grayscale:
+        env = GrayScaleObservation(env, keep_dim=True)
+    if frame_stack and frame_stack > 1:
+        env = FrameStack(env, frame_stack)
+    if normalize:
+        env = NormalizeObservation(env)
+    return env
 
 
 def check_path(path):
@@ -370,6 +400,9 @@ def env_creator(env_config):
     elif env_config["id"].startswith("Pendulum-"):
         env_id = env_config["id"].replace("Pendulum-", "", 1)
         img_size = env_config.get("img_size", 84)
+        frame_stack = max(1, int(env_config.get("frame_stack", 4)))
+        grayscale = env_config.get("grayscale", True)
+        normalize = env_config.get("normalize", True)
         pixels_only = env_config.get("pixels_only", True)
         env = gymnasium.make(env_id, render_mode="rgb_array")
         env = PixelObservationWrapper(env, pixels_only=pixels_only)
@@ -377,7 +410,13 @@ def env_creator(env_config):
             pixel_space = env.observation_space["pixels"]
             env = TransformObservation(env, lambda obs: obs["pixels"])
             env.observation_space = pixel_space
-        env = ResizeObservation(env, (img_size, img_size))
+        env = apply_image_wrappers(
+            env,
+            img_size=img_size,
+            frame_stack=frame_stack,
+            grayscale=grayscale,
+            normalize=normalize,
+        )
         return env
     elif env_config["id"][0:7] == "BOX2DV-":
         # BOX2DV: Vector observation environments (LunarLander, BipedalWalker)
@@ -391,7 +430,18 @@ def env_creator(env_config):
     elif env_config["id"][0:7] == "BOX2DI-":
         # BOX2DI: Image observation environments (CarRacing)
         env_id = env_config["id"].replace("BOX2DI-", "")
+        img_size = env_config.get("img_size", 84)
+        frame_stack = max(1, int(env_config.get("frame_stack", 4)))
+        grayscale = env_config.get("grayscale", True)
+        normalize = env_config.get("normalize", True)
         env = gymnasium.make(env_id)
+        env = apply_image_wrappers(
+            env,
+            img_size=img_size,
+            frame_stack=frame_stack,
+            grayscale=grayscale,
+            normalize=normalize,
+        )
         return env
     elif env_config["id"][0:4] == "GYM-":
         # GYM: Generic Gymnasium environments (Pendulum, MountainCar, etc.)

@@ -29,7 +29,7 @@ hyper_parameters:
   # Replay buffer (PBER: Block-based without compression)
   replay_buffer_config:
     # Standard PER parameters
-    capacity: 500000
+    capacity: 1000000
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
@@ -40,5 +40,5 @@ hyper_parameters:
     sub_buffer_size: 16  # Transitions per block
 
   # Resource
-  num_workers: 4
+  num_workers: 3
   num_envs_per_worker: 8
