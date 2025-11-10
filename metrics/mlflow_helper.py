@@ -51,14 +51,21 @@ def setup_mlflow(
     run_name = mlflow_cfg["run_name"]
 
     tags_source = mlflow_cfg.get("tags")
+    run_tags_source = mlflow_cfg.get("run_tags")
     if tags_source is not None and not isinstance(tags_source, dict):
         raise TypeError("mlflow_cfg['tags'] must be a dict")
+    if run_tags_source is not None and not isinstance(run_tags_source, dict):
+        raise TypeError("mlflow_cfg['run_tags'] must be a dict")
 
     tags: dict = {}
+    if isinstance(run_tags_source, dict):
+        tags.update(run_tags_source)
     if isinstance(tags_source, dict):
         tags.update(tags_source)
     if extra_tags:
         tags.update(extra_tags)
+    if "user" in tags and "mlflow.user" not in tags:
+        tags["mlflow.user"] = tags["user"]
 
     try:
         mlflow.set_tracking_uri(tracking_uri)

@@ -216,6 +216,9 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             debug=debug
         )
 
+        # Align with other replay buffers: expose total transitions seen.
+        data["added_count"] = int(getattr(self, "_num_added", 0))
+
         # Add PBER-specific metadata
         data["sub_buffer_size"] = self.sub_buffer_size
         data["configured_capacity_transitions"] = (
