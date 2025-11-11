@@ -34,5 +34,5 @@ hyper_parameters:
     worker_side_prioritization: false
 
   # Resource
-  num_workers: 3
+  num_workers: 2
   num_envs_per_worker: 8
