@@ -148,8 +148,6 @@ class BlockAccumulator(object):
         """Reset node state (keep allocated memory)."""
         self.pos = 0
         self.full = False
-        if logger.isEnabledFor(logging.INFO):
-            logger.info("BlockAccumulator reset")
 
     def is_full(self) -> bool:
         """Whether the accumulator is full (ready to flush)."""

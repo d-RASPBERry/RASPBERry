@@ -140,20 +140,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             weight = 0.01
         
         # Store directly (no compression)
-        logger.info(
-            "[PBER] Storing block: size=%d, storage_len_before=%d, _next_idx=%d",
-            len(raw_batch),
-            len(self._storage),
-            self._next_idx,
-        )
-        
         self._add_single_batch(raw_batch, weight=weight)
-        
-        logger.info(
-            "[PBER] Block stored: storage_len_after=%d, _next_idx=%d",
-            len(self._storage),
-            self._next_idx,
-        )
         
         # Reset accumulator
         self.block_accumulator.reset()
