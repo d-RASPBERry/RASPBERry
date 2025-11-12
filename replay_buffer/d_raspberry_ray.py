@@ -92,13 +92,6 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         configured_capacity_transitions = int(capacity)
         effective_block_capacity = max(1, int(capacity // max(1, sub_buffer_size)))
 
-        logger.info(
-            "MultiAgentRASPBERry capacity init: transitions=%d sub_buffer_size=%d blocks=%d",
-            configured_capacity_transitions,
-            self.sub_buffer_size,
-            effective_block_capacity,
-        )
-
         self._configured_capacity_transitions = configured_capacity_transitions
         # Protect against divide-by-zero
         self._effective_block_capacity = effective_block_capacity
@@ -185,8 +178,10 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         """Add a batch to the corresponding policy's underlying replay buffer."""
         if batch is None:
             if log_once("empty_batch_added_to_buffer"):
-                logger.info("Empty batch added to %s (normal at start, check if persistent)", 
-                           type(self).__name__)
+                logger.warning(
+                    "Empty batch added to %s (normal at start, check if persistent)",
+                    type(self).__name__,
+                )
             return
 
         batch = batch.copy()

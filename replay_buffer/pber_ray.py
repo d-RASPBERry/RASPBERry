@@ -16,7 +16,6 @@ Design:
 See Chapter 3 (PBER) in thesis for algorithm details.
 """
 
-import logging
 import numpy as np
 from gymnasium.spaces import Space
 from typing import Dict, Optional, Any, List
@@ -27,9 +26,6 @@ from ray.rllib.utils.replay_buffers.prioritized_replay_buffer import (
 from replay_buffer.block_accumulator import BlockAccumulator
 from ray.rllib.policy.sample_batch import SampleBatch
 from ray.rllib.policy.sample_batch import concat_samples
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
@@ -72,12 +68,6 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             "num_blocks": 0,
             "num_transitions": 0,
         }
-
-        logger.info(
-            "Initialized PBER buffer: block_size=%d, capacity=%d blocks",
-            sub_buffer_size,
-            self.capacity,
-        )
 
     def stats(self, debug: bool = False) -> Dict[str, Any]:
         """Compute memory usage statistics.

@@ -204,12 +204,15 @@ class CompressReplayNode(object):
 
         # Perform compression
         try:
-            if logger.isEnabledFor(logging.INFO):
+            if logger.isEnabledFor(logging.DEBUG):
                 try:
                     size = int(self.size())
-                    logger.info(
-                        f"[Compress.sample] size={size}, prep_ms={prep_ms:.2f}, "
-                        f"obs_shape={prepared_batch['obs'].shape}, base={self.compress_base}"
+                    logger.debug(
+                        "[Compress.sample] size=%d, prep_ms=%.2f, obs_shape=%s, base=%s",
+                        size,
+                        prep_ms,
+                        prepared_batch["obs"].shape,
+                        self.compress_base,
                     )
                 except Exception:
                     pass
@@ -256,10 +259,11 @@ class CompressReplayNode(object):
 
         # Mode C: No compression, just wrap in object array for compatibility
         if not self.enable_compression:
-            if logger.isEnabledFor(logging.INFO):
-                logger.info(
-                    f"[Mode C - No Compression] obs_bytes={raw_obs_bytes}, "
-                    f"new_obs_bytes={raw_new_obs_bytes}"
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    "[Mode C - No Compression] obs_bytes=%d, new_obs_bytes=%d",
+                    raw_obs_bytes,
+                    raw_new_obs_bytes,
                 )
             
             t_asm0 = time.time()
@@ -296,16 +300,25 @@ class CompressReplayNode(object):
         pack_obs_ms = (t_obs1 - t_obs0) * 1000.0
         pack_new_obs_ms = (t_obs2 - t_obs1) * 1000.0
 
-        if logger.isEnabledFor(logging.INFO):
+        if logger.isEnabledFor(logging.DEBUG):
             try:
                 obs_comp_bytes = int(len(compressed_obs))
                 new_obs_comp_bytes = int(len(compressed_new_obs))
-                logger.info(
-                    f"[Compress.pack] pack_obs_ms={(t_obs1 - t_obs0)*1000.0:.2f}, "
-                    f"pack_new_obs_ms={(t_obs2 - t_obs1)*1000.0:.2f}, "
-                    f"obs_bytes={obs_comp_bytes}/{raw_obs_bytes} ({obs_comp_bytes/max(raw_obs_bytes,1):.3f}), "
-                    f"new_obs_bytes={new_obs_comp_bytes}/{raw_new_obs_bytes} ({new_obs_comp_bytes/max(raw_new_obs_bytes,1):.3f}), "
-                    f"algo={self.cname}, clevel={self.compression_level}, nthreads={self.nthreads}"
+                logger.debug(
+                    "[Compress.pack] pack_obs_ms=%.2f, pack_new_obs_ms=%.2f, "
+                    "obs_bytes=%d/%d (%.3f), new_obs_bytes=%d/%d (%.3f), "
+                    "algo=%s, clevel=%d, nthreads=%d",
+                    (t_obs1 - t_obs0) * 1000.0,
+                    (t_obs2 - t_obs1) * 1000.0,
+                    obs_comp_bytes,
+                    raw_obs_bytes,
+                    obs_comp_bytes / max(raw_obs_bytes, 1),
+                    new_obs_comp_bytes,
+                    raw_new_obs_bytes,
+                    new_obs_comp_bytes / max(raw_new_obs_bytes, 1),
+                    self.cname,
+                    self.compression_level,
+                    self.nthreads,
                 )
             except Exception:
                 pass
@@ -335,8 +348,8 @@ class CompressReplayNode(object):
         """Reset node state (keep allocated memory)."""
         self.pos = 0
         self.full = False
-        if logger.isEnabledFor(logging.INFO):
-            logger.info("CompressReplayNode reset")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("CompressReplayNode reset")
 
     def is_ready(self) -> bool:
         """Whether the node is ready to compress (buffer full)."""

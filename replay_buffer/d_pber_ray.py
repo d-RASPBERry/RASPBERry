@@ -34,7 +34,6 @@ from ray.rllib.policy.sample_batch import SampleBatch, MultiAgentBatch
 from ray.util.debug import log_once
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 @DeveloperAPI
@@ -110,13 +109,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         # Pass capacity directly (in transitions) to underlying buffer
         pber_config["capacity"] = self._configured_capacity_transitions
 
-        logger.info(
-            "MultiAgentPBER: capacity=%d transitions (block_size=%d, max_blocks~%d)",
-            self._configured_capacity_transitions,
-            sub_buffer_size,
-            self._configured_capacity_transitions // sub_buffer_size,
-        )
-
         super(MultiAgentPrioritizedBlockReplayBuffer, self).__init__(
             capacity=self._configured_capacity_transitions,
             storage_unit=StorageUnit.FRAGMENTS,
@@ -132,12 +124,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
 
         # Override capacity tracking (in transitions)
         self._capacity = self._configured_capacity_transitions
-
-        logger.info(
-            "Initialized MultiAgentPBER: block_size=%d, capacity=%d transitions",
-            self.sub_buffer_size,
-            self._configured_capacity_transitions,
-        )
 
     @override(MultiAgentPrioritizedReplayBuffer)
     def sample(
@@ -197,13 +183,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
 
             # Update underlying buffer with block-level priorities
             buffer.update_priorities(unique_block_indexes, block_priorities)
-
-            logger.info(
-                "[PBER] Updated priorities for policy %s: %d transitions -> %d blocks",
-                policy_id,
-                len(batch_indexes),
-                len(unique_block_indexes),
-            )
 
     @override(MultiAgentPrioritizedReplayBuffer)
     def stats(self, debug: bool = False) -> Dict:

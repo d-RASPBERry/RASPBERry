@@ -31,10 +31,23 @@ def write_iteration_json(log_dir: Path, iteration: int, result: dict) -> None:
         iteration: 当前迭代次数
         result: 训练结果字典，包含指标、状态等信息
     """
+    sanitized_result = dict(result) if isinstance(result, dict) else result
+    if isinstance(sanitized_result, dict):
+        config = sanitized_result.get("config")
+        if isinstance(config, dict):
+            config = dict(config)
+            replay_cfg = config.get("replay_buffer_config")
+            if isinstance(replay_cfg, dict):
+                replay_cfg = dict(replay_cfg)
+                replay_cfg.pop("obs_space", None)
+                replay_cfg.pop("action_space", None)
+                config["replay_buffer_config"] = replay_cfg
+            sanitized_result["config"] = config
+
     payload = {
         "iteration": iteration,
         "timestamp": time.time(),
-        "result": result,
+        "result": sanitized_result,
     }
     record = convert_np_arrays(payload)
     output_path = log_dir / f"result_{iteration:05d}.json"

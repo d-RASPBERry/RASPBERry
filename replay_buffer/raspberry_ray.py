@@ -188,9 +188,11 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
             transpose_type = f"dim_{compress_base_used}_from_end_{rank}D"
 
     t1 = time.time()
-    logger.info("[Decompression] Blosc unpack + %s transpose: %.4fs",
-                transpose_type,
-                t1 - t0)
+    logger.debug(
+        "[Decompression] Blosc unpack + %s transpose: %.4fs",
+        transpose_type,
+        t1 - t0,
+    )
 
     # Simply pass through all other fields (weights and batch_indexes should already
     # be expanded to transition-level by PrioritizedBlockReplayBuffer.sample())
@@ -269,7 +271,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         elif self._compression_mode in ["C", "D"]:
             self._num_ray_workers = max(4, int(compress_pool_size)) if compress_pool_size > 0 else 5
             if not ray.is_initialized():
-                logger.info(
+                logger.debug(
                     "Initializing Ray with %d CPUs for compression",
                     self._num_ray_workers,
                 )
@@ -404,7 +406,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
             future = compress_node_batch_ray.remote(nodes_data, self._compression_config)
             self._inflight_futures.append(future)
             
-            logger.info(
+            logger.debug(
                 "Mode D: Submitted chunk (%d nodes), %d futures pending",
                 len(chunk_nodes),
                 len(self._inflight_futures),
@@ -440,7 +442,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
                 # Update futures list
                 self._inflight_futures = remaining_refs
                 
-                logger.info(
+                logger.debug(
                     "Mode D: Processed %d futures, buffer=%d, pending=%d",
                     len(ready_refs),
                     len(self._storage),
@@ -449,7 +451,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         
         # 3. Backpressure: if too many pending futures, wait for oldest
         if len(self._inflight_futures) >= self._num_ray_workers * 2:
-            logger.info("Mode D: Backpressure triggered, waiting for oldest future")
+            logger.warning("Mode D: Backpressure triggered, waiting for oldest future")
             t_backpressure_start = time.time()
             
             # Wait for the oldest future
@@ -688,24 +690,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         prev_entry = None
         if self._next_idx < len(self._storage):
             prev_entry = self._storage[self._next_idx]
-        before_added = getattr(self, "_num_timesteps_added_wrap", None)
-        before_idx = self._next_idx
-        before_len = len(self._storage)
-
         self._add_single_batch(compressed_batch, weight=weight)
-
-        after_added = getattr(self, "_num_timesteps_added_wrap", None)
-        if before_added is not None and after_added is not None:
-            transitions_added = after_added - before_added
-            logger.info(
-                "Block stored: transitions=%d block_size=%d idx %d->%d storage_len %d->%d",
-                transitions_added,
-                self.sub_buffer_size,
-                before_idx,
-                self._next_idx,
-                before_len,
-                len(self._storage),
-            )
 
         total_comp = int(obs_bytes) + int(new_obs_bytes)
         self._metrics["compress_bytes_obs"] += int(obs_bytes)

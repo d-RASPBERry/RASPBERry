@@ -9,10 +9,6 @@ from typing import Tuple
 from gymnasium import spaces
 from ray.rllib.policy.sample_batch import SampleBatch
 from utils import get_obs_shape
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 class BlockAccumulator(object):
     """
