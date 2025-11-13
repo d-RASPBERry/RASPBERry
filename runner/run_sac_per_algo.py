@@ -254,10 +254,17 @@ def main() -> None:
                 if mlflow_run is not None and mlflow_cfg is not None:
                     metrics = prepare_metrics(result)
                     step = result.get("episodes_total", iteration)
-                    mlflow.log_metrics(metrics, step=step)
 
-                    if iteration % mlflow_cfg.get("log_artifacts_every", 200) == 0:
-                        mlflow.log_artifacts(str(log_dir))
+                    try:
+                        mlflow.log_metrics(metrics, step=step)
+                    except Exception as e:
+                        logger.warning("[mlflow] log_metrics failed: %s", e)
+                    else:
+                        try:
+                            if iteration % mlflow_cfg.get("log_artifacts_every", 200) == 0:
+                                mlflow.log_artifacts(str(log_dir))
+                        except Exception as e:
+                            logger.warning("[mlflow] log_artifacts failed: %s", e)
 
     except KeyboardInterrupt:
         logger.info("⚠️  Training interrupted by user")
@@ -274,8 +281,14 @@ def main() -> None:
         ray.shutdown()
 
         if mlflow_run is not None:
-            mlflow.log_artifacts(str(log_dir))
-            mlflow.end_run()
+            try:
+                mlflow.log_artifacts(str(log_dir))
+            except Exception as e:
+                logger.warning("[mlflow] log_artifacts failed: %s", e)
+            try:
+                mlflow.end_run()
+            except Exception as e:
+                logger.warning("[mlflow] end_run failed: %s", e)
             logger.info("mlflow run ended")
 
         logger.info("=" * 60)
