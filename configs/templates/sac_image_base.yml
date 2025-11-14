@@ -10,7 +10,7 @@ hyper_parameters:
   model:
     custom_model: SACLightweightCNN
     custom_model_config:
-      feature_dim: 256              # Feature dimension after CNN encoder
+      feature_dim: 128              # Feature dimension after CNN encoder
 
   # Core SAC parameters (tuned for Pendulum)
   lr: 3e-4
@@ -21,7 +21,7 @@ hyper_parameters:
   n_step: 1
 
   # Network architecture
-  hiddens: [128, 128]               # Applied to CNN features
+  hiddens: [64, 64]                # Applied to CNN features
 
   # Learning schedule (faster warmup for image-based learning)
   num_steps_sampled_before_learning_starts: 5000
