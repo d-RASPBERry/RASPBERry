@@ -16,15 +16,14 @@ mlflow:
     buffer: "PBER"
     environment: "Pendulum"
     obs_type: "image"
-    compression: "none"
 
 run_config:
   max_time_s: 360000
 
 hyper_parameters:
-  train_batch_size: 64
-  min_sample_timesteps_per_iteration: 2000
-  training_intensity: 3.0
+  train_batch_size: 128
+  min_sample_timesteps_per_iteration: 4000
+  training_intensity: 6.0
 
   # Replay buffer (PBER: Block-based without compression)
   replay_buffer_config:

@@ -49,7 +49,7 @@ class SACLightweightCNN(SACTorchModel):
                 [64, [3, 3], 1],   # 64 filters, 3x3 kernel, stride 1
             ]
             policy_model_config["conv_activation"] = "relu"
-            policy_model_config["post_fcnet_hiddens"] = [128]
+            policy_model_config["post_fcnet_hiddens"] = [256, 128]
             policy_model_config["post_fcnet_activation"] = "relu"
         
         model = ModelCatalog.get_model_v2(
@@ -74,7 +74,7 @@ class SACLightweightCNN(SACTorchModel):
                 [64, [3, 3], 1],   # 64 filters, 3x3 kernel, stride 1
             ]
             q_model_config["conv_activation"] = "relu"
-            q_model_config["post_fcnet_hiddens"] = [128]
+            q_model_config["post_fcnet_hiddens"] = [256, 128]
             q_model_config["post_fcnet_activation"] = "relu"
         
         # Handle input space for Q-network (obs + action concatenation)

@@ -16,27 +16,19 @@ mlflow:
     buffer: "PBER"
     environment: "CarRacing"
     obs_type: "image"
-    compression: "none"
 
 run_config:
   max_time_s: 360000
 
 hyper_parameters:
   train_batch_size: 256
-  min_sample_timesteps_per_iteration: 2000
+  min_sample_timesteps_per_iteration: 10000
   training_intensity: 3.0
   target_entropy: -3.0
 
   # Replay buffer (PBER: Block-based without compression)
   replay_buffer_config:
-    # Standard PER parameters
     capacity: 1000000
-    prioritized_replay_alpha: 0.5
-    prioritized_replay_beta: 1.0
-    prioritized_replay_eps: 0.000001
-    worker_side_prioritization: false
-    
-    # PBER-specific parameters
     type: MultiAgentPrioritizedBlockReplayBuffer
     sub_buffer_size: 16  # Transitions per block
 
