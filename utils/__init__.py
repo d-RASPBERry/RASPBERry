@@ -445,7 +445,8 @@ def env_creator(env_config):
         img_size = env_config.get("img_size", 84)
         frame_stack = max(1, int(env_config.get("frame_stack", 4)))
         grayscale = env_config.get("grayscale", True)
-        normalize = env_config.get("normalize", True)
+        normalize = env_config.setdefault("normalize", False)
+        dtype_value = resolve_dtype(env_config.setdefault("dtype", "uint8"))
         env = gymnasium.make(env_id)
         env = apply_image_wrappers(
             env,
@@ -453,7 +454,7 @@ def env_creator(env_config):
             frame_stack=frame_stack,
             grayscale=grayscale,
             normalize=normalize,
-            dtype=resolve_dtype(env_config.get("dtype")),
+            dtype=dtype_value,
         )
         return env
     elif env_config["id"][0:4] == "GYM-":

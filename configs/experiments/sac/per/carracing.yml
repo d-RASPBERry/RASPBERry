@@ -4,6 +4,8 @@ extends: ../../../templates/sac_image_base.yml
 env_config:
   env_name: "BOX2DI-CarRacing"
   env_alias: "SAC-PER-CarRacing"
+  normalize: false
+  dtype: "uint8"
 
 logging:
   log_subdir: "BOX2DI/CarRacing"

@@ -1,5 +1,5 @@
 # SAC-PBER: BOX2DV-LunarLanderContinuous
-# PBER = Block Experience Replay without compression (RASPBERry中间态)
+# PBER = Block Experience Replay without compression baseline
 extends: ../../../templates/sac_vector_base.yml
 
 env_config:
