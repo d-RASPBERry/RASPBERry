@@ -9,6 +9,7 @@ from gymnasium.wrappers import (
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
 from ray.rllib.env.wrappers.atari_wrappers import (
     FrameStack as RLlibFrameStack,
+    MaxAndSkipEnv,
     ScaledFloatFrame,
     wrap_deepmind,
 )
@@ -94,6 +95,44 @@ def apply_image_wrappers(
         env = ScaledFloatFrame(env)
     elif dtype is not None:
         env = TransformObservation(env, lambda obs: np.asarray(obs).astype(dtype))
+    return env
+
+
+def wrap_sac_like_deepmind(
+    env,
+    *,
+    img_size: int = 84,
+    frame_skip: int = 4,
+    frame_stack: int = 4,
+    grayscale: bool = True,
+    normalize: bool = True,
+    dtype=None,
+):
+    """DeepMind-style preprocessing tailored for BOX2DI SAC runs (e.g., CarRacing).
+    
+    Mirrors wrap_deepmind ordering: MaxAndSkip → Resize/Gray → (optional) clip →
+    FrameStack → normalize/dtype cast. Defaults keep channel-last tensors to
+    match RLlib's CNN expectations.
+    """
+    dtype = resolve_dtype(dtype)
+    if not normalize and dtype is None:
+        dtype = np.uint8
+
+    if frame_skip and frame_skip > 1:
+        env = MaxAndSkipEnv(env, skip=frame_skip)
+
+    env = ResizeObservation(env, img_size)
+    if grayscale:
+        env = GrayScaleObservation(env, keep_dim=True)
+
+    if frame_stack and frame_stack > 1:
+        env = RLlibFrameStack(env, frame_stack)
+
+    if normalize:
+        env = ScaledFloatFrame(env)
+    elif dtype is not None:
+        env = TransformObservation(env, lambda obs: np.asarray(obs).astype(dtype))
+
     return env
 
 
@@ -408,28 +447,6 @@ def env_creator(env_config):
         env_id = env_config["id"].replace("Atari-", "")
         env = gymnasium.make(env_id)
         return wrap_deepmind(env)
-    elif env_config["id"].startswith("Pendulum-"):
-        env_id = env_config["id"].replace("Pendulum-", "", 1)
-        img_size = env_config.get("img_size", 84)
-        frame_stack = max(1, int(env_config.get("frame_stack", 4)))
-        grayscale = env_config.get("grayscale", True)
-        normalize = env_config.get("normalize", False)
-        pixels_only = env_config.get("pixels_only", True)
-        env = gymnasium.make(env_id, render_mode="rgb_array")
-        env = PixelObservationWrapper(env, pixels_only=pixels_only)
-        if isinstance(env.observation_space, spaces.Dict):
-            pixel_space = env.observation_space["pixels"]
-            env = TransformObservation(env, lambda obs: obs["pixels"])
-            env.observation_space = pixel_space
-        env = apply_image_wrappers(
-            env,
-            img_size=img_size,
-            frame_stack=frame_stack,
-            grayscale=grayscale,
-            normalize=normalize,
-            dtype=resolve_dtype(env_config.get("dtype")),
-        )
-        return env
     elif env_config["id"][0:7] == "BOX2DV-":
         # BOX2DV: Vector observation environments (LunarLander, BipedalWalker)
         env_id = env_config["id"].replace("BOX2DV-", "")
@@ -442,19 +459,15 @@ def env_creator(env_config):
     elif env_config["id"][0:7] == "BOX2DI-":
         # BOX2DI: Image observation environments (CarRacing)
         env_id = env_config["id"].replace("BOX2DI-", "")
-        img_size = env_config.get("img_size", 84)
-        frame_stack = max(1, int(env_config.get("frame_stack", 4)))
-        grayscale = env_config.get("grayscale", True)
-        normalize = env_config.setdefault("normalize", False)
-        dtype_value = resolve_dtype(env_config.setdefault("dtype", "uint8"))
         env = gymnasium.make(env_id)
-        env = apply_image_wrappers(
+        env = wrap_sac_like_deepmind(
             env,
-            img_size=img_size,
-            frame_stack=frame_stack,
-            grayscale=grayscale,
-            normalize=normalize,
-            dtype=dtype_value,
+            img_size=84,
+            frame_skip=4,
+            frame_stack=4,
+            grayscale=True,
+            normalize=True,
+            dtype=None,
         )
         return env
     elif env_config["id"][0:4] == "GYM-":

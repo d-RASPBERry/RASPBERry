@@ -90,8 +90,8 @@ def main() -> None:
     parser.add_argument(
         "--env",
         type=str,
-        default="Pendulum-Pendulum",
-        help="Environment name (e.g., Pendulum-Pendulum, CarRacing-v2)",
+        default="Atari-Breakout",
+        help="Environment name (e.g., Atari-Breakout, CarRacing)",
     )
     parser.add_argument("--gpu", type=str, default="0", help="CUDA device ID")
     parser.add_argument(

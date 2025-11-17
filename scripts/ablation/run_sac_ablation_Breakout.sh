@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ################################################################################
-# SAC 消融实验启动脚本 (Pendulum 图像观测)
+# SAC 消融实验启动脚本 (Breakout 图像观测)
 #
 # 功能:
 #   对每个指定 GPU 依次启动 3 个 SAC 变体:
@@ -10,8 +10,8 @@
 #     3) SAC-RASPBERry (分块回放 + 压缩)
 #
 # 使用方法:
-#   ./run_sac_ablation_Pendulum.sh            # 默认仅使用 GPU 0
-#   ./run_sac_ablation_Pendulum.sh -n 0,1,2   # 指定逗号分隔 GPU 列表
+#   ./run_sac_ablation_Breakout.sh            # 默认仅使用 GPU 0
+#   ./run_sac_ablation_Breakout.sh -n 0,1,2   # 指定逗号分隔 GPU 列表
 #
 ################################################################################
 
@@ -63,7 +63,7 @@ SCRIPT_LOG_DIR="./logs/scripts"
 mkdir -p ${SCRIPT_LOG_DIR}
 
 echo "================================================================================"
-echo "🚀 启动 SAC 消融实验 (环境: Pendulum 图像观测)"
+echo "🚀 启动 SAC 消融实验 (环境: Breakout 图像观测)"
 echo "    目标 GPU 列表: ${GPU_IDS[*]}"
 echo "    每块 GPU 执行顺序: SAC-PER → SAC-PBER → SAC-RASPBERry"
 echo "    输出日志目录: ${SCRIPT_LOG_DIR}"
@@ -73,14 +73,14 @@ echo "==========================================================================
 declare -a ALL_PIDS
 declare -a ALL_NAMES
 
-PER_CONFIG="configs/experiments/sac/per/pendulum.yml"
-PBER_CONFIG="configs/experiments/sac/pber/pendulum.yml"
-RASP_CONFIG="configs/experiments/sac/raspberry/pendulum.yml"
+PER_CONFIG="configs/experiments/sac/per/breakout.yml"
+PBER_CONFIG="configs/experiments/sac/pber/breakout.yml"
+RASP_CONFIG="configs/experiments/sac/raspberry/breakout.yml"
 
 for idx in "${!GPU_IDS[@]}"; do
     gpu="${GPU_IDS[$idx]}"
-    echo "┌─ GPU ${gpu}: 第 $((idx+1)) 组 Pendulum SAC 消融任务 ───────────────────────┐"
-    log_suffix="pendulum_gpu${gpu}_${TIMESTAMP}"
+    echo "┌─ GPU ${gpu}: 第 $((idx+1)) 组 Breakout SAC 消融任务 ──────────────────────┐"
+    log_suffix="breakout_gpu${gpu}_${TIMESTAMP}"
 
     echo "  [1/3] SAC-PER 启动 (日志: ${SCRIPT_LOG_DIR}/sac_per_${log_suffix}.log)"
     python runner/run_sac_per_algo.py --config ${PER_CONFIG} --gpu ${gpu} \
