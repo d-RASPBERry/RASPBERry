@@ -1,0 +1,46 @@
+# SAC-RASPBERry: Atari-Breakout (Image observation)
+# 仅覆盖与 template 不同的配置参数
+extends: ../../../templates/sac_image_base.yml
+
+env_config:
+  env_name: "Atari-Breakout"
+  env_alias: "SAC-RASPBERry-Breakout"
+
+logging:
+  log_subdir: "Atari/Breakout"
+
+mlflow:
+  experiment: "SAC-Breakout"
+  tags:
+    algorithm: "SAC"
+    buffer: "RASPBERry"
+    environment: "Breakout"
+    obs_type: "image"
+
+run_config:
+  max_time_s: 360000
+
+hyper_parameters:
+  train_batch_size: 256
+  min_sample_timesteps_per_iteration: 10000
+  training_intensity: 3.0
+  target_entropy: -3.0
+
+  # Replay buffer (RASPBERry-specific)
+  replay_buffer_config:
+    capacity: 500000
+    type: MultiAgentRASPBERryReplayBuffer
+    sub_buffer_size: 16
+    compress_base: -1
+    worker_side_prioritization: false
+    compress_pool_size: 400
+    compression_algorithm: "lz4"
+    compression_level: 1
+    compression_nthreads: 4
+    compression_mode: "D"
+    chunk_size: 20
+
+  # Resource
+  num_workers: 3
+  num_envs_per_worker: 8
+
