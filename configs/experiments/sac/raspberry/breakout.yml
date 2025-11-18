@@ -28,7 +28,7 @@ hyper_parameters:
 
   # Replay buffer (RASPBERry-specific)
   replay_buffer_config:
-    capacity: 500000
+    capacity: 1000000
     type: MultiAgentRASPBERryReplayBuffer
     sub_buffer_size: 16
     compress_base: -1
