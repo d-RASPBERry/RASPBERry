@@ -191,7 +191,7 @@ def main() -> None:
     # Initialize Ray
     ray_temp_dir = f"{paths['ray_temp_dir']}ray_{int(time.time())}"
     object_store_bytes = int(
-        ray_cfg.get("object_store_memory_gb", 80) * 1024 * 1024 * 1024
+        ray_cfg.get("object_store_memory_gb", 90) * 1024 * 1024 * 1024
     )
 
     ray.init(
