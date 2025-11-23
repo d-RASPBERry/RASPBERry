@@ -3,7 +3,6 @@ from gymnasium.wrappers import (
     ResizeObservation,
     TimeLimit,
     TransformObservation,
-    PixelObservationWrapper,
     GrayScaleObservation,
 )
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
@@ -88,7 +87,7 @@ def apply_image_wrappers(
     """Apply Resize → GrayScale → RLlib FrameStack (channel-last)."""
     env = ResizeObservation(env, img_size)
     if grayscale:
-        env = GrayscaleObservation(env, keep_dim=True)
+        env = GrayScaleObservation(env, keep_dim=True)
     if frame_stack and frame_stack > 1:
         env = RLlibFrameStack(env, frame_stack)
     if normalize:
@@ -123,7 +122,7 @@ def wrap_sac_like_deepmind(
 
     env = ResizeObservation(env, (img_size, img_size))
     if grayscale:
-        env = GrayscaleObservation(env, keep_dim=True)
+        env = GrayScaleObservation(env, keep_dim=True)
 
     if frame_stack and frame_stack > 1:
         env = RLlibFrameStack(env, frame_stack)
