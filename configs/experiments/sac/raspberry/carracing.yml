@@ -27,8 +27,6 @@ hyper_parameters:
   n_step: 3
   rollout_fragment_length: 3
   initial_alpha: 0.05
-  num_workers: 9
-  num_cpus: 10
   optimization:
     actor_learning_rate: 0.0001
     critic_learning_rate: 0.0001
@@ -54,4 +52,5 @@ hyper_parameters:
 
   # Resource
   num_workers: 9
+  num_cpus: 10
   num_envs_per_worker: 8
