@@ -23,7 +23,7 @@ run_config:
   max_time_s: 360000
 
 hyper_parameters:
-  train_batch_size: 1024
+  train_batch_size: 512
   grad_clip: 1.0
   n_step: 3
   rollout_fragment_length: 8
@@ -39,7 +39,7 @@ hyper_parameters:
 
   # Replay buffer (PBER: Block-based without compression)
   replay_buffer_config:
-    capacity: 500000
+    capacity: 1000000
     type: MultiAgentPrioritizedBlockReplayBuffer
     sub_buffer_size: 32  # Transitions per block
 
