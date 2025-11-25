@@ -42,14 +42,14 @@ class SACLightweightCNN(SACTorchModel):
         # Use ModelCatalog to build a CNN model for the policy
         policy_model_config = policy_model_config.copy()
         if "conv_filters" not in policy_model_config:
-            # Use lighter CNN architecture
+            # Upgrade to Nature-CNN style backbone for richer visual features
             policy_model_config["conv_filters"] = [
-                [32, [3, 3], 2],   # 32 filters, 3x3 kernel, stride 2
-                [32, [3, 3], 2],   # 32 filters, 3x3 kernel, stride 2
+                [32, [8, 8], 4],   # 32 filters, 8x8 kernel, stride 4
+                [64, [4, 4], 2],   # 64 filters, 4x4 kernel, stride 2
                 [64, [3, 3], 1],   # 64 filters, 3x3 kernel, stride 1
             ]
             policy_model_config["conv_activation"] = "relu"
-            policy_model_config["post_fcnet_hiddens"] = [256, 128]
+            policy_model_config["post_fcnet_hiddens"] = [512, 256]
             policy_model_config["post_fcnet_activation"] = "relu"
         
         model = ModelCatalog.get_model_v2(
@@ -67,14 +67,14 @@ class SACLightweightCNN(SACTorchModel):
         # Use ModelCatalog to build a CNN model for Q-network
         q_model_config = q_model_config.copy()
         if "conv_filters" not in q_model_config:
-            # Use same lighter CNN architecture as policy
+            # Keep Q-network in sync with policy architecture
             q_model_config["conv_filters"] = [
-                [32, [3, 3], 2],   # 32 filters, 3x3 kernel, stride 2
-                [32, [3, 3], 2],   # 32 filters, 3x3 kernel, stride 2
-                [64, [3, 3], 1],   # 64 filters, 3x3 kernel, stride 1
+                [32, [8, 8], 4],
+                [64, [4, 4], 2],
+                [64, [3, 3], 1],
             ]
             q_model_config["conv_activation"] = "relu"
-            q_model_config["post_fcnet_hiddens"] = [256, 128]
+            q_model_config["post_fcnet_hiddens"] = [512, 256]
             q_model_config["post_fcnet_activation"] = "relu"
         
         # Handle input space for Q-network (obs + action concatenation)
