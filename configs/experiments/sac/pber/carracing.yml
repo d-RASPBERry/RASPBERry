@@ -39,7 +39,7 @@ hyper_parameters:
 
   # Replay buffer (PBER: Block-based without compression)
   replay_buffer_config:
-    capacity: 800000
+    capacity: 700000
     type: MultiAgentPrioritizedBlockReplayBuffer
     sub_buffer_size: 32  # Transitions per block
 
