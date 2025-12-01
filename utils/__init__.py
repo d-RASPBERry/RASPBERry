@@ -41,6 +41,27 @@ class ClipObservationWrapper(gymnasium.Wrapper):
         obs = np.clip(obs, self.observation_space.low, self.observation_space.high)
         return obs, reward, terminated, truncated, info
 
+
+class SkipInitialFramesWrapper(gymnasium.Wrapper):
+    """在 reset 后自动跳过固定数量帧，常用于 CarRacing 等环境."""
+
+    def __init__(self, env, skip_frames: int = 0):
+        super().__init__(env)
+        self.skip_frames = max(0, int(skip_frames))
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+
+        if self.skip_frames <= 0:
+            return obs, info
+
+        action = np.zeros(self.action_space.shape, dtype=self.action_space.dtype)
+        for _ in range(self.skip_frames):
+            obs, _, terminated, truncated, info = self.env.step(action)
+            if terminated or truncated:
+                obs, info = self.env.reset(**kwargs)
+        return obs, info
+
 agent_dir = {
     0: '>',
     1: 'V',
@@ -459,15 +480,29 @@ def env_creator(env_config):
         # BOX2DI: Image observation environments (CarRacing)
         env_id = env_config["id"].replace("BOX2DI-", "")
         env = gymnasium.make(env_id)
+
+        # Allow configuration overrides (fall back to defaults used previously)
+        img_size = env_config.get("img_size", 84)
+        frame_skip = env_config.get("frame_skip", 4)
+        frame_stack = env_config.get("frame_stack", 4)
+        grayscale = env_config.get("grayscale", True)
+        normalize = env_config.get("normalize", True)
+        dtype = env_config.get("dtype", None)
+
         env = wrap_sac_like_deepmind(
             env,
-            img_size=84,
-            frame_skip=4,
-            frame_stack=4,
-            grayscale=True,
-            normalize=True,
-            dtype=None,
+            img_size=img_size,
+            frame_skip=frame_skip,
+            frame_stack=frame_stack,
+            grayscale=grayscale,
+            normalize=normalize,
+            dtype=dtype,
         )
+
+        reset_skip = env_config.get("reset_skip_frames", 0)
+        if reset_skip > 0:
+            env = SkipInitialFramesWrapper(env, reset_skip)
+
         return env
     elif env_config["id"][0:4] == "GYM-":
         # GYM: Generic Gymnasium environments (Pendulum, MountainCar, etc.)
