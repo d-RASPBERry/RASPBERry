@@ -510,6 +510,13 @@ def env_creator(env_config):
         # gymnasium.make will automatically select the latest version
         env = gymnasium.make(env_id)
         return env
+    elif env_config["id"][0:7] == "MUJOCO-":
+        # MUJOCO: MuJoCo continuous control environments (HalfCheetah, Walker2d, Ant, etc.)
+        env_id = env_config["id"].replace("MUJOCO-", "")
+        env = gymnasium.make(env_id)
+        # MuJoCo environments can have unbounded observations in edge cases
+        env = ClipObservationWrapper(env)
+        return env
     else:
         raise NotImplementedError(f"Environment {env_config['id']} not supported")
 

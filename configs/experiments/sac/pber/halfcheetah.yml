@@ -1,0 +1,38 @@
+# SAC-PBER: MUJOCO-HalfCheetah (Vector observation)
+# PBER = Block Experience Replay without compression
+extends: ../../../templates/sac_vector_base.yml
+
+env_config:
+  env_name: "MUJOCO-HalfCheetah-v4"
+  env_alias: "SAC-PBER-HalfCheetah"
+
+logging:
+  log_subdir: "MuJoCo/HalfCheetah-PBER"
+
+mlflow:
+  experiment: "SAC-HalfCheetah"
+  tags:
+    algorithm: "SAC"
+    buffer: "PBER"
+    environment: "HalfCheetah"
+    obs_type: "vector"
+
+run_config:
+  max_time_s: 144000
+
+hyper_parameters:
+  train_batch_size: 512
+  min_sample_timesteps_per_iteration: 6000
+  training_intensity: 2.0
+
+  # Replay buffer (PBER: Block-based without compression)
+  replay_buffer_config:
+    capacity: 2000000
+    type: MultiAgentPrioritizedBlockReplayBuffer
+    sub_buffer_size: 32
+    worker_side_prioritization: false
+
+  # Resource
+  num_workers: 6
+  num_envs_per_worker: 6
+
