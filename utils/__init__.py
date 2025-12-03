@@ -517,6 +517,29 @@ def env_creator(env_config):
         # MuJoCo environments can have unbounded observations in edge cases
         env = ClipObservationWrapper(env)
         return env
+    elif env_config["id"][0:8] == "MUJOCOI-":
+        # MUJOCOI: MuJoCo with IMAGE observations (render_mode="rgb_array")
+        env_id = env_config["id"].replace("MUJOCOI-", "")
+        env = gymnasium.make(env_id, render_mode="rgb_array")
+
+        # Apply image preprocessing (similar to BOX2DI)
+        img_size = env_config.get("img_size", 84)
+        frame_skip = env_config.get("frame_skip", 4)
+        frame_stack = env_config.get("frame_stack", 4)
+        grayscale = env_config.get("grayscale", True)
+        normalize = env_config.get("normalize", True)
+        dtype = env_config.get("dtype", None)
+
+        env = wrap_sac_like_deepmind(
+            env,
+            img_size=img_size,
+            frame_skip=frame_skip,
+            frame_stack=frame_stack,
+            grayscale=grayscale,
+            normalize=normalize,
+            dtype=dtype,
+        )
+        return env
     else:
         raise NotImplementedError(f"Environment {env_config['id']} not supported")
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ################################################################################
-# SAC 消融实验启动脚本 (HalfCheetah - MuJoCo)
+# SAC 消融实验启动脚本 (HalfCheetah - MuJoCo 图像观测)
 #
 # 功能:
 #   对每个指定 GPU 顺序启动 3 个 SAC 变体:
@@ -10,9 +10,9 @@
 #     3) SAC-RASPBERry (分块回放 + 压缩)
 #
 # 使用方法:
-#   ./run_sac_ablation_HalfCheetah.sh                # 默认 GPU 共享 (仅使用 GPU 0)
-#   ./run_sac_ablation_HalfCheetah.sh -n 0,1,2       # 指定逗号分隔 GPU 列表
-#   ./run_sac_ablation_HalfCheetah.sh -m exclusive   # 开启独占模式 (需提供3的倍数GPU)
+#   ./run_sac_ablation_HalfCheetah_Image.sh                # 默认 GPU 共享 (仅使用 GPU 0)
+#   ./run_sac_ablation_HalfCheetah_Image.sh -n 0,1,2       # 指定逗号分隔 GPU 列表
+#   ./run_sac_ablation_HalfCheetah_Image.sh -m exclusive   # 开启独占模式 (需提供3的倍数GPU)
 #
 ################################################################################
 
@@ -99,7 +99,7 @@ SCRIPT_LOG_DIR="./logs/scripts"
 mkdir -p ${SCRIPT_LOG_DIR}
 
 echo "================================================================================"
-echo "🚀 启动 SAC 消融实验 (环境: HalfCheetah - MuJoCo)"
+echo "🚀 启动 SAC 消融实验 (环境: HalfCheetah - MuJoCo 图像观测)"
 echo "    目标 GPU 列表: ${GPU_IDS[*]}"
 if [ "${GPU_ASSIGNMENT_MODE}" = "exclusive" ]; then
     echo "    模式: 每个实验独占单独 GPU (共 ${GROUP_COUNT} 组)"

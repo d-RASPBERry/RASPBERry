@@ -1,35 +1,51 @@
-# SAC-PER: MUJOCO-HalfCheetah (Vector observation)
-extends: ../../../templates/sac_vector_base.yml
+# SAC-PER: MUJOCOI-HalfCheetah (Image observation)
+extends: ../../../templates/sac_image_base.yml
 
 env_config:
-  env_name: "MUJOCO-HalfCheetah-v4"
-  env_alias: "SAC-PER-HalfCheetah"
+  env_name: "MUJOCOI-HalfCheetah-v4"
+  env_alias: "SAC-PER-HalfCheetah-Image"
+  img_size: 84
+  frame_skip: 4
+  frame_stack: 4
+  grayscale: true
+  normalize: true
 
 logging:
-  log_subdir: "MuJoCo/HalfCheetah"
+  log_subdir: "MuJoCo/HalfCheetah-Image"
 
 mlflow:
-  experiment: "SAC-HalfCheetah"
+  experiment: "SAC-HalfCheetah-Image"
   tags:
     algorithm: "SAC"
     buffer: "PER"
     environment: "HalfCheetah"
-    obs_type: "vector"
+    obs_type: "image"
 
 run_config:
-  max_time_s: 144000
+  max_time_s: 180000
 
 hyper_parameters:
-  train_batch_size: 512
-  min_sample_timesteps_per_iteration: 6000
+  train_batch_size: 256
+  grad_clip: 1.0
+  n_step: 3
+  rollout_fragment_length: 4
+  initial_alpha: 0.2
+  optimization:
+    actor_learning_rate: 0.0001
+    critic_learning_rate: 0.0001
+    entropy_learning_rate: 0.0001
+
+  min_sample_timesteps_per_iteration: 8000
   training_intensity: 2.0
+  target_entropy: auto
 
   # Replay buffer (PER baseline)
   replay_buffer_config:
-    capacity: 2000000
+    capacity: 500000
     type: MultiAgentPrioritizedReplayBuffer
 
   # Resource
   num_workers: 6
-  num_envs_per_worker: 6
+  num_cpus: 8
+  num_envs_per_worker: 4
 

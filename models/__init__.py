@@ -25,6 +25,12 @@ class SACLightweightCNN(SACTorchModel):
     
     def __init__(self, obs_space, action_space, num_outputs, model_config, name, 
                  policy_model_config=None, q_model_config=None, **kwargs):
+        # Pop any custom_model_config keys to avoid passing unsupported args to parent
+        kwargs.pop("feature_dim", None)
+        kwargs.pop("twin_q", None)
+        kwargs.pop("initial_alpha", None)
+        kwargs.pop("target_entropy", None)
+
         # Initialize SACTorchModel parent
         super().__init__(
             obs_space=obs_space,
@@ -34,23 +40,21 @@ class SACLightweightCNN(SACTorchModel):
             name=name,
             policy_model_config=policy_model_config or {},
             q_model_config=q_model_config or {},
-            **kwargs
         )
         
     def build_policy_model(self, obs_space, num_outputs, policy_model_config, name):
         """Build the policy network with CNN feature extractor."""
-        # Use ModelCatalog to build a CNN model for the policy
-        policy_model_config = policy_model_config.copy()
-        if "conv_filters" not in policy_model_config:
-            # Upgrade to Nature-CNN style backbone for richer visual features
-            policy_model_config["conv_filters"] = [
+        # Hardcoded Nature-CNN architecture - no config dependency
+        policy_model_config = {
+            "conv_filters": [
                 [32, [8, 8], 4],   # 32 filters, 8x8 kernel, stride 4
                 [64, [4, 4], 2],   # 64 filters, 4x4 kernel, stride 2
                 [64, [3, 3], 1],   # 64 filters, 3x3 kernel, stride 1
-            ]
-            policy_model_config["conv_activation"] = "relu"
-            policy_model_config["post_fcnet_hiddens"] = [512, 256]
-            policy_model_config["post_fcnet_activation"] = "relu"
+            ],
+            "conv_activation": "relu",
+            "post_fcnet_hiddens": [512, 256],
+            "post_fcnet_activation": "relu",
+        }
         
         model = ModelCatalog.get_model_v2(
             obs_space,
@@ -64,18 +68,17 @@ class SACLightweightCNN(SACTorchModel):
     
     def build_q_model(self, obs_space, action_space, num_outputs, q_model_config, name):
         """Build the Q-network with CNN feature extractor."""
-        # Use ModelCatalog to build a CNN model for Q-network
-        q_model_config = q_model_config.copy()
-        if "conv_filters" not in q_model_config:
-            # Keep Q-network in sync with policy architecture
-            q_model_config["conv_filters"] = [
-                [32, [8, 8], 4],
-                [64, [4, 4], 2],
-                [64, [3, 3], 1],
-            ]
-            q_model_config["conv_activation"] = "relu"
-            q_model_config["post_fcnet_hiddens"] = [512, 256]
-            q_model_config["post_fcnet_activation"] = "relu"
+        # Hardcoded Nature-CNN architecture - same as policy
+        q_model_config = {
+            "conv_filters": [
+                [32, [8, 8], 4],   # 32 filters, 8x8 kernel, stride 4
+                [64, [4, 4], 2],   # 64 filters, 4x4 kernel, stride 2
+                [64, [3, 3], 1],   # 64 filters, 3x3 kernel, stride 1
+            ],
+            "conv_activation": "relu",
+            "post_fcnet_hiddens": [512, 256],
+            "post_fcnet_activation": "relu",
+        }
         
         # Handle input space for Q-network (obs + action concatenation)
         self.concat_obs_and_actions = False

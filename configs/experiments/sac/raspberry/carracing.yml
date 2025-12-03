@@ -27,7 +27,7 @@ hyper_parameters:
   grad_clip: 1.0
   n_step: 3
   rollout_fragment_length: 8
-  initial_alpha: "auto"
+  initial_alpha: 1.0
   optimization:
     actor_learning_rate: 0.00003
     critic_learning_rate: 0.00003
