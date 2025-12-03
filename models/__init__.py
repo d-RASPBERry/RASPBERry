@@ -15,13 +15,20 @@ from ray.rllib.utils.annotations import override
 
 class SACLightweightCNN(SACTorchModel):
     """
-    Lightweight CNN encoder for smaller image observations with SAC.
+    CNN encoder for image observations with SAC.
     
-    Suitable for 64x64 or 80x80 images. Faster training than Nature CNN.
+    - CNN backbone: Hardcoded Nature-CNN (32-64-64 filters)
+    - Dense layers: Configurable via policy_model_config / q_model_config
     
     This model properly inherits from SACTorchModel to work with SAC algorithm.
-    It provides custom CNN feature extraction for both policy and Q networks.
     """
+    
+    # Hardcoded Nature-CNN architecture
+    CONV_FILTERS = [
+        [32, [8, 8], 4],   # 32 filters, 8x8 kernel, stride 4
+        [64, [4, 4], 2],   # 64 filters, 4x4 kernel, stride 2
+        [64, [3, 3], 1],   # 64 filters, 3x3 kernel, stride 1
+    ]
     
     def __init__(self, obs_space, action_space, num_outputs, model_config, name, 
                  policy_model_config=None, q_model_config=None, **kwargs):
@@ -44,23 +51,23 @@ class SACLightweightCNN(SACTorchModel):
         
     def build_policy_model(self, obs_space, num_outputs, policy_model_config, name):
         """Build the policy network with CNN feature extractor."""
-        # Hardcoded Nature-CNN architecture - no config dependency
-        policy_model_config = {
-            "conv_filters": [
-                [32, [8, 8], 4],   # 32 filters, 8x8 kernel, stride 4
-                [64, [4, 4], 2],   # 64 filters, 4x4 kernel, stride 2
-                [64, [3, 3], 1],   # 64 filters, 3x3 kernel, stride 1
-            ],
+        # Merge hardcoded CNN with configurable dense layers
+        config = {
+            # Hardcoded CNN backbone
+            "conv_filters": self.CONV_FILTERS,
             "conv_activation": "relu",
-            "post_fcnet_hiddens": [512, 256],
-            "post_fcnet_activation": "relu",
+            # Dense layers from config (with defaults)
+            "post_fcnet_hiddens": policy_model_config.get("post_fcnet_hiddens", [256, 256]),
+            "post_fcnet_activation": policy_model_config.get("post_fcnet_activation", "relu"),
+            "fcnet_hiddens": policy_model_config.get("fcnet_hiddens", [256, 256]),
+            "fcnet_activation": policy_model_config.get("fcnet_activation", "relu"),
         }
         
         model = ModelCatalog.get_model_v2(
             obs_space,
             self.action_space,
             num_outputs,
-            policy_model_config,
+            config,
             framework="torch",
             name=name,
         )
@@ -68,16 +75,16 @@ class SACLightweightCNN(SACTorchModel):
     
     def build_q_model(self, obs_space, action_space, num_outputs, q_model_config, name):
         """Build the Q-network with CNN feature extractor."""
-        # Hardcoded Nature-CNN architecture - same as policy
-        q_model_config = {
-            "conv_filters": [
-                [32, [8, 8], 4],   # 32 filters, 8x8 kernel, stride 4
-                [64, [4, 4], 2],   # 64 filters, 4x4 kernel, stride 2
-                [64, [3, 3], 1],   # 64 filters, 3x3 kernel, stride 1
-            ],
+        # Merge hardcoded CNN with configurable dense layers
+        config = {
+            # Hardcoded CNN backbone
+            "conv_filters": self.CONV_FILTERS,
             "conv_activation": "relu",
-            "post_fcnet_hiddens": [512, 256],
-            "post_fcnet_activation": "relu",
+            # Dense layers from config (with defaults)
+            "post_fcnet_hiddens": q_model_config.get("post_fcnet_hiddens", [256, 256]),
+            "post_fcnet_activation": q_model_config.get("post_fcnet_activation", "relu"),
+            "fcnet_hiddens": q_model_config.get("fcnet_hiddens", [256, 256]),
+            "fcnet_activation": q_model_config.get("fcnet_activation", "relu"),
         }
         
         # Handle input space for Q-network (obs + action concatenation)
@@ -85,7 +92,7 @@ class SACLightweightCNN(SACTorchModel):
         if self.discrete:
             input_space = obs_space
         else:
-            from gymnasium.spaces import Box, Tuple as TupleSpace
+            from gymnasium.spaces import Box
             orig_space = getattr(obs_space, "original_space", obs_space)
             # For image observations, use Tuple space (obs, action)
             if isinstance(orig_space, Box) and len(orig_space.shape) == 1:
@@ -105,7 +112,7 @@ class SACLightweightCNN(SACTorchModel):
             input_space,
             action_space,
             num_outputs,
-            q_model_config,
+            config,
             framework="torch",
             name=name,
         )
