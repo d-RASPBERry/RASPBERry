@@ -23,22 +23,24 @@ class SACLightweightCNN(SACTorchModel):
     This model properly inherits from SACTorchModel to work with SAC algorithm.
     """
     
-    # Hardcoded Nature-CNN architecture
+    # Hardcoded Nature-CNN architecture for 84x84 input
+    # Output must be [B, C, 1, 1] for RLlib's VisionNetwork
+    # RLlib uses 'same' padding: 84 -> 21 -> 11 -> 11
+    # So we need 11x11 kernel to compress to 1x1
     CONV_FILTERS = [
-        [32, [8, 8], 4],   # 32 filters, 8x8 kernel, stride 4
-        [64, [4, 4], 2],   # 64 filters, 4x4 kernel, stride 2
-        [64, [3, 3], 1],   # 64 filters, 3x3 kernel, stride 1
+        [32, [8, 8], 4],    # 84 -> 21 (stride 4, same padding)
+        [64, [4, 4], 2],    # 21 -> 11 (stride 2, same padding)
+        [64, [3, 3], 1],    # 11 -> 11 (stride 1, same padding)
+        [256, [11, 11], 1], # 11 -> 1  (compress to 1x1)
     ]
     
     def __init__(self, obs_space, action_space, num_outputs, model_config, name, 
-                 policy_model_config=None, q_model_config=None, **kwargs):
-        # Pop any custom_model_config keys to avoid passing unsupported args to parent
+                 policy_model_config=None, q_model_config=None, twin_q=True,
+                 initial_alpha=1.0, target_entropy=None, **kwargs):
+        # Pop custom_model_config keys that are not used by parent
         kwargs.pop("feature_dim", None)
-        kwargs.pop("twin_q", None)
-        kwargs.pop("initial_alpha", None)
-        kwargs.pop("target_entropy", None)
 
-        # Initialize SACTorchModel parent
+        # Initialize SACTorchModel parent with required SAC parameters
         super().__init__(
             obs_space=obs_space,
             action_space=action_space,
@@ -47,6 +49,9 @@ class SACLightweightCNN(SACTorchModel):
             name=name,
             policy_model_config=policy_model_config or {},
             q_model_config=q_model_config or {},
+            twin_q=twin_q,
+            initial_alpha=initial_alpha,
+            target_entropy=target_entropy,
         )
         
     def build_policy_model(self, obs_space, num_outputs, policy_model_config, name):
