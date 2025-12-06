@@ -4,6 +4,7 @@ from gymnasium.wrappers import (
     TimeLimit,
     TransformObservation,
     GrayScaleObservation,
+    TransformReward,
 )
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
 from ray.rllib.env.wrappers.atari_wrappers import (
@@ -40,6 +41,44 @@ class ClipObservationWrapper(gymnasium.Wrapper):
         obs, reward, terminated, truncated, info = self.env.step(action)
         obs = np.clip(obs, self.observation_space.low, self.observation_space.high)
         return obs, reward, terminated, truncated, info
+
+
+class CarRacingActionWrapper(gymnasium.ActionWrapper):
+    """Normalize CarRacing actions to [-1, 1] for SAC agents.
+    
+    The raw CarRacing environment has an asymmetric action space:
+    - Steering: [-1, 1]
+    - Gas: [0, 1]
+    - Brake: [0, 1]
+    
+    This wrapper presents a unified [-1, 1] action space to the agent,
+    which is crucial for algorithms like SAC that typically output tanh-squashed
+    actions in [-1, 1].
+    
+    Mapping strategy:
+    - Steering: direct map [-1, 1] -> [-1, 1]
+    - Gas: clip(action, 0, 1) -> [0, 1] (negative values are ignored/idling)
+    - Brake: clip(action, 0, 1) -> [0, 1] (negative values are ignored/idling)
+    
+    This strategy ensures that an agent initialized with 0-mean outputs (common in SAC)
+    starts with 0 gas and 0 brake (idling), rather than 0.5 gas/brake which causes
+    conflicting inputs and stalling.
+    """
+    def __init__(self, env):
+        super().__init__(env)
+        # Define the unified symmetric action space
+        self.action_space = spaces.Box(
+            low=-1.0, high=1.0, shape=(3,), dtype=np.float32
+        )
+
+    def action(self, action):
+        # Receive [-1, 1] action from agent
+        steering = action[0]
+        # Clip negative values to 0 for gas/brake (ReLU-style)
+        gas = max(0.0, float(action[1]))
+        brake = max(0.0, float(action[2]))
+        
+        return np.array([steering, gas, brake], dtype=np.float32)
 
 
 class SkipInitialFramesWrapper(gymnasium.Wrapper):
@@ -486,8 +525,16 @@ def env_creator(env_config):
         frame_skip = env_config.get("frame_skip", 4)
         frame_stack = env_config.get("frame_stack", 4)
         grayscale = env_config.get("grayscale", True)
-        normalize = env_config.get("normalize", True)
-        dtype = env_config.get("dtype", None)
+        
+        # [Alignment Fix] Enforce normalization for CarRacing
+        # SAC requires observation intensity in [0, 1] to match standard 
+        # weight initialization and temperature (alpha) scaling.
+        if "CarRacing" in env_id:
+            normalize = True
+            dtype = np.float32
+        else:
+            normalize = env_config.get("normalize", True)
+            dtype = env_config.get("dtype", None)
 
         env = wrap_sac_like_deepmind(
             env,
@@ -499,7 +546,16 @@ def env_creator(env_config):
             dtype=dtype,
         )
 
-        reset_skip = env_config.get("reset_skip_frames", 0)
+        # [CRITICAL Fix] Apply Action Wrapper for CarRacing to fix initialization stalling
+        if "CarRacing" in env_id:
+            env = CarRacingActionWrapper(env)
+            # [Stability Fix] Scale rewards to reasonable range for SAC
+            # Cumulative ~900 -> 9.0. This prevents Q-values from exploding relative to entropy.
+            env = TransformReward(env, lambda r: 0.01 * r)
+
+        # Default skip 50 frames for CarRacing (skip initial zoom-in/black frames)
+        default_skip = 50 if "CarRacing" in env_id else 0
+        reset_skip = env_config.get("reset_skip_frames", default_skip)
         if reset_skip > 0:
             env = SkipInitialFramesWrapper(env, reset_skip)
 

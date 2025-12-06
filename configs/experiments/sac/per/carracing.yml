@@ -4,9 +4,9 @@ extends: ../../../templates/sac_image_base.yml
 env_config:
   env_name: "BOX2DI-CarRacing"
   env_alias: "SAC-PER-CarRacing"
-  normalize: false
-  dtype: "uint8"
-  reset_skip_frames: 50
+  normalize: true
+  dtype: "float32"
+  # SKIP_INITIAL_FRAMES handled in utils/__init__.py
 
 logging:
   log_subdir: "BOX2DI/CarRacing"
@@ -23,18 +23,22 @@ run_config:
   max_time_s: 360000
 
 hyper_parameters:
-  train_batch_size: 512
+  # Optimized for Image-based Continuous Control
+  train_batch_size: 256
   grad_clip: 1.0
   n_step: 3
   rollout_fragment_length: 8
-  initial_alpha: 1.0
+  
+  # Optimization
+  initial_alpha: 0.2
   optimization:
-    actor_learning_rate: 0.00003
-    critic_learning_rate: 0.00003
-    entropy_learning_rate: 0.00003
+    actor_learning_rate: 0.0003
+    critic_learning_rate: 0.0003
+    entropy_learning_rate: 0.0003
 
-  min_sample_timesteps_per_iteration: 15000
-  training_intensity: 1.0
+  # Sampling & Training
+  min_sample_timesteps_per_iteration: 10000
+  training_intensity: 4.0
   target_entropy: -3.0
 
   # Replay buffer (PER baseline)
