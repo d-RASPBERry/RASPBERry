@@ -595,6 +595,10 @@ def env_creator(env_config):
             normalize=normalize,
             dtype=dtype,
         )
+        # [Stability Fix] Scale rewards for MuJoCo Image tasks
+        # HalfCheetah rewards can be large (~3000+), scaling by 0.01 keeps Q-values reasonable
+        env = TransformReward(env, lambda r: 0.01 * r)
+        
         return env
     else:
         raise NotImplementedError(f"Environment {env_config['id']} not supported")
