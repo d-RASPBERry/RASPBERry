@@ -573,9 +573,9 @@ def env_creator(env_config):
         # MuJoCo environments can have unbounded observations in edge cases
         env = ClipObservationWrapper(env)
         return env
-    elif env_config["id"][0:8] == "MUJOCOI-":
-        # MUJOCOI: MuJoCo with IMAGE observations (render_mode="rgb_array")
-        env_id = env_config["id"].replace("MUJOCOI-", "")
+    elif env_config["id"][0:8] == "MUJOCO-I-":
+        # MUJOCO-I: MuJoCo with IMAGE observations (render_mode="rgb_array")
+        env_id = env_config["id"].replace("MUJOCO-I-", "")
         env = gymnasium.make(env_id, render_mode="rgb_array")
 
         # Apply image preprocessing (similar to BOX2DI)

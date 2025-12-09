@@ -1,8 +1,8 @@
-# SAC-PER: MUJOCOI-HalfCheetah (Image observation)
+# SAC-PER: MUJOCO-I-HalfCheetah (Image observation)
 extends: ../../../templates/sac_image_base.yml
 
 env_config:
-  env_name: "MUJOCOI-HalfCheetah-v4"
+  env_name: "MUJOCO-I-HalfCheetah-v4"
   env_alias: "SAC-PER-HalfCheetah-Image"
   img_size: 84
   frame_skip: 4
