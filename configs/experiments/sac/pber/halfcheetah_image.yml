@@ -1,9 +1,9 @@
-# SAC-PBER: MUJOCO-I-HalfCheetah (Image observation)
+# SAC-PBER: MUJOCOI-HalfCheetah (Image observation)
 # PBER = Block Experience Replay without compression
 extends: ../../../templates/sac_image_base.yml
 
 env_config:
-  env_name: "MUJOCO-I-HalfCheetah-v4"
+  env_name: "MUJOCOI-HalfCheetah-v4"
   env_alias: "SAC-PBER-HalfCheetah-Image"
   img_size: 84
   frame_skip: 4

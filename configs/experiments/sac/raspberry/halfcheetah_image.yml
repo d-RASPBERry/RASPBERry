@@ -1,8 +1,8 @@
-# SAC-RASPBERry: MUJOCO-I-HalfCheetah (Image observation)
+# SAC-RASPBERry: MUJOCOI-HalfCheetah (Image observation)
 extends: ../../../templates/sac_image_base.yml
 
 env_config:
-  env_name: "MUJOCO-I-HalfCheetah-v4"
+  env_name: "MUJOCOI-HalfCheetah-v4"
   env_alias: "SAC-RASPBERry-HalfCheetah-Image"
   img_size: 84
   frame_skip: 4
