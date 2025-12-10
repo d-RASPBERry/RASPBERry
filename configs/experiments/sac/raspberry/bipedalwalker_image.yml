@@ -1,0 +1,64 @@
+# SAC-RASPBERry: BOX2DI-BipedalWalker-v3 (Image observation)
+extends: ../../../templates/sac_image_base.yml
+
+env_config:
+  env_name: "BOX2DI-BipedalWalker-v3"
+  env_alias: "SAC-RASPBERry-BipedalWalker-Image"
+  img_size: 84
+  frame_skip: 4
+  frame_stack: 4
+  grayscale: true
+  normalize: true
+
+logging:
+  log_subdir: "BOX2DI/BipedalWalker-Image"
+
+mlflow:
+  experiment: "SAC-BipedalWalker-Image"
+  tags:
+    algorithm: "SAC"
+    buffer: "RASPBERry"
+    environment: "BipedalWalker"
+    obs_type: "image"
+
+run_config:
+  max_time_s: 360000
+
+hyper_parameters:
+  # Optimized for Image-based Continuous Control
+  train_batch_size: 256
+  grad_clip: 1.0
+  n_step: 3
+  rollout_fragment_length: 4
+  
+  # Optimization
+  initial_alpha: 0.2
+  optimization:
+    actor_learning_rate: 0.0003
+    critic_learning_rate: 0.0003
+    entropy_learning_rate: 0.0003
+
+  # Sampling & Training
+  min_sample_timesteps_per_iteration: 8000
+  training_intensity: 4.0
+  target_entropy: auto
+
+  # Replay buffer (RASPBERry-specific)
+  replay_buffer_config:
+    capacity: 500000
+    type: MultiAgentRASPBERryReplayBuffer
+    sub_buffer_size: 16
+    compress_base: -1
+    worker_side_prioritization: false
+    compress_pool_size: 400
+    compression_algorithm: "lz4"
+    compression_level: 1
+    compression_nthreads: 4
+    compression_mode: "D"
+    chunk_size: 20
+
+  # Resource
+  num_workers: 6
+  num_cpus: 8
+  num_envs_per_worker: 4
+
