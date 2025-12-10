@@ -5,6 +5,7 @@ from gymnasium.wrappers import (
     TransformObservation,
     GrayScaleObservation,
     TransformReward,
+    PixelObservationWrapper,
 )
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
 from ray.rllib.env.wrappers.atari_wrappers import (
@@ -79,6 +80,22 @@ class CarRacingActionWrapper(gymnasium.ActionWrapper):
         brake = max(0.0, float(action[2]))
         
         return np.array([steering, gas, brake], dtype=np.float32)
+
+
+class PixelObsExtractWrapper(gymnasium.ObservationWrapper):
+    """Extract 'pixels' key from PixelObservationWrapper's dict observation.
+    
+    PixelObservationWrapper returns {"pixels": image} even with pixels_only=True.
+    This wrapper converts it to just the image array for downstream wrappers.
+    """
+    def __init__(self, env, key="pixels"):
+        super().__init__(env)
+        self._key = key
+        # Update observation space to be just the pixels
+        self.observation_space = env.observation_space[key]
+    
+    def observation(self, obs):
+        return obs[self._key]
 
 
 class SkipInitialFramesWrapper(gymnasium.Wrapper):
@@ -516,9 +533,20 @@ def env_creator(env_config):
         env = ClipObservationWrapper(env)
         return env
     elif env_config["id"][0:7] == "BOX2DI-":
-        # BOX2DI: Image observation environments (CarRacing)
+        # BOX2DI: Image observation environments (CarRacing, BipedalWalker-Image)
         env_id = env_config["id"].replace("BOX2DI-", "")
-        env = gymnasium.make(env_id)
+        
+        # Determine if we need to force pixel observation
+        # CarRacing is native pixels; BipedalWalker/LunarLander are native vectors.
+        needs_pixel_wrapper = "CarRacing" not in env_id
+        
+        # Create env (render_mode="rgb_array" is key for both cases)
+        env = gymnasium.make(env_id, render_mode="rgb_array")
+
+        if needs_pixel_wrapper:
+            # Wrap vector env to output pixels
+            env = PixelObservationWrapper(env, pixels_only=True)
+            env = PixelObsExtractWrapper(env, key="pixels")
 
         # Allow configuration overrides (fall back to defaults used previously)
         img_size = env_config.get("img_size", 84)
@@ -549,9 +577,10 @@ def env_creator(env_config):
         # [CRITICAL Fix] Apply Action Wrapper for CarRacing to fix initialization stalling
         if "CarRacing" in env_id:
             env = CarRacingActionWrapper(env)
-            # [Stability Fix] Scale rewards to reasonable range for SAC
-            # Cumulative ~900 -> 9.0. This prevents Q-values from exploding relative to entropy.
-            env = TransformReward(env, lambda r: 0.01 * r)
+        
+        # [Stability Fix] Scale rewards for ALL Image tasks (CarRacing & BipedalWalker)
+        # Keeps Q-values in reasonable range for SAC (e.g. -100..300 -> -1..3)
+        env = TransformReward(env, lambda r: 0.01 * r)
 
         # Default skip 50 frames for CarRacing (skip initial zoom-in/black frames)
         default_skip = 50 if "CarRacing" in env_id else 0
@@ -575,8 +604,24 @@ def env_creator(env_config):
         return env
     elif env_config["id"][0:8] == "MUJOCOI-":
         # MUJOCOI: MuJoCo with IMAGE observations (render_mode="rgb_array")
+        # MuJoCo envs by default return vector state; we need PixelObservationWrapper
+        # to replace the state observation with rendered RGB images.
         env_id = env_config["id"].replace("MUJOCOI-", "")
         env = gymnasium.make(env_id, render_mode="rgb_array")
+        
+        # Convert state observation to pixel observation
+        # pixels_only=True replaces state with image
+        # For MuJoCo envs in Gymnasium, render() does not accept width/height directly.
+        # They are usually set at env creation or via camera configuration.
+        # However, MuJoCo envs respect the render_mode="rgb_array" and default resolution.
+        # Let's try without explicit size args first, or rely on gym's default.
+        env = PixelObservationWrapper(
+            env, 
+            pixels_only=True,
+            # render_kwargs={} # Rely on default rendering
+        )
+        # Extract pixels from dict observation {"pixels": image} -> image
+        env = PixelObsExtractWrapper(env, key="pixels")
 
         # Apply image preprocessing (similar to BOX2DI)
         img_size = env_config.get("img_size", 84)
