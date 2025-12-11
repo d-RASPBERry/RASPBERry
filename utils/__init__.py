@@ -126,6 +126,23 @@ agent_dir = {
 }
 
 
+def split_list_into_n_parts(lst, n=10):
+    """Split a list into n interleaved parts.
+    
+    Args:
+        lst: List to split
+        n: Number of parts (default: 10)
+        
+    Returns:
+        List of n sub-lists with interleaved elements
+        
+    Example:
+        >>> split_list_into_n_parts([0,1,2,3,4,5], n=2)
+        [[0,2,4], [1,3,5]]
+    """
+    return [lst[i::n] for i in range(n)]
+
+
 def resolve_dtype(dtype_value):
     """Resolve dtype from string or numpy dtype spec."""
     if dtype_value is None:
@@ -181,6 +198,62 @@ def check_path(path):
     """
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
+
+
+def convert_np_arrays(obj):
+    """Convert numpy arrays and filter out non-JSON-serializable objects.
+    
+    Args:
+        obj: Object to convert (dict, list, numpy array, etc.)
+        
+    Returns:
+        JSON-serializable version of obj (lists, primitives, dicts)
+        
+    Note:
+        Recursively converts nested structures, filters out type objects
+    """
+    if obj is None:
+        return None
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, (np.integer, np.floating)):
+        return obj.item()  # Convert numpy scalars to Python scalars
+    elif isinstance(obj, dict):
+        # Filter out non-serializable values
+        result = {}
+        for key, value in obj.items():
+            if not isinstance(value, type):  # Skip type objects (ABCMeta, etc.)
+                converted = convert_np_arrays(value)
+                if converted is not None or value is None:
+                    result[key] = converted
+        return result
+    elif isinstance(obj, (list, tuple)):
+        # Filter out non-serializable items
+        result = []
+        for item in obj:
+            if not isinstance(item, type):  # Skip type objects
+                converted = convert_np_arrays(item)
+                if converted is not None or item is None:
+                    result.append(converted)
+        return result
+    elif isinstance(obj, type):
+        # Convert type objects to string representation
+        return str(obj)
+    elif hasattr(obj, '__dict__') and not callable(obj):
+        # Convert objects with __dict__ to dict representation
+        try:
+            return convert_np_arrays(obj.__dict__)
+        except (AttributeError, TypeError):
+            return str(obj)
+    else:
+        # For basic types (int, float, str, bool), return as is
+        # For other objects, convert to string
+        try:
+            import json
+            json.dumps(obj)  # Test if it's JSON serializable
+            return obj
+        except (TypeError, ValueError):
+            return str(obj)
 
 
 def flatten_dict(d):
