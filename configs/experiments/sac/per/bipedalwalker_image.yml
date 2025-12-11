@@ -5,7 +5,7 @@ env_config:
   env_name: "BOX2DI-BipedalWalker-v3"
   env_alias: "SAC-PER-BipedalWalker-Image"
   img_size: 84
-  frame_skip: 4
+  frame_skip: 2 # Reduced from 4 to 2
   frame_stack: 4
   grayscale: true
   normalize: true

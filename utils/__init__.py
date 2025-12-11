@@ -578,9 +578,15 @@ def env_creator(env_config):
         if "CarRacing" in env_id:
             env = CarRacingActionWrapper(env)
         
-        # [Stability Fix] Scale rewards for ALL Image tasks (CarRacing & BipedalWalker)
-        # Keeps Q-values in reasonable range for SAC (e.g. -100..300 -> -1..3)
-        env = TransformReward(env, lambda r: 0.01 * r)
+        # [Stability Fix] Scale rewards for ALL Image tasks
+        if "CarRacing" in env_id:
+            # CarRacing: ~900 total -> scale 0.01 -> ~9.0
+            env = TransformReward(env, lambda r: 0.01 * r)
+        else:
+            # BipedalWalker/Others: ~300 total -> scale 0.05 -> ~15.0
+            # Increased scale for BipedalWalker to make positive feedback more significant
+            # relative to entropy term, encouraging movement over "idling".
+            env = TransformReward(env, lambda r: 0.05 * r)
 
         # Default skip 50 frames for CarRacing (skip initial zoom-in/black frames)
         default_skip = 50 if "CarRacing" in env_id else 0
