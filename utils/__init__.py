@@ -126,23 +126,6 @@ agent_dir = {
 }
 
 
-def split_list_into_n_parts(lst, n=10):
-    """Split a list into n interleaved parts.
-    
-    Args:
-        lst: List to split
-        n: Number of parts (default: 10)
-        
-    Returns:
-        List of n sub-lists with interleaved elements
-        
-    Example:
-        >>> split_list_into_n_parts([0,1,2,3,4,5], n=2)
-        [[0,2,4], [1,3,5]]
-    """
-    return [lst[i::n] for i in range(n)]
-
-
 def resolve_dtype(dtype_value):
     """Resolve dtype from string or numpy dtype spec."""
     if dtype_value is None:
@@ -150,28 +133,6 @@ def resolve_dtype(dtype_value):
     if isinstance(dtype_value, str):
         return np.dtype(dtype_value).type
     return dtype_value
-
-
-def apply_image_wrappers(
-    env,
-    *,
-    img_size: int = 84,
-    frame_stack: int = 4,
-    grayscale: bool = True,
-    normalize: bool = False,
-    dtype=None,
-):
-    """Apply Resize → GrayScale → RLlib FrameStack (channel-last)."""
-    env = ResizeObservation(env, img_size)
-    if grayscale:
-        env = GrayScaleObservation(env, keep_dim=True)
-    if frame_stack and frame_stack > 1:
-        env = RLlibFrameStack(env, frame_stack)
-    if normalize:
-        env = ScaledFloatFrame(env)
-    elif dtype is not None:
-        env = TransformObservation(env, lambda obs: np.asarray(obs).astype(dtype))
-    return env
 
 
 def wrap_sac_like_deepmind(
@@ -220,62 +181,6 @@ def check_path(path):
     """
     if not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
-
-
-def convert_np_arrays(obj):
-    """Convert numpy arrays and filter out non-JSON-serializable objects.
-    
-    Args:
-        obj: Object to convert (dict, list, numpy array, etc.)
-        
-    Returns:
-        JSON-serializable version of obj (lists, primitives, dicts)
-        
-    Note:
-        Recursively converts nested structures, filters out type objects
-    """
-    if obj is None:
-        return None
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, (np.integer, np.floating)):
-        return obj.item()  # Convert numpy scalars to Python scalars
-    elif isinstance(obj, dict):
-        # Filter out non-serializable values
-        result = {}
-        for key, value in obj.items():
-            if not isinstance(value, type):  # Skip type objects (ABCMeta, etc.)
-                converted = convert_np_arrays(value)
-                if converted is not None or value is None:
-                    result[key] = converted
-        return result
-    elif isinstance(obj, (list, tuple)):
-        # Filter out non-serializable items
-        result = []
-        for item in obj:
-            if not isinstance(item, type):  # Skip type objects
-                converted = convert_np_arrays(item)
-                if converted is not None or item is None:
-                    result.append(converted)
-        return result
-    elif isinstance(obj, type):
-        # Convert type objects to string representation
-        return str(obj)
-    elif hasattr(obj, '__dict__') and not callable(obj):
-        # Convert objects with __dict__ to dict representation
-        try:
-            return convert_np_arrays(obj.__dict__)
-        except (AttributeError, TypeError):
-            return str(obj)
-    else:
-        # For basic types (int, float, str, bool), return as is
-        # For other objects, convert to string
-        try:
-            import json
-            json.dumps(obj)  # Test if it's JSON serializable
-            return obj
-        except (TypeError, ValueError):
-            return str(obj)
 
 
 def flatten_dict(d):
@@ -359,147 +264,6 @@ def get_action_dim(action_space: spaces.Space) -> int:
         raise NotImplementedError(f"{action_space} action space is not supported")
 
 
-def minigrid_env_creator(env_config):
-    """Create a MiniGrid environment with standard wrappers.
-    
-    Args:
-        env_config: Dict with 'id', 'tile_size', 'img_size', 'max_steps'
-        
-    Returns:
-        Wrapped MiniGrid environment (RGB, resized, time-limited)
-    """
-    env = gymnasium.make(env_config["id"], render_mode="rgb_array")
-    env = RGBImgObsWrapper(env, tile_size=env_config["tile_size"])
-    env = ImgObsWrapper(env)
-    env = ResizeObservation(env, (env_config["img_size"], env_config["img_size"]))
-    env = TimeLimit(env, max_episode_steps=env_config["max_steps"])
-    return env
-
-
-def dicts_to_structured_array(dict_list):
-    """Convert list of dicts to numpy structured array.
-    
-    Args:
-        dict_list: List of dicts with same keys and numeric values
-        
-    Returns:
-        Numpy structured array with fields from dict keys
-    """
-    keys = dict_list[0].keys()
-    dtype = [(key, 'float32') for key in keys]
-    structured_array = np.array([tuple(d.values()) for d in dict_list], dtype=dtype)
-    return structured_array
-
-
-def calculate_average_with_numpy(dict_list):
-    """Calculate average values across list of dicts using numpy.
-    
-    Args:
-        dict_list: List of dicts with same keys and numeric values
-        
-    Returns:
-        Dict mapping keys to mean values
-    """
-    structured_array = dicts_to_structured_array(dict_list)
-    averages = {dtype[0]: structured_array[dtype[0]].mean() for dtype in structured_array.dtype.descr}
-    return averages
-
-
-def translate_state(state):
-    """Extract agent view, map, and battery from state dict.
-    
-    Args:
-        state: State dict with 'agent_view', 'whole_map', 'battery' keys
-        
-    Returns:
-        Tuple of (agent_view, whole_map, battery)
-    """
-    return state["agent_view"], state["whole_map"], state["battery"]
-
-
-def copy_params(offline, online):
-    """Copy parameters from offline network to online network (MXNet-specific).
-    
-    Args:
-        offline: Offline network with parameters to copy
-        online: Online network to update
-        
-    Note:
-        Legacy function for MXNet-based networks
-    """
-    layer = list(offline.collect_params().values())
-    for i in layer:
-        _1 = online.collect_params().get(
-            "_".join(i.name.split("_")[1:])).data().asnumpy()
-        online.collect_params().get("_".join(i.name.split("_")[1:])).set_data(
-            i.data())
-        _2 = online.collect_params().get(
-            "_".join(i.name.split("_")[1:])).data().asnumpy()
-
-
-def check_dir(i):
-    """Create directory if it doesn't exist (legacy function, use check_path instead).
-    
-    Args:
-        i: Directory name to create in current directory
-    """
-    if not os.path.exists("./{}/".format(i)):
-        os.mkdir("./{}/".format(i))
-
-
-def get_goal(array, agent):
-    """Find closest goal location (value 3 or 4) to agent.
-    
-    Args:
-        array: 2D grid array with goal locations marked as 3 or 4
-        agent: Agent position [x, y, ...] (only first 2 elements used)
-        
-    Returns:
-        2D binary array with 1 at closest goal location, 0 elsewhere
-    """
-    _min = 999
-    _location = np.zeros([array.shape[0], array.shape[1]])
-    for i, row in enumerate(array):
-        for j, value in enumerate(row):
-            if value in (3, 4):
-                _dis = sum(np.abs(np.array(agent[:2]) - np.array((i, j))))
-                if _dis < _min:
-                    _location = np.zeros([array.shape[0], array.shape[1]])
-                    _location[i][j] = 1
-                    _min = _dis
-    return _location
-
-
-def to_numpy(grid, allow, agent, vis_mask=None):
-    """Convert MiniGrid grid to numpy array representation.
-    
-    Args:
-        grid: MiniGrid grid object
-        allow: Dict mapping object types to integer codes
-        agent: Agent position [x, y, direction] or None
-        vis_mask: Optional visibility mask (default: all visible)
-        
-    Returns:
-        2D numpy array with integer codes for each grid cell
-    """
-    shape = (grid.width, grid.height)
-    grid = grid.grid
-    if vis_mask is None:
-        vis_mask = np.ones(len(grid), dtype=bool)
-    else:
-        vis_mask = vis_mask.flatten()
-    map_img = []
-    for i, j in zip(grid, vis_mask):
-        if i is not None and i.type in allow.keys() and j:
-            map_img.append(allow[i.type])
-        else:
-            map_img.append(0)
-    map_img = np.array(map_img).reshape(shape)
-    if agent is not None:
-        map_img[agent[0], agent[1]] = allow[agent_dir[agent[2]]]
-    return map_img
-
-
 def env_creator(env_config):
     """Create environment with appropriate wrappers based on type.
     
@@ -513,18 +277,13 @@ def env_creator(env_config):
     Raises:
         NotImplementedError: If environment type not supported
     """
-    if env_config["id"][0:8] == "MiniGrid":
-        # Add default MiniGrid parameters if not provided (based on 2024 experiments)
-        env_config.setdefault("tile_size", 10)
-        env_config.setdefault("img_size", 80)
-        env_config.setdefault("max_steps", 100)
-        return minigrid_env_creator(env_config)
-    elif env_config["id"][0:5] == "Atari":
+    if env_config["id"][0:5] == "Atari":
         env_id = env_config["id"].replace("Atari-", "")
         env = gymnasium.make(env_id)
         return wrap_deepmind(env)
     elif env_config["id"][0:7] == "BOX2DV-":
-        # BOX2DV: Vector observation environments (LunarLander, BipedalWalker)
+        # BOX2DV: Vector observation environments (LunarLander)
+        # Note: BipedalWalker has been moved to Image-based (BOX2DI)
         env_id = env_config["id"].replace("BOX2DV-", "")
         env = gymnasium.make(env_id)
         # Apply observation clipping wrapper to handle edge cases where
@@ -594,19 +353,6 @@ def env_creator(env_config):
         if reset_skip > 0:
             env = SkipInitialFramesWrapper(env, reset_skip)
 
-        return env
-    elif env_config["id"][0:4] == "GYM-":
-        # GYM: Generic Gymnasium environments (Pendulum, MountainCar, etc.)
-        env_id = env_config["id"].replace("GYM-", "")
-        # gymnasium.make will automatically select the latest version
-        env = gymnasium.make(env_id)
-        return env
-    elif env_config["id"][0:7] == "MUJOCO-":
-        # MUJOCO: MuJoCo continuous control environments (HalfCheetah, Walker2d, Ant, etc.)
-        env_id = env_config["id"].replace("MUJOCO-", "")
-        env = gymnasium.make(env_id)
-        # MuJoCo environments can have unbounded observations in edge cases
-        env = ClipObservationWrapper(env)
         return env
     elif env_config["id"][0:8] == "MUJOCOI-":
         # MUJOCOI: MuJoCo with IMAGE observations (render_mode="rgb_array")
