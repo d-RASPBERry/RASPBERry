@@ -59,7 +59,12 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> SACRaspberry
     # Register custom CNN model
     ModelCatalog.register_custom_model("SACLightweightCNN", SACLightweightCNN)
 
-    env_config = {"id": env_name}
+    # IMPORTANT: Propagate YAML env_config into RLlib env_config.
+    # Previously we only passed {"id": env_name}, silently ignoring keys like
+    # img_size/frame_skip/frame_stack/grayscale/normalize, causing unexpected behavior.
+    yaml_env_cfg = config.get("env_config", {}) or {}
+    env_id = yaml_env_cfg.get("id") or yaml_env_cfg.get("env_name") or env_name
+    env_config = {**yaml_env_cfg, "id": env_id}
     game = env_creator(env_config)
     register_env(env_short, env_creator)
 
