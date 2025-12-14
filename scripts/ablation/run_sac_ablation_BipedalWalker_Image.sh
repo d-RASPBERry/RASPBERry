@@ -24,15 +24,6 @@ GPU_ASSIGNMENT_MODE="shared"
 LAUNCH_DELAY_BETWEEN_GPUS=60
 LAUNCH_DELAY_SAME_GPU=120
 
-# Python 解释器（默认使用本机 Conda 环境；也可通过环境变量覆盖）
-PYTHON_BIN="${PYTHON_BIN:-/home/seventheli/anaconda3/envs/RASPBERRY/bin/python}"
-if [ ! -x "${PYTHON_BIN}" ]; then
-    echo "错误: 找不到可执行的 Python: ${PYTHON_BIN}" >&2
-    echo "请先安装/激活环境，或 export PYTHON_BIN=/path/to/python" >&2
-    exit 1
-fi
-
-# 解析命令行参数
 while getopts "n:m:h" opt; do
     case $opt in
         n)
