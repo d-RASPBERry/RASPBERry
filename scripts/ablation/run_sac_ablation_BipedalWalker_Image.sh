@@ -125,7 +125,7 @@ if [ "${GPU_ASSIGNMENT_MODE}" = "shared" ]; then
         log_suffix="bipedalwalker_image_gpu${gpu}_${TIMESTAMP}"
 
         echo "  [1/3] SAC-PER 启动 (日志: ${SCRIPT_LOG_DIR}/sac_per_${log_suffix}.log)"
-        "${PYTHON_BIN}" runner/run_sac_per_algo.py \
+        python runner/run_sac_per_algo.py \
             --config ${PER_CONFIG} \
             --gpu ${gpu} \
             > ${SCRIPT_LOG_DIR}/sac_per_${log_suffix}.log 2>&1 &
@@ -136,7 +136,7 @@ if [ "${GPU_ASSIGNMENT_MODE}" = "shared" ]; then
         sleep ${LAUNCH_DELAY_SAME_GPU}
 
         echo "  [2/3] SAC-PBER 启动 (日志: ${SCRIPT_LOG_DIR}/sac_pber_${log_suffix}.log)"
-        "${PYTHON_BIN}" runner/run_sac_pber_algo.py \
+        python runner/run_sac_pber_algo.py \
             --config ${PBER_CONFIG} \
             --gpu ${gpu} \
             > ${SCRIPT_LOG_DIR}/sac_pber_${log_suffix}.log 2>&1 &
@@ -147,7 +147,7 @@ if [ "${GPU_ASSIGNMENT_MODE}" = "shared" ]; then
         sleep ${LAUNCH_DELAY_SAME_GPU}
 
         echo "  [3/3] SAC-RASPBERry 启动 (日志: ${SCRIPT_LOG_DIR}/sac_raspberry_${log_suffix}.log)"
-        "${PYTHON_BIN}" runner/run_sac_raspberry_algo.py \
+        python runner/run_sac_raspberry_algo.py \
             --config ${RASP_CONFIG} \
             --gpu ${gpu} \
             > ${SCRIPT_LOG_DIR}/sac_raspberry_${log_suffix}.log 2>&1 &
@@ -173,7 +173,7 @@ else
         log_suffix="bipedalwalker_image_group$((group_idx + 1))_${TIMESTAMP}"
 
         echo "  [PER] 使用 GPU ${gpu_per} (日志: ${SCRIPT_LOG_DIR}/sac_per_${log_suffix}.log)"
-        "${PYTHON_BIN}" runner/run_sac_per_algo.py \
+        python runner/run_sac_per_algo.py \
             --config ${PER_CONFIG} \
             --gpu ${gpu_per} \
             > ${SCRIPT_LOG_DIR}/sac_per_${log_suffix}.log 2>&1 &
@@ -183,7 +183,7 @@ else
         echo "       后台 PID: ${pid_per}"
 
         echo "  [PBER] 使用 GPU ${gpu_pber} (日志: ${SCRIPT_LOG_DIR}/sac_pber_${log_suffix}.log)"
-        "${PYTHON_BIN}" runner/run_sac_pber_algo.py \
+        python runner/run_sac_pber_algo.py \
             --config ${PBER_CONFIG} \
             --gpu ${gpu_pber} \
             > ${SCRIPT_LOG_DIR}/sac_pber_${log_suffix}.log 2>&1 &
@@ -193,7 +193,7 @@ else
         echo "       后台 PID: ${pid_pber}"
 
         echo "  [RASPBERry] 使用 GPU ${gpu_rasp} (日志: ${SCRIPT_LOG_DIR}/sac_raspberry_${log_suffix}.log)"
-        "${PYTHON_BIN}" runner/run_sac_raspberry_algo.py \
+        python runner/run_sac_raspberry_algo.py \
             --config ${RASP_CONFIG} \
             --gpu ${gpu_rasp} \
             > ${SCRIPT_LOG_DIR}/sac_raspberry_${log_suffix}.log 2>&1 &
