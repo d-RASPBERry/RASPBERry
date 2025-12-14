@@ -29,7 +29,7 @@ hyper_parameters:
   # Optimized for Image-based Continuous Control
   train_batch_size: 256
   grad_clip: 1.0
-  n_step: 3
+  n_step: 1
   rollout_fragment_length: 4
   
   # Optimization
@@ -41,7 +41,8 @@ hyper_parameters:
 
   # Sampling & Training
   min_sample_timesteps_per_iteration: 8000
-  training_intensity: 4.0
+  num_steps_sampled_before_learning_starts: 20000
+  training_intensity: 1.0
   target_entropy: auto
 
   # Replay buffer (RASPBERry-specific)

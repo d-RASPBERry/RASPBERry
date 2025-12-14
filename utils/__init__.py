@@ -4,7 +4,6 @@ from gymnasium.wrappers import (
     TimeLimit,
     TransformObservation,
     GrayScaleObservation,
-    TransformReward,
     PixelObservationWrapper,
 )
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
@@ -80,6 +79,17 @@ class CarRacingActionWrapper(gymnasium.ActionWrapper):
         brake = max(0.0, float(action[2]))
         
         return np.array([steering, gas, brake], dtype=np.float32)
+
+
+class RewardScaleWrapper(gymnasium.RewardWrapper):
+    """统一的奖励缩放包装器，便于在外层脚本中检查 scale."""
+
+    def __init__(self, env, scale: float = 1.0):
+        super().__init__(env)
+        self.scale = float(scale)
+
+    def reward(self, reward):
+        return reward * self.scale
 
 
 class PixelObsExtractWrapper(gymnasium.ObservationWrapper):
@@ -410,15 +420,15 @@ def env_creator(env_config):
         if "CarRacing" in env_id:
             env = CarRacingActionWrapper(env)
         
-        # [Stability Fix] Scale rewards for ALL Image tasks
+        # [Stability Fix] Scale rewards for ALL Image tasks (configurable)
         if "CarRacing" in env_id:
-            # CarRacing: ~900 total -> scale 0.01 -> ~9.0
-            env = TransformReward(env, lambda r: 0.01 * r)
+            # CarRacing 默认缩放 0.01，仍允许 YAML 覆写
+            default_reward_scale = 0.01
         else:
-            # BipedalWalker/Others: ~300 total -> scale 0.05 -> ~15.0
-            # Increased scale for BipedalWalker to make positive feedback more significant
-            # relative to entropy term, encouraging movement over "idling".
-            env = TransformReward(env, lambda r: 0.05 * r)
+            # BipedalWalker/Others 默认缩放 0.05，可通过 env_config.reward_scale 调整
+            default_reward_scale = 0.05
+        reward_scale = env_config.get("reward_scale", default_reward_scale)
+        env = RewardScaleWrapper(env, reward_scale)
 
         # Default skip 50 frames for CarRacing (skip initial zoom-in/black frames)
         default_skip = 50 if "CarRacing" in env_id else 0
@@ -465,9 +475,10 @@ def env_creator(env_config):
             normalize=normalize,
             dtype=dtype,
         )
-        # [Stability Fix] Scale rewards for MuJoCo Image tasks
-        # HalfCheetah rewards can be large (~3000+), scaling by 0.01 keeps Q-values reasonable
-        env = TransformReward(env, lambda r: 0.01 * r)
+        # [Stability Fix] Scale rewards for MuJoCo Image tasks (configurable)
+        # HalfCheetah rewards can be large (~3000+), scaling keeps Q-values reasonable
+        reward_scale = env_config.get("reward_scale", 0.01)
+        env = RewardScaleWrapper(env, reward_scale)
         
         return env
     else:
