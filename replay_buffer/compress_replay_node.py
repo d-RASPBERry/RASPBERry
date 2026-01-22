@@ -1,15 +1,22 @@
-import numpy as np
+# ====== Section: Imports ======
+# ------ Subsection: Standard library ------
+import logging
+import time
 from typing import Tuple
+
+# ------ Subsection: Third-party ------
+import blosc
+import numpy as np
 from gymnasium import spaces
 from ray.rllib.policy.sample_batch import SampleBatch
-from utils import get_obs_shape
-import blosc
-import time
-import logging
 
+# ------ Subsection: Local ------
+from utils import get_obs_shape
+
+# ====== Section: Module State ======
 logger = logging.getLogger(__name__)
 
-
+# ====== Section: Classes ======
 class CompressReplayNode(object):
     """
     Compressed replay node.
@@ -66,18 +73,15 @@ class CompressReplayNode(object):
             # Some environments do not support setting the thread count; ignore
             pass
 
-        # State management
         self.pos = 0
         self.full = False
 
         self.obs_shape = get_obs_shape(obs_space)
 
-        # Pre-allocate observation buffers
         obs_buffer_shape = (self.buffer_size,) + tuple(self.obs_shape)
         self.obs = np.zeros(obs_buffer_shape, dtype=obs_space.dtype)
         self.new_obs = np.zeros(obs_buffer_shape, dtype=obs_space.dtype)
 
-        # Action space support (Discrete and Box)
         if isinstance(action_space, spaces.Discrete):
             self.actions = np.zeros(self.buffer_size, dtype=action_space.dtype)
         else:
@@ -108,7 +112,6 @@ class CompressReplayNode(object):
         if actual_size == 0:
             raise ValueError
 
-        # Store data
         end_pos = self.pos + actual_size
         slice_range = slice(self.pos, end_pos)
         data_slice = slice(None, actual_size)
@@ -120,11 +123,9 @@ class CompressReplayNode(object):
         self.terminateds[slice_range] = batch["terminateds"][data_slice]
         self.truncateds[slice_range] = batch["truncateds"][data_slice]
 
-        # Handle weights
         weights = batch.get("weights")
         self.weights[slice_range] = weights[data_slice] if weights is not None else 1.0
 
-        # Update state
         self.pos = end_pos
         if self.pos >= self.buffer_size:
             self.full = True
@@ -145,7 +146,6 @@ class CompressReplayNode(object):
         transpose_ms = 0.0
         rank = len(obs_data.shape)
         
-        # Only transpose if compression is enabled
         if self.enable_compression and rank > 1:
             if self.compress_base == -1:
                 # Smart default: move batch dimension to the end
@@ -161,7 +161,6 @@ class CompressReplayNode(object):
                 new_obs_data = np.transpose(new_obs_data, axes)
         transpose_ms = (time.time() - t_tr0) * 1000.0
 
-        # Create an optimized SampleBatch
         prepared = SampleBatch({
             "obs": obs_data,
             "new_obs": new_obs_data,
@@ -194,31 +193,15 @@ class CompressReplayNode(object):
         if not self.full and self.pos == 0:
             raise ValueError("Node is empty; cannot sample compressed data")
 
-        # Prepare data
         prepared_batch, prep_ms, transpose_ms = self._prepare_for_compression()
 
-        # Compute block-level weight (mean of sample weights)
         block_weight = float(np.mean(prepared_batch["weights"]))
         if np.isnan(block_weight) or block_weight <= 0:
-            block_weight = 0.01  # minimal weight guard
+            # Guard against invalid/zero priorities to keep sampling stable.
+            block_weight = 0.01
 
-        # Perform compression
         try:
-            if logger.isEnabledFor(logging.DEBUG):
-                try:
-                    size = int(self.size())
-                    logger.debug(
-                        "[Compress.sample] size=%d, prep_ms=%.2f, obs_shape=%s, base=%s",
-                        size,
-                        prep_ms,
-                        prepared_batch["obs"].shape,
-                        self.compress_base,
-                    )
-                except Exception:
-                    pass
-            # Compress and collect timing from inner routine
             compressed_batch, pack_obs_ms, pack_new_obs_ms, contig_ms, assemble_ms, raw_obs_bytes, raw_new_obs_bytes = self._compress_sample_batch(prepared_batch)
-            # Expose detailed metrics for aggregators
             metrics = {
                 "prepare_ms": float(prep_ms),
                 "transpose_ms": float(transpose_ms),
@@ -259,13 +242,6 @@ class CompressReplayNode(object):
 
         # Mode C: No compression, just wrap in object array for compatibility
         if not self.enable_compression:
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(
-                    "[Mode C - No Compression] obs_bytes=%d, new_obs_bytes=%d",
-                    raw_obs_bytes,
-                    raw_new_obs_bytes,
-                )
-            
             t_asm0 = time.time()
             out_batch = SampleBatch({
                 "obs": np.array([obs_array], dtype=object),
@@ -281,7 +257,6 @@ class CompressReplayNode(object):
             assemble_ms = (time.time() - t_asm0) * 1000.0
             return out_batch, 0.0, 0.0, contig_ms, assemble_ms, raw_obs_bytes, raw_new_obs_bytes
 
-        # Standard path: Compress with blosc
         t_obs0 = time.time()
         compressed_obs = blosc.pack_array(
             obs_array,
@@ -300,30 +275,6 @@ class CompressReplayNode(object):
         pack_obs_ms = (t_obs1 - t_obs0) * 1000.0
         pack_new_obs_ms = (t_obs2 - t_obs1) * 1000.0
 
-        if logger.isEnabledFor(logging.DEBUG):
-            try:
-                obs_comp_bytes = int(len(compressed_obs))
-                new_obs_comp_bytes = int(len(compressed_new_obs))
-                logger.debug(
-                    "[Compress.pack] pack_obs_ms=%.2f, pack_new_obs_ms=%.2f, "
-                    "obs_bytes=%d/%d (%.3f), new_obs_bytes=%d/%d (%.3f), "
-                    "algo=%s, clevel=%d, nthreads=%d",
-                    (t_obs1 - t_obs0) * 1000.0,
-                    (t_obs2 - t_obs1) * 1000.0,
-                    obs_comp_bytes,
-                    raw_obs_bytes,
-                    obs_comp_bytes / max(raw_obs_bytes, 1),
-                    new_obs_comp_bytes,
-                    raw_new_obs_bytes,
-                    new_obs_comp_bytes / max(raw_new_obs_bytes, 1),
-                    self.cname,
-                    self.compression_level,
-                    self.nthreads,
-                )
-            except Exception:
-                pass
-
-        # Return compressed SampleBatch (only obs/new_obs are compressed object arrays)
         t_asm0 = time.time()
         out_batch = SampleBatch({
             "obs": np.array([compressed_obs], dtype=object),
@@ -348,8 +299,6 @@ class CompressReplayNode(object):
         """Reset node state (keep allocated memory)."""
         self.pos = 0
         self.full = False
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug("CompressReplayNode reset")
 
     def is_ready(self) -> bool:
         """Whether the node is ready to compress (buffer full)."""

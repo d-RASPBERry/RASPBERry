@@ -21,7 +21,8 @@ hyper_parameters:
 
 
 run_config:
-  max_iterations: 100
+  # Keep iterations high so time-based runs (e.g., timeout 30m) don't stop early.
+  max_iterations: 100000
   max_time_s: 5400
 
 

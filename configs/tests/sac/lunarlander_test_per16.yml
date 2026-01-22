@@ -1,0 +1,38 @@
+# SAC-PER: BOX2DV-LunarLanderContinuous
+# 🧪 TEST: PER baseline（sub_buffer_size 暂无概念）
+extends: ../../templates/sac_vector_base.yml
+
+env_config:
+  env_name: "BOX2DV-LunarLanderContinuous"
+  env_alias: "SAC-PER-LunarLander"
+
+logging:
+  log_subdir: "BOX2DV/LunarLander-PER"
+
+mlflow:
+  experiment: "SAC-LunarLander-per-test"
+  tags:
+    algorithm: "SAC"
+    buffer: "PER"
+    environment: "LunarLander"
+    obs_type: "vector"
+    compression: "none"
+    test: "per_baseline"
+
+run_config:
+  max_time_s: 14400  # 4 hours test
+
+hyper_parameters:
+  train_batch_size: 256
+  rollout_fragment_length: 1
+  min_sample_timesteps_per_iteration: 2000
+  training_intensity: 2.0
+
+  replay_buffer_config:
+    capacity: 1000000  # 1M transitions
+    type: MultiAgentPrioritizedReplayBuffer
+    worker_side_prioritization: false
+
+  num_workers: 6
+  num_envs_per_worker: 8
+

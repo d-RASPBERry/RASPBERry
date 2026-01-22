@@ -1,0 +1,41 @@
+# SAC-PBER: BOX2DV-LunarLanderContinuous
+# 🧪 TEST: sub_buffer_size=8 (aligned) + 容量 10w
+extends: ../../templates/sac_vector_base.yml
+
+env_config:
+  env_name: "BOX2DV-LunarLanderContinuous"
+  env_alias: "SAC-PBER-LunarLander-sub8"
+
+logging:
+  log_subdir: "BOX2DV/LunarLander-PBER-sub8"
+
+mlflow:
+  experiment: "SAC-LunarLander-sub8-test"
+  tags:
+    algorithm: "SAC"
+    buffer: "PBER"
+    environment: "LunarLander"
+    obs_type: "vector"
+    compression: "none"
+    test: "sub_buffer_size_8_aligned"
+
+run_config:
+  max_time_s: 14400  # 4 hours test
+
+hyper_parameters:
+  train_batch_size: 256
+  rollout_fragment_length: 1
+  min_sample_timesteps_per_iteration: 2000
+  training_intensity: 2.0
+
+  # Replay buffer 设置（容量 1M transitions）
+  replay_buffer_config:
+    capacity: 1000000  # 1M transitions
+    type: MultiAgentPrioritizedBlockReplayBuffer
+    sub_buffer_size: 8
+    worker_side_prioritization: false
+
+  # 资源配置（与其他测试保持一致）
+  num_workers: 6
+  num_envs_per_worker: 8
+

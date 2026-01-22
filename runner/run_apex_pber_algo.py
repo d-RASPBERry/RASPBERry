@@ -2,11 +2,12 @@
 """Minimal training script for APEX-DQN + PBER.
 
 Direct algorithm construction with PBER buffer,
-suitable for quick experiments and debugging.
+suitable for quick experiments.
 Distributed version with multiple workers and replay actors.
 """
 
-# Standard library imports
+# ====== Section: Imports ======
+# ------ Subsection: Standard library ------
 import argparse
 import os
 import sys
@@ -14,29 +15,30 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# Add project root to path
+# ------ Subsection: Project root on sys.path ------
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Third-party imports
+# ------ Subsection: Third-party ------
 import mlflow
 import ray
 from ray.tune.registry import register_env
 
-# Local imports
+# ------ Subsection: Local ------
 from algorithms.apex_dqn_raspberry_algo import ApexDQNRaspberryAlgo
 from metrics import write_iteration_json
 from metrics.logger import setup_logger
 from metrics.mlflow_helper import setup_mlflow, prepare_metrics
 from replay_buffer.d_pber_ray import MultiAgentPrioritizedBlockReplayBuffer
-from utils import env_creator, load_config, infer_env_type
-from utils.config_helper import load_buffer_dump_config
+from utils import env_creator, infer_env_type, ConfigLoader
 
-CONFIG_PATH = str((ROOT / "configs/apex_pber_atari.yml").resolve())
+# ====== Section: Constants ======
+DEFAULT_CONFIG_PATH = str((ROOT / "configs/apex_pber_atari.yml").resolve())
 RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
 
 
+# ====== Section: Algorithm Construction ======
 def build_algorithm(env_name: str, env_short: str, config: dict) -> ApexDQNRaspberryAlgo:
     """Build APEX-DQN PBER algorithm instance.
 
@@ -52,7 +54,10 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> ApexDQNRaspb
     """
     hyper = config["hyper_parameters"].copy()
 
-    env_config = {"id": env_name}
+    # Pass full YAML env_config to preserve env-specific settings.
+    yaml_env_cfg = config.get("env_config", {}) or {}
+    env_id = yaml_env_cfg.get("id") or yaml_env_cfg.get("env_name") or env_name
+    env_config = {**yaml_env_cfg, "id": env_id}
     game = env_creator(env_config)
     register_env(env_short, env_creator)
 
@@ -75,25 +80,29 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> ApexDQNRaspb
     return ApexDQNRaspberryAlgo(config=hyper, env=env_short)
 
 
+# ====== Section: CLI / Main ======
 def main() -> None:
+    # ------ Subsection: CLI args ------
     parser = argparse.ArgumentParser(description="APEX-DQN-PBER training script")
     parser.add_argument("--env", type=str, default="Atari-Breakout",
                         help="Atari environment name (e.g., Breakout, Pong)")
     parser.add_argument("--gpu", type=str, default="0", help="CUDA device ID")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=DEFAULT_CONFIG_PATH,
+        help="Path to APEX-PBER config YAML (default: apex_pber_atari.yml)",
+    )
     args = parser.parse_args()
 
-    # Load configs
-    config = load_config(CONFIG_PATH)
-    runtime = load_config(RUNTIME_CONFIG)
+    # ------ Subsection: Config loading ------
+    loader = ConfigLoader(runtime_config_path=RUNTIME_CONFIG)
+    config = loader.load(args.config)
 
-    required_runtime = ["paths", "ray"]
-    missing = [k for k in required_runtime if k not in runtime]
-    if missing:
-        raise ValueError(f"runtime.yml missing required configs: {missing}")
-
-    paths = runtime["paths"]
-    ray_cfg = runtime["ray"]
-    mlflow_base = runtime.get("mlflow", None)
+    # ------ Subsection: Runtime config ------
+    paths = config['runtime']['paths']
+    ray_cfg = config['runtime']['ray']
+    mlflow_base = config['runtime'].get('mlflow', None)
 
     run_cfg = config["run_config"]
     hyper = config["hyper_parameters"]
@@ -103,9 +112,26 @@ def main() -> None:
     log_every = config.get("logging_config", {}).get("log_freq", 10)
 
     # Infer environment type and construct paths dynamically
-    env_type = infer_env_type(args.env)
-    run_name = f"APEX-PBER-{datetime.now().timestamp()}"
-    log_root = Path(paths["log_base_path"]) / env_type / args.env
+    env_name = config.get("env_config", {}).get("env_name", args.env)
+    env_alias = config.get("env_config", {}).get("env_alias", env_name)
+
+    env_type = infer_env_type(env_name)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    alias_slug = "".join(
+        ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in env_alias
+    ).strip("_")
+    prefix = "APEX-PBER"
+    config_slug = "".join(
+        ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in Path(args.config).stem
+    ).strip("_")
+    if alias_slug:
+        run_name_base = f"{prefix}-{alias_slug}"
+    else:
+        run_name_base = prefix
+    if config_slug and config_slug.lower() not in run_name_base.lower():
+        run_name_base = f"{run_name_base}-{config_slug}"
+    run_name = f"{run_name_base}-{args.gpu}-{timestamp}"
+    log_root = Path(paths["log_base_path"]) / env_type / env_name
     log_dir = log_root / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -117,42 +143,55 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("APEX-DQN-PBER Training Started")
     logger.info("Env: %s (%s) | GPU: %s | Max time: %ds | Max iter: %d",
-                args.env, env_type, args.gpu, max_time_s, max_iterations)
+                env_name, env_type, args.gpu, max_time_s, max_iterations)
     logger.info("Log dir: %s", log_dir)
     logger.info("=" * 60)
 
     # Setup mlflow (if configured)
-    if mlflow_base:
+    use_mlflow = run_cfg.get("use_mlflow", False)
+    if mlflow_base and use_mlflow:
+        mlflow_cfg_from_yaml = config.get("mlflow", {})
+        mlflow_experiment = mlflow_cfg_from_yaml.get("experiment", env_name)
+        mlflow_tags_from_yaml = mlflow_cfg_from_yaml.get("tags", {})
+
         mlflow_cfg = {
             **mlflow_base,
-            "experiment": args.env,
-            "run_name": run_name,
+            "experiment": mlflow_experiment,
+            "run_name": f"{env_alias}-{args.gpu}-{timestamp}",
         }
         extra_tags = {
-            "algorithm": "APEX-DQN",
-            "buffer": "PBER",
-            "env": args.env,
+            "algorithm": mlflow_tags_from_yaml.get("algorithm", "APEX-DQN"),
+            "buffer": mlflow_tags_from_yaml.get("buffer", "PBER"),
+            "env": mlflow_tags_from_yaml.get("environment", env_name),
+            "env_alias": env_alias,
+            "obs_type": mlflow_tags_from_yaml.get("obs_type", "unknown"),
+            "gpu": args.gpu,
         }
         mlflow_run = setup_mlflow(mlflow_cfg, hyper, logger, extra_tags=extra_tags)
     else:
         mlflow_run = None
         mlflow_cfg = None
-        logger.info("[mlflow] Not configured, skipping experiment tracking")
+        if not use_mlflow:
+            logger.info("[mlflow] Disabled in run_config")
+        else:
+            logger.info("[mlflow] Not configured, skipping experiment tracking")
 
     # Initialize Ray
     ray_temp_dir = f"{paths['ray_temp_dir']}ray_{int(time.time())}"
     object_store_bytes = int(ray_cfg.get("object_store_memory_gb", 80) * 1024 * 1024 * 1024)
 
+    num_cpus = hyper.get("num_cpus", 5)
+    num_gpus = hyper.get("num_gpus", 0)
     ray.init(
-        num_cpus=hyper.get("num_cpus", 5),
-        num_gpus=hyper["num_gpus"],
+        num_cpus=num_cpus,
+        num_gpus=num_gpus,
         include_dashboard=ray_cfg.get("include_dashboard", False),
         object_store_memory=object_store_bytes,
         _temp_dir=ray_temp_dir,
     )
-    logger.info("Ray initialized (CPUs=%d, GPUs=%d)", hyper["num_cpus"], hyper["num_gpus"])
+    logger.info("Ray initialized (CPUs=%d, GPUs=%s)", num_cpus, num_gpus)
 
-    algo = build_algorithm(args.env, args.env, config)
+    algo = build_algorithm(env_name, env_name, config)
     logger.info("Algorithm built, starting training...")
 
     start_time = time.time()
@@ -166,9 +205,6 @@ def main() -> None:
 
             result = algo.train()
             iteration += 1
-            
-            # Note: APEX uses distributed replay buffers, full dump not supported
-            # Buffer statistics are automatically logged in result['info']['replay_shard_X']
             
             # Attach replay buffer statistics to result
             # For APEX, buffer stats come from result['info']['replay_shard_X']

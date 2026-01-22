@@ -1,4 +1,4 @@
-# Inherit base configuration
+# APEX-DQN-PER configuration for Atari environments
 extends: templates/apex_base.yml
 
 hyper_parameters:

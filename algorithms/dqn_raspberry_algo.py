@@ -11,7 +11,7 @@ from ray.rllib.utils.replay_buffers.utils import sample_min_n_steps_from_buffer
 from ray.rllib.utils.typing import AlgorithmConfigDict, EnvCreator, ResultDict, SampleBatchType
 from ray.util import log_once
 from replay_buffer.d_raspberry_ray import MultiAgentRASPBERryReplayBuffer
-from typing import Dict
+from typing import Dict, Any
 import logging
 import numpy as np
 
@@ -20,13 +20,20 @@ logger = logging.getLogger(__name__)
 
 @DeveloperAPI
 def update_priorities_in_replay_buffer(
-        replay_buffer: MultiAgentRASPBERryReplayBuffer,
+        replay_buffer: Any,
         train_batch: SampleBatchType,
         train_results: ResultDict,
     ) -> None:
-    """Update replay buffer priorities using raw sample-level values."""
+    """Update replay buffer priorities using raw sample-level values.
     
-    if not isinstance(replay_buffer, MultiAgentRASPBERryReplayBuffer):
+    Supports any MultiAgentPrioritizedReplayBuffer-style implementation that
+    exposes `update_priorities(prio_dict)`, including:
+    - RASPBERry (`MultiAgentRASPBERryReplayBuffer`)
+    - PBER (`MultiAgentPrioritizedBlockReplayBuffer`)
+    - PER (RLlib `MultiAgentPrioritizedReplayBuffer`)
+    """
+    
+    if replay_buffer is None or not hasattr(replay_buffer, "update_priorities"):
         return
 
     prio_dict: Dict = {}

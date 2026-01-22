@@ -15,27 +15,33 @@ Design:
 See Chapter 3 (PBER) and Chapter 5 (Distributed PBER) in thesis.
 """
 
+# ====== Section: Imports ======
+# ------ Subsection: Standard library ------
 import logging
+from typing import Any, Dict, Optional
+
+# ------ Subsection: Third-party ------
 import numpy as np
 from gymnasium.spaces import Space
-from replay_buffer.pber_ray import PrioritizedBlockReplayBuffer
-from typing import Dict, Optional, Any
-from ray.rllib.utils.typing import PolicyID, SampleBatchType
-from ray.rllib.utils.annotations import override, DeveloperAPI
+from ray.rllib.policy.sample_batch import SampleBatch, MultiAgentBatch
+from ray.rllib.utils.annotations import DeveloperAPI, override
 from ray.rllib.utils.replay_buffers import StorageUnit
+from ray.rllib.utils.replay_buffers.multi_agent_prioritized_replay_buffer import (
+    MultiAgentPrioritizedReplayBuffer,
+)
 from ray.rllib.utils.replay_buffers.multi_agent_replay_buffer import (
     ReplayMode,
     merge_dicts_with_warning,
 )
-from ray.rllib.utils.replay_buffers.multi_agent_prioritized_replay_buffer import (
-    MultiAgentPrioritizedReplayBuffer,
-)
-from ray.rllib.policy.sample_batch import SampleBatch, MultiAgentBatch
-from ray.util.debug import log_once
+from ray.rllib.utils.typing import PolicyID, SampleBatchType
 
+# ------ Subsection: Local ------
+from replay_buffer.pber_ray import PrioritizedBlockReplayBuffer
+
+# ====== Section: Module State ======
 logger = logging.getLogger(__name__)
 
-
+# ====== Section: Classes ======
 @DeveloperAPI
 class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
     """Multi-agent PBER buffer (no compression).
@@ -78,17 +84,14 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             kwargs["replay_mode"] == "lockstep"
             or kwargs["replay_mode"] == ReplayMode.LOCKSTEP
         ):
-            if log_once("lockstep_mode_not_supported"):
-                logger.error(
-                    "Lockstep mode not supported, falling back to independent mode"
-                )
+            logger.error(
+                "Lockstep mode not supported, falling back to independent mode"
+            )
             kwargs["replay_mode"] = "independent"
 
-        # Store block-level parameters
         self.sub_buffer_size = sub_buffer_size
         self.prioritized_replay_eps = float(prioritized_replay_eps)
 
-        # PBER configuration
         pber_config = {
             "type": PrioritizedBlockReplayBuffer,
             "action_space": action_space,
@@ -106,7 +109,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         self._configured_capacity_transitions = int(capacity)
         self._top_storage_unit = storage_unit
 
-        # Pass capacity directly (in transitions) to underlying buffer
         pber_config["capacity"] = self._configured_capacity_transitions
 
         super(MultiAgentPrioritizedBlockReplayBuffer, self).__init__(
@@ -122,7 +124,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             **kwargs,
         )
 
-        # Override capacity tracking (in transitions)
         self._capacity = self._configured_capacity_transitions
 
     @override(MultiAgentPrioritizedReplayBuffer)
@@ -146,12 +147,10 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         Returns:
             SampleBatch or MultiAgentBatch
         """
-        # Use parent's sampling logic
         sampled_batch = super(
             MultiAgentPrioritizedBlockReplayBuffer, self
         ).sample(num_items=num_items, policy_id=policy_id, beta=beta, **kwargs)
 
-        # PBER stores raw numpy arrays, no decompression needed
         return sampled_batch
 
     @override(MultiAgentPrioritizedReplayBuffer)
@@ -168,7 +167,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             if buffer is None:
                 continue
 
-            # Convert transition-level indexes/errors to block-level
             block_indexes = batch_indexes // self.sub_buffer_size
             unique_block_indexes = np.unique(block_indexes)
 
@@ -181,19 +179,16 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
 
             block_priorities = np.array(block_priorities, dtype=np.float32)
 
-            # Update underlying buffer with block-level priorities
             buffer.update_priorities(unique_block_indexes, block_priorities)
 
     @override(MultiAgentPrioritizedReplayBuffer)
-    def stats(self, debug: bool = False) -> Dict:
+    def stats(self) -> Dict:
         """Get buffer statistics.
         
         Returns:
             Dict with per-policy and aggregate statistics
         """
-        data = super(MultiAgentPrioritizedBlockReplayBuffer, self).stats(
-            debug=debug
-        )
+        data = super(MultiAgentPrioritizedBlockReplayBuffer, self).stats()
 
         # Align with other replay buffers: expose total transitions seen.
         data["added_count"] = int(getattr(self, "_num_added", 0))

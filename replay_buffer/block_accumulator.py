@@ -4,12 +4,19 @@ Pure block-level data accumulation without compression logic.
 Used by PBER (Prioritized Block Experience Replay) to batch transitions.
 """
 
-import numpy as np
+# ====== Section: Imports ======
+# ------ Subsection: Standard library ------
 from typing import Tuple
+
+# ------ Subsection: Third-party ------
+import numpy as np
 from gymnasium import spaces
 from ray.rllib.policy.sample_batch import SampleBatch
+
+# ------ Subsection: Local ------
 from utils import get_obs_shape
 
+# ====== Section: Classes ======
 class BlockAccumulator(object):
     """
     Block accumulator for PBER (without compression).
@@ -42,18 +49,15 @@ class BlockAccumulator(object):
         self.obs_space = obs_space
         self.action_space = action_space
 
-        # State management
         self.pos = 0
         self.full = False
 
         self.obs_shape = get_obs_shape(obs_space)
 
-        # Pre-allocate observation buffers
         obs_buffer_shape = (self.block_size,) + tuple(self.obs_shape)
         self.obs = np.zeros(obs_buffer_shape, dtype=obs_space.dtype)
         self.new_obs = np.zeros(obs_buffer_shape, dtype=obs_space.dtype)
 
-        # Action space support (Discrete and Box)
         if isinstance(action_space, spaces.Discrete):
             self.actions = np.zeros(self.block_size, dtype=action_space.dtype)
         else:
@@ -77,7 +81,6 @@ class BlockAccumulator(object):
         if actual_size == 0:
             raise ValueError
 
-        # Store data
         end_pos = self.pos + actual_size
         slice_range = slice(self.pos, end_pos)
         data_slice = slice(None, actual_size)
@@ -89,11 +92,9 @@ class BlockAccumulator(object):
         self.terminateds[slice_range] = batch["terminateds"][data_slice]
         self.truncateds[slice_range] = batch["truncateds"][data_slice]
 
-        # Handle weights
         weights = batch.get("weights")
         self.weights[slice_range] = weights[data_slice] if weights is not None else 1.0
 
-        # Update state
         self.pos = end_pos
         if self.pos >= self.block_size:
             self.full = True
@@ -118,12 +119,11 @@ class BlockAccumulator(object):
 
         size = self.size()
         
-        # Compute block-level weight (mean of sample weights)
         block_weight = float(np.mean(self.weights[:size]))
         if np.isnan(block_weight) or block_weight <= 0:
-            block_weight = 0.01  # minimal weight guard
+            # Guard against invalid/zero priorities to keep sampling stable.
+            block_weight = 0.01
 
-        # Create raw SampleBatch (no compression, no transpose)
         raw_batch = SampleBatch({
             "obs": self.obs[:size].copy(),
             "new_obs": self.new_obs[:size].copy(),
@@ -152,5 +152,3 @@ class BlockAccumulator(object):
     def __repr__(self) -> str:
         return (f"BlockAccumulator(size={self.pos}/{self.block_size}, "
                 f"obs_shape={self.obs_shape})")
-
-

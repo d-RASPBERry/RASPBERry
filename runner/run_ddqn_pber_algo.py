@@ -2,10 +2,11 @@
 """Minimal training script for DDQN + PBER.
 
 Direct algorithm construction with PBER buffer,
-suitable for quick experiments and debugging.
+suitable for quick experiments.
 """
 
-# Standard library imports
+# ====== Section: Imports ======
+# ------ Subsection: Standard library ------
 import argparse
 import os
 import sys
@@ -13,28 +14,29 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-# Add project root to path
+# ------ Subsection: Project root on sys.path ------
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# Third-party imports
+# ------ Subsection: Third-party ------
 import mlflow
 import ray
 from ray.tune.registry import register_env
 
-# Local imports
+# ------ Subsection: Local ------
 from algorithms.dqn_raspberry_algo import DQNRaspberryAlgo
 from metrics import write_iteration_json
 from metrics.logger import setup_logger
 from metrics.mlflow_helper import setup_mlflow, prepare_metrics
 from replay_buffer.d_pber_ray import MultiAgentPrioritizedBlockReplayBuffer
 from utils import env_creator, infer_env_type, ConfigLoader
-from utils.config_helper import load_buffer_dump_config
 
+# ====== Section: Constants ======
 DEFAULT_CONFIG_PATH = str((ROOT / "configs/ddqn_pber_atari.yml").resolve())
 RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
 
+# ====== Section: Algorithm Construction ======
 
 def build_algorithm(env_name: str, env_short: str, config: dict) -> DQNRaspberryAlgo:
     """Build DQN PBER algorithm instance.
@@ -51,7 +53,10 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> DQNRaspberry
     """
     hyper = config["hyper_parameters"].copy()
 
-    env_config = {"id": env_name}
+    # Pass full YAML env_config to preserve env-specific settings.
+    yaml_env_cfg = config.get("env_config", {}) or {}
+    env_id = yaml_env_cfg.get("id") or yaml_env_cfg.get("env_name") or env_name
+    env_config = {**yaml_env_cfg, "id": env_id}
     game = env_creator(env_config)
     register_env(env_short, env_creator)
 
@@ -74,7 +79,9 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> DQNRaspberry
     return DQNRaspberryAlgo(config=hyper, env=env_short)
 
 
+# ====== Section: CLI / Main ======
 def main() -> None:
+    # ------ Subsection: CLI args ------
     parser = argparse.ArgumentParser(description="DDQN-PBER training script")
     parser.add_argument(
         "--env",
@@ -91,11 +98,11 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Load configs with ConfigLoader
+    # ------ Subsection: Config loading ------
     loader = ConfigLoader(runtime_config_path=RUNTIME_CONFIG)
     config = loader.load(args.config)
 
-    # Extract configs
+    # ------ Subsection: Runtime config ------
     paths = config['runtime']['paths']
     ray_cfg = config['runtime']['ray']
     mlflow_base = config['runtime'].get('mlflow', None)
@@ -107,14 +114,24 @@ def main() -> None:
     max_iterations = run_cfg.get("max_iterations", 10000)
     log_every = config.get("logging_config", {}).get("log_freq", 10)
 
-    # Get environment name from config (override command-line default)
+    # ------ Subsection: Paths & env vars ------
     env_name = config.get("env_config", {}).get("env_name", args.env)
     env_alias = config.get("env_config", {}).get("env_alias", env_name)
 
-    # Infer environment type and construct paths dynamically
     env_type = infer_env_type(env_name)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    run_name = f"DDQN-PBER-{args.gpu}-{timestamp}"
+    alias_slug = "".join(
+        ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in env_alias
+    ).strip("_")
+    config_slug = "".join(
+        ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in Path(args.config).stem
+    ).strip("_")
+    run_name_base = "DDQN-PBER"
+    if alias_slug:
+        run_name_base = f"{run_name_base}-{alias_slug}"
+    if config_slug and config_slug.lower() not in run_name_base.lower():
+        run_name_base = f"{run_name_base}-{config_slug}"
+    run_name = f"{run_name_base}-{args.gpu}-{timestamp}"
 
     log_root = Path(paths["log_base_path"]) / env_type / env_name
     log_dir = log_root / run_name
@@ -123,7 +140,7 @@ def main() -> None:
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
     os.environ["TUNE_RESULTS_DIR"] = str(log_root)
 
-    # Setup logging
+    # ------ Subsection: Logging ------
     logger = setup_logger(run_name, log_dir)
     logger.info("=" * 60)
     logger.info("DDQN-PBER Training Started")
@@ -138,7 +155,7 @@ def main() -> None:
     logger.info("Log dir: %s", log_dir)
     logger.info("=" * 60)
 
-    # Setup mlflow (if configured)
+    # ------ Subsection: MLflow (optional) ------
     use_mlflow = run_cfg.get("use_mlflow", False)
     if mlflow_base and use_mlflow:
         mlflow_cfg_from_yaml = config.get("mlflow", {})
@@ -167,7 +184,7 @@ def main() -> None:
         else:
             logger.info("[mlflow] Not configured, skipping experiment tracking")
 
-    # Initialize Ray
+    # ------ Subsection: Ray init ------
     ray_temp_dir = f"{paths['ray_temp_dir']}ray_{int(time.time())}"
     object_store_bytes = int(
         ray_cfg.get("object_store_memory_gb", 80) * 1024 * 1024 * 1024
@@ -186,9 +203,11 @@ def main() -> None:
         hyper.get("num_gpus", 0),
     )
 
+    # ------ Subsection: Algorithm init ------
     algo = build_algorithm(env_name, env_alias, config)
     logger.info("Algorithm built, starting training...")
 
+    # ------ Subsection: Train loop ------
     start_time = time.time()
     iteration = 0
 
@@ -201,23 +220,7 @@ def main() -> None:
             result = algo.train()
             iteration += 1
             
-            # Dump buffer storage for verification (controlled by runtime.yml)
-            dump_config = load_buffer_dump_config('ddqn', RUNTIME_CONFIG)
-            if dump_config['enable_dump'] and iteration == dump_config['dump_iteration']:
-                from utils.buffer_dump_utils import dump_buffer_content
-                dump_file = log_dir / f"buffer_storage_iter{dump_config['dump_iteration']}.pkl"
-                try:
-                    stats = dump_buffer_content(algo.local_replay_buffer, dump_file)
-                    logger.info("📦 Buffer content dumped to %s", dump_file)
-                    if stats:
-                        for policy_id, policy_stats in stats.items():
-                            logger.info(f"  [{policy_id}] Blocks: {policy_stats.get('num_blocks', 0)}, "
-                                      f"Transitions: {policy_stats.get('num_transitions', 0)}, "
-                                      f"Est. Memory: {policy_stats.get('estimated_total_memory_mb', 0):.1f} MB")
-                except Exception as e:
-                    logger.warning("Failed to dump buffer content: %s", e)
-            
-            # Attach replay buffer statistics to result
+            # Attach replay buffer stats to result payload
             if hasattr(algo, 'local_replay_buffer'):
                 from utils import flatten_dict
                 buffer_stats = flatten_dict(algo.local_replay_buffer.stats())

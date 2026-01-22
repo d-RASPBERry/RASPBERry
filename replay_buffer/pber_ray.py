@@ -16,18 +16,23 @@ Design:
 See Chapter 3 (PBER) in thesis for algorithm details.
 """
 
+# ====== Section: Imports ======
+# ------ Subsection: Standard library ------
+from typing import Any, Dict, List, Optional
+
+# ------ Subsection: Third-party ------
 import numpy as np
 from gymnasium.spaces import Space
-from typing import Dict, Optional, Any, List
-from ray.rllib.utils.typing import SampleBatchType
+from ray.rllib.policy.sample_batch import SampleBatch, concat_samples
 from ray.rllib.utils.replay_buffers.prioritized_replay_buffer import (
     PrioritizedReplayBuffer,
 )
+from ray.rllib.utils.typing import SampleBatchType
+
+# ------ Subsection: Local ------
 from replay_buffer.block_accumulator import BlockAccumulator
-from ray.rllib.policy.sample_batch import SampleBatch
-from ray.rllib.policy.sample_batch import concat_samples
 
-
+# ====== Section: Classes ======
 class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
     """Prioritized Block Experience Replay (PBER) buffer.
     
@@ -56,20 +61,18 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         self.obs_space = obs_space
         self.action_space = action_space
 
-        # Block accumulator (简单的数据累积器)
         self.block_accumulator = BlockAccumulator(
             block_size=sub_buffer_size,
             obs_space=obs_space,
             action_space=action_space,
         )
 
-        # Metrics
         self._metrics = {
             "num_blocks": 0,
             "num_transitions": 0,
         }
 
-    def stats(self, debug: bool = False) -> Dict[str, Any]:
+    def stats(self) -> Dict[str, Any]:
         """Compute memory usage statistics.
         
         Returns:
@@ -77,10 +80,8 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         """
         total_size = 0
         
-        # 遍历所有存储的blocks
         for sample_batch in self._storage:
             if "obs" in sample_batch and hasattr(sample_batch["obs"], "nbytes"):
-                # PBER stores raw numpy arrays
                 total_size += sample_batch["obs"].nbytes
             
             if "new_obs" in sample_batch and hasattr(
@@ -105,7 +106,6 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         if not isinstance(batch, SampleBatch):
             return
 
-        # 使用BlockAccumulator填充blocks
         idx = 0
         count = len(batch)
         
@@ -116,26 +116,20 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             self.block_accumulator.add(slice_batch)
             idx += take
 
-            # Block满了就存储
             if self.block_accumulator.is_full():
                 self._store_block()
 
     def _store_block(self) -> None:
         """Store the current block to buffer."""
-        # Extract block data and weight
         raw_batch, weight = self.block_accumulator.flush()
         
-        # Validate weight
         if np.isnan(weight) or weight <= 0:
             weight = 0.01
         
-        # Store directly (no compression)
         self._add_single_batch(raw_batch, weight=weight)
         
-        # Reset accumulator
         self.block_accumulator.reset()
         
-        # Update metrics
         self._metrics["num_blocks"] = len(self._storage)
         self._metrics["num_transitions"] = (
             len(self._storage) * self.sub_buffer_size
@@ -157,7 +151,6 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         if len(self._storage) == 0:
             return None
         
-        # If beta not provided, try to get from parent class or default to 1.0
         if beta is None:
             beta = getattr(self, 'beta', 1.0)
         
@@ -173,7 +166,6 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         if batch is None:
             return None
 
-        # Expand block-level weights/batch_indexes to transition-level
         num_transitions = len(batch.get("actions", batch.get("rewards", [])))
         self._expand_block_field(batch, "weights", num_transitions)
         self._expand_block_field(batch, "batch_indexes", num_transitions)
@@ -210,6 +202,5 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             self._hit_count[i] += 1
             batch_list.append(self._storage[i])
 
-        # Concatenate blocks
         return concat_samples(batch_list)
 

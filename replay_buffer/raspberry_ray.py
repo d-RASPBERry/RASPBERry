@@ -11,27 +11,30 @@ Key features:
 See docs/raspberr_design.md for detailed architecture and design decisions.
 """
 
+# ====== Section: Imports ======
+# ------ Subsection: Standard library ------
 import logging
-import numpy as np
 import time
+from typing import Any, Dict, List, Optional
+
+# ------ Subsection: Third-party ------
 import blosc
+import numpy as np
 import ray
 from gymnasium.spaces import Space
-from typing import Dict, Optional, Any, List
-from ray.rllib.utils.typing import SampleBatchType
+from ray.rllib.policy.sample_batch import SampleBatch, concat_samples
 from ray.rllib.utils.replay_buffers.prioritized_replay_buffer import (
     PrioritizedReplayBuffer,
 )
-from replay_buffer.compress_replay_node import CompressReplayNode
-from ray.rllib.policy.sample_batch import SampleBatch
-from ray.rllib.policy.sample_batch import concat_samples
+from ray.rllib.utils.typing import SampleBatchType
 
+# ------ Subsection: Local ------
+from replay_buffer.compress_replay_node import CompressReplayNode
+
+# ====== Section: Module State ======
 logger = logging.getLogger(__name__)
 
-
-# ============================================================================
-# Ray Remote Compression Worker
-# ============================================================================
+# ====== Section: Ray Remote Compression Worker ======
 
 @ray.remote
 def compress_node_batch_ray(nodes_data: List[dict], 
@@ -48,14 +51,12 @@ def compress_node_batch_ray(nodes_data: List[dict],
     batch_results = []
     
     for node_data in nodes_data:
-        # Reconstruct arrays
         obs = node_data['obs']
         new_obs = node_data['new_obs']
         
         raw_obs_bytes = int(node_data.get('raw_obs_bytes', obs.nbytes))
         raw_new_obs_bytes = int(node_data.get('raw_new_obs_bytes', new_obs.nbytes))
         
-        # Transpose for better compression (move batch dimension to end)
         rank = len(obs.shape)
         if rank > 1:
             if compress_config['compress_base'] == -1:
@@ -63,11 +64,9 @@ def compress_node_batch_ray(nodes_data: List[dict],
                 obs = np.transpose(obs, axes)
                 new_obs = np.transpose(new_obs, axes)
         
-        # Make contiguous
         obs = np.ascontiguousarray(obs)
         new_obs = np.ascontiguousarray(new_obs)
         
-        # Compress with blosc
         compressed_obs = blosc.pack_array(
             obs,
             cname=compress_config['cname'],
@@ -81,7 +80,6 @@ def compress_node_batch_ray(nodes_data: List[dict],
             shuffle=compress_config['shuffle'],
         )
         
-        # Reconstruct compressed batch
         compressed_data = SampleBatch({
             "obs": np.array([compressed_obs], dtype=object),
             "new_obs": np.array([compressed_new_obs], dtype=object),
@@ -108,6 +106,7 @@ def compress_node_batch_ray(nodes_data: List[dict],
     return batch_results
 
 
+# ====== Section: Decompression ======
 def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> SampleBatch:
     """Decompress obs/new_obs using blosc and restore axes.
     
@@ -125,25 +124,19 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
         Handles both single-block (DDQN via sample_min_n_steps_from_buffer)
         and multi-block (APEX direct sample) cases.
     """
-    t0 = time.time()
-
-    # Prefer per-batch compress_base metadata if present
     compress_base_used = ma_batch.get("compress_base", compress_base)
 
-    # Unpack compressed arrays - handle both single and multiple blocks
     obs_array = ma_batch["obs"]
     new_obs_array = ma_batch["new_obs"]
+    # Support both single-block (DDQN) and multi-block (APEX) layouts.
     if len(obs_array) == 1 and isinstance(obs_array[0], bytes):
-        # Single compressed block
         decompressed_obs_transposed = blosc.unpack_array(obs_array[0])
         decompressed_new_obs_transposed = blosc.unpack_array(new_obs_array[0])
     else:
-        # Multiple compressed blocks - decompress and concatenate
         obs_blocks = [blosc.unpack_array(block) for block in obs_array if isinstance(block, bytes)]
         new_obs_blocks = [blosc.unpack_array(block) for block in new_obs_array if isinstance(block, bytes)]
         
         if not obs_blocks:
-            # Fallback: try single block decompression
             decompressed_obs_transposed = blosc.unpack_array(obs_array[0])
             decompressed_new_obs_transposed = blosc.unpack_array(new_obs_array[0])
         else:
@@ -151,32 +144,26 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
             decompressed_obs_transposed = np.concatenate(obs_blocks, axis=-1)
             decompressed_new_obs_transposed = np.concatenate(new_obs_blocks, axis=-1)
 
-    # Rank info
     rank = len(decompressed_obs_transposed.shape)
 
+    # Default path reverses the batch-axis move used for compression.
     if compress_base_used == -1:
         # Smart default: move axis 0 (batch) from end back to front
         if rank <= 1:
             decompressed_obs = decompressed_obs_transposed
             decompressed_new_obs = decompressed_new_obs_transposed
-            transpose_type = "no_transpose"
         else:
             # Multi-dim: move last axis (original axis 0) back to the front
             axes = [rank - 1] + list(range(rank - 1))
             decompressed_obs = np.transpose(decompressed_obs_transposed, axes)
             decompressed_new_obs = np.transpose(decompressed_new_obs_transposed, axes)
-            transpose_type = f"default_dim0_to_front_{rank}D"
     elif compress_base_used == 0:
-        # No transpose when compress_base=0
         decompressed_obs = decompressed_obs_transposed
         decompressed_new_obs = decompressed_new_obs_transposed
-        transpose_type = "no_transpose_base0"
     else:
-        # User-specified axis restoration
         if compress_base_used >= rank or rank <= 1:
             decompressed_obs = decompressed_obs_transposed
             decompressed_new_obs = decompressed_new_obs_transposed
-            transpose_type = "no_transpose"
         else:
             # Insert the last axis back at compress_base position
             axes = list(range(rank))
@@ -185,14 +172,6 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
 
             decompressed_obs = np.transpose(decompressed_obs_transposed, axes)
             decompressed_new_obs = np.transpose(decompressed_new_obs_transposed, axes)
-            transpose_type = f"dim_{compress_base_used}_from_end_{rank}D"
-
-    t1 = time.time()
-    logger.debug(
-        "[Decompression] Blosc unpack + %s transpose: %.4fs",
-        transpose_type,
-        t1 - t0,
-    )
 
     # Simply pass through all other fields (weights and batch_indexes should already
     # be expanded to transition-level by PrioritizedBlockReplayBuffer.sample())
@@ -212,9 +191,7 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
     return SampleBatch(data_dict)
 
 
-# ============================================================================
-# Prioritized Block Replay Buffer with Ray Compression
-# ============================================================================
+# ====== Section: Prioritized Block Replay Buffer with Ray Compression ======
 
 class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
     """RASPBERry single-agent replay buffer with block-level storage and compression."""
@@ -255,7 +232,6 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         self.obs_space = obs_space
         self.action_space = action_space
 
-        # Compression mode configuration
         self._compression_mode = compression_mode.upper()
         if self._compression_mode not in ["B", "C", "D"]:
             logger.warning("Invalid compression mode '%s', defaulting to 'D'", self._compression_mode)
@@ -265,22 +241,16 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         # All modes now use compression
         self._enable_compression = True
         
-        # Ray setup based on mode
         if self._compression_mode == "B":
             self._num_ray_workers = 0  # No Ray for sync compression
         elif self._compression_mode in ["C", "D"]:
             self._num_ray_workers = max(4, int(compress_pool_size)) if compress_pool_size > 0 else 5
             if not ray.is_initialized():
-                logger.debug(
-                    "Initializing Ray with %d CPUs for compression",
-                    self._num_ray_workers,
-                )
                 ray.init(num_cpus=self._num_ray_workers, ignore_reinit_error=True)
 
         self._inflight_futures: List[ray.ObjectRef] = []
         self._pending_nodes: List[CompressReplayNode] = []
 
-        # Cumulative metrics
         self._metrics = {
             "compress_time_ms": 0.0,
             "compress_count": 0,
@@ -296,7 +266,6 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         self._est_compressed_bytes = 0
         self._est_raw_bytes = 0
 
-        # Persist compression configuration
         self._compression_config = {
             'cname': compression_algorithm,
             'clevel': compression_level,
@@ -358,25 +327,20 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         
         t_batch_start = time.time()
         
-        # Convert nodes to serializable dicts
         nodes_data = [self._node_to_dict(node) for node in nodes]
         
-        # Split into chunks for Ray tasks
         chunks = [
             nodes_data[i:i + self._chunk_size]
             for i in range(0, len(nodes_data), self._chunk_size)
         ]
         
-        # Submit Ray tasks
         futures = [
             compress_node_batch_ray.remote(chunk, self._compression_config)
             for chunk in chunks
         ]
         
-        # Wait for all results (synchronous)
         all_results = ray.get(futures)
         
-        # Flatten results and add to buffer
         for batch_results in all_results:
             for result in batch_results:
                 total_raw = result.get("raw_total_bytes")
@@ -389,30 +353,21 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
                                            result["obs_bytes"], result["new_obs_bytes"],
                                            total_raw)
         
-        # Record wall time
         actual_wall_time = (time.time() - t_batch_start) * 1000.0
         self._metrics["compress_time_ms"] += actual_wall_time
 
     def _compress_mode_D(self):
         """Mode D: True asynchronous processing with Ray."""
         
-        # 1. Submit new tasks when we have enough pending nodes
         while len(self._pending_nodes) >= self._chunk_size:
             chunk_nodes = self._pending_nodes[:self._chunk_size]
             self._pending_nodes = self._pending_nodes[self._chunk_size:]
             
-            # Convert to dicts and submit
             nodes_data = [self._node_to_dict(node) for node in chunk_nodes]
             future = compress_node_batch_ray.remote(nodes_data, self._compression_config)
             self._inflight_futures.append(future)
             
-            logger.debug(
-                "Mode D: Submitted chunk (%d nodes), %d futures pending",
-                len(chunk_nodes),
-                len(self._inflight_futures),
-            )
         
-        # 2. Check for completed tasks (non-blocking)
         if self._inflight_futures:
             ready_refs, remaining_refs = ray.wait(
                 self._inflight_futures, 
@@ -420,7 +375,6 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
                 timeout=0  # Non-blocking
             )
             
-            # Process completed tasks
             if ready_refs:
                 t_drain_start = time.time()
                 for ref in ready_refs:
@@ -439,22 +393,14 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
                 drain_time = (time.time() - t_drain_start) * 1000.0
                 self._metrics["compress_time_ms"] += drain_time
                 
-                # Update futures list
                 self._inflight_futures = remaining_refs
                 
-                logger.debug(
-                    "Mode D: Processed %d futures, buffer=%d, pending=%d",
-                    len(ready_refs),
-                    len(self._storage),
-                    len(self._inflight_futures),
-                )
         
-        # 3. Backpressure: if too many pending futures, wait for oldest
+        # Backpressure keeps in-flight tasks bounded to avoid memory growth.
         if len(self._inflight_futures) >= self._num_ray_workers * 2:
             logger.warning("Mode D: Backpressure triggered, waiting for oldest future")
             t_backpressure_start = time.time()
             
-            # Wait for the oldest future
             oldest_ref = self._inflight_futures.pop(0)
             batch_results = ray.get(oldest_ref)
             
@@ -477,7 +423,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         """Reset pending nodes pool."""
         self._pending_nodes = []
 
-    def stats(self, debug: bool = False) -> Dict[str, Any]:
+    def stats(self) -> Dict[str, Any]:
         """Compute memory usage and expose timing metrics.
         
         Returns:
@@ -491,7 +437,6 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
                 if isinstance(obs_data[0], bytes):
                     total_size += len(obs_data[0])
                 else:
-                    # Fallback
                     total_size += len(obs_data) if hasattr(obs_data, '__len__') else 0
                     
             if "new_obs" in sample_batch and hasattr(
@@ -502,7 +447,6 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
                 if isinstance(new_obs_data[0], bytes):
                     total_size += len(new_obs_data[0])
                 else:
-                    # Fallback
                     total_size += len(new_obs_data) if hasattr(new_obs_data, '__len__') else 0
 
         out = {
@@ -529,14 +473,12 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         Returns:
             SampleBatch with expanded weights/batch_indexes, or None if buffer empty
         """
-        # Drain pending async tasks if buffer empty (Mode D only)
         if self._compression_mode == "D" and len(self._storage) == 0 and len(self._inflight_futures) > 0:
             self._drain_pending_futures()
         
         if len(self._storage) == 0:
             return None
         
-        # Use self.beta if beta not provided
         if beta is None:
             beta = getattr(self, 'beta', 1.0)
         
@@ -550,7 +492,6 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         if batch is None:
             return None
 
-        # Expand block-level weights/batch_indexes to transition-level
         num_transitions = len(batch.get("actions", batch.get("rewards", [])))
         self._expand_block_field(batch, "weights", num_transitions)
         self._expand_block_field(batch, "batch_indexes", num_transitions)
@@ -601,7 +542,6 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         if not isinstance(batch, SampleBatch):
             return
 
-        # Use CompressReplayNode to fill blocks
         idx = 0
         count = len(batch)
         while idx < count:
@@ -653,10 +593,8 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
             if "is_compressed" in batch:
                 del batch["is_compressed"]
         
-        # Concatenate batches
         out = concat_samples(batch_list)
         
-        # Add metadata back (after concatenation)
         out["compress_base"] = compress_base_value
         out["is_compressed"] = is_compressed_value
 

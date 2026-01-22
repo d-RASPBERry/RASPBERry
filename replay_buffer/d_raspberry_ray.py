@@ -10,22 +10,33 @@ Key operations:
 See docs/raspberr_design.md for architecture details.
 """
 
+# ====== Section: Imports ======
+# ------ Subsection: Standard library ------
 import logging
+from typing import Any, Dict, Optional
+
+# ------ Subsection: Third-party ------
 import numpy as np
 from gymnasium.spaces import Space
-from replay_buffer.raspberry_ray import RASPBERryReplayBuffer, decompress_sample_batch
-from typing import Dict, Optional, Any
-from ray.rllib.utils.typing import PolicyID, SampleBatchType
-from ray.rllib.utils.annotations import override, DeveloperAPI
-from ray.rllib.utils.replay_buffers import StorageUnit
-from ray.rllib.utils.replay_buffers.multi_agent_replay_buffer import ReplayMode, merge_dicts_with_warning
-from ray.rllib.utils.replay_buffers.multi_agent_prioritized_replay_buffer import MultiAgentPrioritizedReplayBuffer
 from ray.rllib.policy.sample_batch import SampleBatch, MultiAgentBatch
-from ray.util.debug import log_once
+from ray.rllib.utils.annotations import DeveloperAPI, override
+from ray.rllib.utils.replay_buffers import StorageUnit
+from ray.rllib.utils.replay_buffers.multi_agent_prioritized_replay_buffer import (
+    MultiAgentPrioritizedReplayBuffer,
+)
+from ray.rllib.utils.replay_buffers.multi_agent_replay_buffer import (
+    ReplayMode,
+    merge_dicts_with_warning,
+)
+from ray.rllib.utils.typing import PolicyID, SampleBatchType
 
+# ------ Subsection: Local ------
+from replay_buffer.raspberry_ray import RASPBERryReplayBuffer, decompress_sample_batch
+
+# ====== Section: Module State ======
 logger = logging.getLogger(__name__)
 
-
+# ====== Section: Classes ======
 @DeveloperAPI
 class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
     """Multi-agent RASPBERry replay buffer with block-level storage and compression."""
@@ -60,14 +71,11 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 kwargs["replay_mode"] == "lockstep"
                 or kwargs["replay_mode"] == ReplayMode.LOCKSTEP
         ):
-            if log_once("lockstep_mode_not_supported"):
-                logger.error("Lockstep mode not supported, falling back to independent mode")
+            logger.error("Lockstep mode not supported, falling back to independent mode")
             kwargs["replay_mode"] = "independent"
 
-        # Store block-level parameters for later use
         self.sub_buffer_size = sub_buffer_size
         self.compress_base = compress_base
-        # Ensure prioritized_replay_eps is numeric
         self.prioritized_replay_eps = float(prioritized_replay_eps)
 
         pber_config = {
@@ -95,7 +103,6 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         self._configured_capacity_transitions = configured_capacity_transitions
         # Protect against divide-by-zero
         self._effective_block_capacity = effective_block_capacity
-        # Record top-level storage unit for debug/metrics
         self._top_storage_unit = storage_unit
 
         # Enforce capacity on underlying (block-based) buffer
@@ -177,11 +184,10 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
     def add(self, batch: SampleBatchType, **kwargs) -> None:
         """Add a batch to the corresponding policy's underlying replay buffer."""
         if batch is None:
-            if log_once("empty_batch_added_to_buffer"):
-                logger.warning(
-                    "Empty batch added to %s (normal at start, check if persistent)",
-                    type(self).__name__,
-                )
+            logger.warning(
+                "Empty batch added to %s (normal at start, check if persistent)",
+                type(self).__name__,
+            )
             return
 
         batch = batch.copy()
@@ -234,7 +240,7 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                     return MultiAgentBatch(samples, sum(s.count for s in samples.values()))
                 return None
 
-    def stats(self, debug: bool = False) -> Dict[str, Any]:
+    def stats(self) -> Dict[str, Any]:
         """Return replay buffer statistics."""
         stat = {
             "add_batch_time_ms": round(1000 * self.add_batch_timer.mean, 3),
@@ -263,7 +269,7 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         )
         agg_metrics = {k: 0.0 for k in metric_keys}
         for policy_id, replay_buffer in self.replay_buffers.items():
-            policy_stats = replay_buffer.stats(debug=debug)
+            policy_stats = replay_buffer.stats()
             total_estimated_bytes += policy_stats.get("est_size_bytes", 0)
             total_compressed_bytes += policy_stats.get("est_compressed_bytes", 0)
             total_raw_bytes += policy_stats.get("est_raw_bytes", 0)
