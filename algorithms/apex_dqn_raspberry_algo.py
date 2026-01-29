@@ -4,6 +4,8 @@ Extends RLlib's Apex DQN with distributed block-level prioritized replay buffer 
 This implementation handles block-level priority updates for distributed training.
 """
 
+from typing import Any, Dict
+
 from ray.rllib.algorithms.apex_dqn import ApexDQN
 from ray.rllib.utils.annotations import override
 from ray.rllib.utils.metrics import NUM_AGENT_STEPS_TRAINED, NUM_ENV_STEPS_TRAINED
@@ -25,17 +27,12 @@ class ApexDQNRaspberryAlgo(ApexDQN):
 
     @override(ApexDQN)
     def update_replay_sample_priority(self) -> None:
-        """Update replay buffer priorities using block-level aggregation.
+        """Update replay buffer priorities without algorithm-side aggregation.
         
-        Processes priority updates from the learner thread and aggregates sample-level
-        priorities into block-level priorities before updating distributed replay actors.
-        
-        Key differences from standard Apex DQN:
-        - Aggregates priorities at block level (using sub_buffer_size)
-        - Takes first index of each block for batch_indices
-        - Averages TD errors within each block
+        Delegates block-level aggregation to the replay buffer implementation.
         """
-        sub_buffer_size = self.config["replay_buffer_config"]["sub_buffer_size"]
+        replay_cfg = self.config.get("replay_buffer_config", {}) or {}
+        sub_buffer_size = replay_cfg.get("sub_buffer_size", 1)
         train_batch_size = self.config.get("train_batch_size", 512)
         num_samples_trained_this_itr = 0
         
@@ -71,22 +68,11 @@ class ApexDQNRaspberryAlgo(ApexDQN):
                         logger.info(f"      Original td_error shape: {original_td_error.shape}")
                         logger.info(f"      Total transitions in batch: {len(original_indices)}")
                 
-                # Convert sample-level priorities to block-level priorities
                 for policy_id in priority_dict:
                     original_indices = priority_dict[policy_id][0]
                     original_td_error = priority_dict[policy_id][1]
-                    
-                    batch_indices = original_indices.reshape(-1, sub_buffer_size)[:, 0]
-                    td_error = original_td_error.reshape([-1, sub_buffer_size]).mean(axis=1)
-                    
-                    if should_log and update_idx == 0:
-                        logger.info(f"      After reshape to blocks:")
-                        logger.info(f"        Block indices shape: {batch_indices.shape}")
-                        logger.info(f"        Block td_error shape: {td_error.shape}")
-                        logger.info(f"        Num blocks: {len(batch_indices)}")
-                        logger.info(f"        Expected: {len(original_indices)} transitions / {sub_buffer_size} = {len(original_indices)//sub_buffer_size} blocks")
-                    
-                    priority_dict[policy_id] = (batch_indices, td_error)
+
+                    priority_dict[policy_id] = (original_indices, original_td_error)
                 
                 # Update priorities in distributed replay actors
                 if self.config["replay_buffer_config"].get("prioritized_replay_alpha") > 0:
@@ -115,8 +101,29 @@ class ApexDQNRaspberryAlgo(ApexDQN):
         self._timers["learner_grad"] = self.learner_thread.grad_timer
         self._timers["learner_overall"] = self.learner_thread.overall_timer
 
+    @override(ApexDQN)
+    def _get_shard0_replay_stats(self) -> Dict[str, Any]:
+        """Get replay stats from the replay actor shard 0."""
+        healthy_actor_ids = self._replay_actor_manager.healthy_actor_ids()
+        if not healthy_actor_ids:
+            return {}
+
+        healthy_actor_id = healthy_actor_ids[0]
+        results = list(
+            self._replay_actor_manager.foreach_actor(
+                func=lambda actor: actor.stats(),
+                remote_actor_ids=[healthy_actor_id],
+            )
+        )
+        if not results:
+            return {}
+        if not results[0].ok:
+            raise results[0].get()
+        return results[0].get()
+
     @staticmethod
     def execution_plan(workers, config, **kwargs):
         """Execution plan for Apex DQN (deprecated in newer RLlib versions)."""
         pass
+
 

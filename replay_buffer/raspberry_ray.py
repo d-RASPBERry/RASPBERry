@@ -1,14 +1,6 @@
-"""RASPBERry Replay Buffer with Ray-based Compression.
+"""RASPBERry replay buffer with Ray-based compression.
 
-Prioritized Block Replay Buffer with on-the-fly blosc compression.
-
-Key features:
-- Block-level storage: O(M/m) operations instead of O(M)
-- Ray-based parallel compression: 2.3x faster than ThreadPool
-- 60-95% memory reduction for Atari environments
-- Compatible with RLlib's PER interface
-
-See docs/raspberr_design.md for detailed architecture and design decisions.
+Prioritized block replay buffer with on-the-fly blosc compression.
 """
 
 # ====== Section: Imports ======
@@ -32,21 +24,23 @@ from ray.rllib.utils.typing import SampleBatchType
 from replay_buffer.compress_replay_node import CompressReplayNode
 
 # ====== Section: Module State ======
+BUFFER_NAME = "raspberry"
 logger = logging.getLogger(__name__)
 
 # ====== Section: Ray Remote Compression Worker ======
 
 @ray.remote
-def compress_node_batch_ray(nodes_data: List[dict], 
+def compress_node_batch_ray(nodes_data: List[dict],
                             compress_config: dict) -> List[dict]:
     """Ray remote worker to compress a batch of nodes.
-    
+
     Args:
-        nodes_data: List of node data dicts (obs, new_obs, actions, etc.)
-        compress_config: Compression config (cname, clevel, shuffle, compress_base, enable_compression)
-        
+        nodes_data: List of node data dicts (obs, new_obs, actions, etc.).
+        compress_config: Compression config (cname, clevel, shuffle, compress_base,
+            enable_compression).
+
     Returns:
-        List of dicts with compressed_data (SampleBatch), weight, and byte counts
+        List of dicts with compressed_data (SampleBatch), weight, and byte counts.
     """
     batch_results = []
     
@@ -109,18 +103,18 @@ def compress_node_batch_ray(nodes_data: List[dict],
 # ====== Section: Decompression ======
 def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> SampleBatch:
     """Decompress obs/new_obs using blosc and restore axes.
-    
+
     Args:
-        ma_batch: Compressed batch with obs/new_obs as blosc-packed arrays (single or multiple blocks)
-        compress_base: Axis transposition hint (-1 for auto, 0 for none)
-        
+        ma_batch: Compressed batch with obs/new_obs as blosc-packed arrays
+            (single or multiple blocks).
+        compress_base: Axis transposition hint (-1 for auto, 0 for none).
+
     Returns:
-        Decompressed SampleBatch with expanded weights/batch_indexes
-        
-    Note:
+        Decompressed SampleBatch with expanded weights/batch_indexes.
+
+    Notes:
         weights/batch_indexes should already be expanded to transition-level
         by the buffer's sample() method before calling this function.
-        
         Handles both single-block (DDQN via sample_min_n_steps_from_buffer)
         and multi-block (APEX direct sample) cases.
     """
@@ -194,7 +188,10 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
 # ====== Section: Prioritized Block Replay Buffer with Ray Compression ======
 
 class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
-    """RASPBERry single-agent replay buffer with block-level storage and compression."""
+    """RASPBERry replay buffer with block-level compression.
+
+    Uses Ray workers to compress blocks before storage.
+    """
 
     def __init__(
             self,
@@ -210,21 +207,33 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
             chunk_size: int = 10,
             **kwargs,
     ):
-        """Initialize the prioritized block replay buffer with Ray compression.
-        
+        """Initialize the prioritized block replay buffer.
+
         Args:
-            obs_space: Observation space
-            action_space: Action space
-            sub_buffer_size: Block size (transitions per block)
-            compress_base: Axis to move for compression (-1 for auto)
-            compress_pool_size: Number of Ray workers (default: 5)
-            compression_algorithm: Blosc algorithm (zstd, lz4, etc.)
-            compression_level: Compression level (1-9)
-            compression_nthreads: Blosc compression threads
-            compression_mode: "B" (sync), "C" (batch Ray), "D" (async Ray)
-            chunk_size: Number of nodes per Ray task batch
-            **kwargs: Additional args for PrioritizedReplayBuffer
+            obs_space: Observation space.
+            action_space: Action space.
+            sub_buffer_size: Block size (transitions per block).
+            compress_base: Axis to move for compression (-1 for auto).
+            compress_pool_size: Number of Ray workers (default: 5).
+            compression_algorithm: Blosc algorithm (zstd, lz4, etc.).
+            compression_level: Compression level (1-9).
+            compression_nthreads: Blosc compression threads.
+            compression_mode: "B" (sync), "C" (batch Ray), "D" (async Ray).
+            chunk_size: Number of nodes per Ray task batch.
+            **kwargs: Additional args for PrioritizedReplayBuffer.
         """
+        # Map repo config keys to RLlib's PrioritizedReplayBuffer args.
+        # - Configs use `prioritized_replay_alpha/beta`.
+        # - RLlib expects `alpha`, and `beta` is provided in sample().
+        if "prioritized_replay_alpha" in kwargs and "alpha" not in kwargs:
+            kwargs["alpha"] = kwargs.pop("prioritized_replay_alpha")
+        # Keep beta as an attribute so callers can omit beta in sample().
+        if "prioritized_replay_beta" in kwargs and not hasattr(self, "beta"):
+            try:
+                self.beta = float(kwargs["prioritized_replay_beta"])
+            except Exception:
+                pass
+
         super(RASPBERryReplayBuffer, self).__init__(**kwargs)
 
         self.sub_buffer_size = sub_buffer_size
@@ -234,7 +243,12 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
 
         self._compression_mode = compression_mode.upper()
         if self._compression_mode not in ["B", "C", "D"]:
-            logger.warning("Invalid compression mode '%s', defaulting to 'D'", self._compression_mode)
+            logger.warning(
+                "event=invalid_compression_mode buffer=%s mode=%s fallback=%s",
+                BUFFER_NAME,
+                self._compression_mode,
+                "D",
+            )
             self._compression_mode = "D"
         self._chunk_size = max(1, int(chunk_size))
         
@@ -398,7 +412,12 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         
         # Backpressure keeps in-flight tasks bounded to avoid memory growth.
         if len(self._inflight_futures) >= self._num_ray_workers * 2:
-            logger.warning("Mode D: Backpressure triggered, waiting for oldest future")
+            logger.warning(
+                "event=backpressure_wait buffer=%s in_flight=%s max_in_flight=%s",
+                BUFFER_NAME,
+                len(self._inflight_futures),
+                self._num_ray_workers * 2,
+            )
             t_backpressure_start = time.time()
             
             oldest_ref = self._inflight_futures.pop(0)
@@ -424,10 +443,10 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         self._pending_nodes = []
 
     def stats(self) -> Dict[str, Any]:
-        """Compute memory usage and expose timing metrics.
-        
+        """Compute memory usage statistics.
+
         Returns:
-            Dict with est_size_bytes, num_entries, and timing metrics (ms)
+            Dict with estimated size, compression, and timing metrics.
         """
         total_size = 0
         for sample_batch in self._storage:
@@ -463,15 +482,15 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         return out
 
     def sample(self, num_items: int, beta: Optional[float] = None, **kwargs) -> Optional[SampleBatch]:
-        """Sample blocks and expand metadata to transition-level for DQN training.
-        
+        """Sample blocks and expand metadata to transition-level.
+
         Args:
-            num_items: Number of blocks to sample
-            beta: PER importance sampling exponent (defaults to self.beta if not provided)
-            **kwargs: Additional sampling args
-            
+            num_items: Number of blocks to sample.
+            beta: PER importance sampling exponent (defaults to self.beta if not provided).
+            **kwargs: Additional sampling args.
+
         Returns:
-            SampleBatch with expanded weights/batch_indexes, or None if buffer empty
+            SampleBatch with expanded weights/batch_indexes, or None if empty.
         """
         if self._compression_mode == "D" and len(self._storage) == 0 and len(self._inflight_futures) > 0:
             self._drain_pending_futures()
@@ -480,7 +499,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
             return None
         
         if beta is None:
-            beta = getattr(self, 'beta', 1.0)
+            beta = getattr(self, "beta", 1.0)
         
         try:
             batch = super(RASPBERryReplayBuffer, self).sample(num_items, beta=beta, **kwargs)
@@ -499,12 +518,12 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         return batch
     
     def _expand_block_field(self, batch: SampleBatch, field_name: str, target_size: int) -> None:
-        """Expand block-level field to transition-level by replicating values.
-        
+        """Expand a block-level field to transition-level by replication.
+
         Args:
-            batch: SampleBatch to modify in-place
-            field_name: Field to expand (weights, batch_indexes)
-            target_size: Target size (number of transitions)
+            batch: SampleBatch to modify in-place.
+            field_name: Field to expand (weights, batch_indexes).
+            target_size: Target size (number of transitions).
         """
         if field_name not in batch or len(batch[field_name]) == target_size:
             return
@@ -533,11 +552,13 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         self._metrics["compress_time_ms"] += (time.time() - t_start) * 1000.0
 
     def add(self, batch: SampleBatchType, **kwargs) -> None:
-        """Add a batch to the buffer, compressing blocks as they fill up.
-        
+        """Add a batch to the buffer, organizing transitions into blocks.
+
+        Blocks are compressed as they fill up.
+
         Args:
-            batch: SampleBatch with transitions to add
-            **kwargs: Additional args (unused)
+            batch: SampleBatch with transitions to add.
+            **kwargs: Additional args (unused).
         """
         if not isinstance(batch, SampleBatch):
             return
@@ -569,13 +590,13 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
                     self._compress_mode_D()
 
     def _encode_sample(self, idxes: List[int]) -> SampleBatch:
-        """Encode samples - returns compressed data with metadata.
-        
+        """Encode samples and return compressed data with metadata.
+
         Args:
-            idxes: Block indices to retrieve
-            
+            idxes: Block indices to retrieve.
+
         Returns:
-            Concatenated SampleBatch with compress_base metadata
+            Concatenated SampleBatch with compress_base metadata.
         """
         batch_list = []
         for i in idxes:
@@ -646,4 +667,5 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
 
         compressed_batch._compressed_bytes = total_comp
         compressed_batch._raw_bytes = int(raw_bytes)
+
 

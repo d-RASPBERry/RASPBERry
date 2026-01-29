@@ -23,7 +23,7 @@ from typing import Any, Dict, Optional
 # ------ Subsection: Third-party ------
 import numpy as np
 from gymnasium.spaces import Space
-from ray.rllib.policy.sample_batch import SampleBatch, MultiAgentBatch
+from ray.rllib.policy.sample_batch import MultiAgentBatch
 from ray.rllib.utils.annotations import DeveloperAPI, override
 from ray.rllib.utils.replay_buffers import StorageUnit
 from ray.rllib.utils.replay_buffers.multi_agent_prioritized_replay_buffer import (
@@ -91,6 +91,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
 
         self.sub_buffer_size = sub_buffer_size
         self.prioritized_replay_eps = float(prioritized_replay_eps)
+        self.prioritized_replay_beta = float(prioritized_replay_beta)
 
         pber_config = {
             "type": PrioritizedBlockReplayBuffer,
@@ -145,13 +146,53 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             **kwargs: Additional sampling args
             
         Returns:
-            SampleBatch or MultiAgentBatch
+            MultiAgentBatch
         """
-        sampled_batch = super(
-            MultiAgentPrioritizedBlockReplayBuffer, self
-        ).sample(num_items=num_items, policy_id=policy_id, beta=beta, **kwargs)
+        # NOTE: We do NOT call `super().sample()` here.
+        #
+        # RLlib's MultiAgentPrioritizedReplayBuffer.sample() assumes underlying buffers
+        # raise on empty. Our block buffers (PBER/RASPBERry) return None instead.
+        # Calling the upstream method would crash on `sample.count` when any policy
+        # buffer is empty. We therefore mirror RLlib's logic with explicit None handling.
+        kwargs = merge_dicts_with_warning(self.underlying_buffer_call_args, kwargs)
 
-        return sampled_batch
+        # Accept beta either as explicit arg or via kwargs (API parity).
+        if beta is None:
+            beta = kwargs.pop("beta", None)
+        if beta is None:
+            beta = getattr(self, "prioritized_replay_beta", 0.4)
+
+        with self.replay_timer:
+            # Lockstep mode: sample from all policies at the same time.
+            if self.replay_mode == ReplayMode.LOCKSTEP:
+                assert (
+                    policy_id is None
+                ), "`policy_id` specifier not allowed in `lockstep` mode!"
+                raw_sample = self.replay_buffers["__all__"].sample(
+                    num_items, beta=beta, **kwargs
+                )
+                return raw_sample if raw_sample is not None else None
+
+            # Independent mode: sample from a single policy.
+            if policy_id is not None:
+                sample = self.replay_buffers[policy_id].sample(
+                    num_items, beta=beta, **kwargs
+                )
+                if sample is None:
+                    return None
+                return MultiAgentBatch({policy_id: sample}, sample.count)
+
+            # Independent mode: sample from all policies and merge.
+            samples = {}
+            for pid, replay_buffer in self.replay_buffers.items():
+                sample = replay_buffer.sample(num_items, beta=beta, **kwargs)
+                if sample is None:
+                    continue
+                samples[pid] = sample
+
+            if not samples:
+                return None
+            return MultiAgentBatch(samples, sum(s.count for s in samples.values()))
 
     @override(MultiAgentPrioritizedReplayBuffer)
     def update_priorities(self, prio_dict: Dict) -> None:
@@ -167,14 +208,15 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             if buffer is None:
                 continue
 
-            block_indexes = batch_indexes // self.sub_buffer_size
+            # batch_indexes already represent block/storage indices (may repeat per transition).
+            block_indexes = np.asarray(batch_indexes)
             unique_block_indexes = np.unique(block_indexes)
 
-            # Aggregate TD-errors per block (use max for conservative priority)
+            # Aggregate TD-errors per block (mean to align with RASPBERry)
             block_priorities = []
             for block_idx in unique_block_indexes:
                 mask = block_indexes == block_idx
-                block_td_error = np.max(np.abs(td_errors[mask]))
+                block_td_error = np.abs(td_errors[mask]).mean()
                 block_priorities.append(block_td_error)
 
             block_priorities = np.array(block_priorities, dtype=np.float32)
@@ -188,7 +230,15 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         Returns:
             Dict with per-policy and aggregate statistics
         """
-        data = super(MultiAgentPrioritizedBlockReplayBuffer, self).stats()
+        data = {
+            "add_batch_time_ms": round(1000 * self.add_batch_timer.mean, 3),
+            "replay_time_ms": round(1000 * self.replay_timer.mean, 3),
+            "update_priorities_time_ms": round(
+                1000 * self.update_priorities_timer.mean, 3
+            ),
+        }
+        for policy_id, replay_buffer in self.replay_buffers.items():
+            data["policy_{}".format(policy_id)] = replay_buffer.stats()
 
         # Align with other replay buffers: expose total transitions seen.
         data["added_count"] = int(getattr(self, "_num_added", 0))

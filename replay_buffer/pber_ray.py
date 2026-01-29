@@ -1,23 +1,11 @@
-"""Prioritized Block Experience Replay (PBER) Buffer.
+"""Prioritized Block Experience Replay (PBER) buffer.
 
-Block-level replay buffer WITHOUT compression (pure PBER baseline).
-
-Key features:
-- Block-level storage: O(M/m) operations instead of O(M)
-- No compression: direct numpy array storage
-- Compatible with RLlib's PER interface
-- Clean separation from RASPBERry (compression-enabled variant)
-
-Design:
-- Uses BlockAccumulator for simple data batching
-- Stores raw numpy blocks directly (no compression overhead)
-- Block-level priority management
-
-See Chapter 3 (PBER) in thesis for algorithm details.
+Block-level replay buffer without compression (pure PBER baseline).
 """
 
 # ====== Section: Imports ======
 # ------ Subsection: Standard library ------
+import logging
 from typing import Any, Dict, List, Optional
 
 # ------ Subsection: Third-party ------
@@ -31,6 +19,10 @@ from ray.rllib.utils.typing import SampleBatchType
 
 # ------ Subsection: Local ------
 from replay_buffer.block_accumulator import BlockAccumulator
+
+# ====== Section: Module State ======
+BUFFER_NAME = "pber"
+logger = logging.getLogger(__name__)
 
 # ====== Section: Classes ======
 class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
@@ -47,14 +39,26 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         sub_buffer_size: int = 32,
         **kwargs,
     ):
-        """Initialize PBER buffer.
-        
+        """Initialize the prioritized block replay buffer.
+
         Args:
-            obs_space: Observation space
-            action_space: Action space
-            sub_buffer_size: Block size (transitions per block)
-            **kwargs: Additional args for PrioritizedReplayBuffer
+            obs_space: Observation space.
+            action_space: Action space.
+            sub_buffer_size: Block size (transitions per block).
+            **kwargs: Additional args for PrioritizedReplayBuffer.
         """
+        # Map repo config keys to RLlib's PrioritizedReplayBuffer args.
+        # - Configs use `prioritized_replay_alpha/beta`.
+        # - RLlib expects `alpha`, and `beta` is provided in sample().
+        if "prioritized_replay_alpha" in kwargs and "alpha" not in kwargs:
+            kwargs["alpha"] = kwargs.pop("prioritized_replay_alpha")
+        # Keep beta as an attribute so callers can omit beta in sample().
+        if "prioritized_replay_beta" in kwargs and not hasattr(self, "beta"):
+            try:
+                self.beta = float(kwargs["prioritized_replay_beta"])
+            except Exception:
+                pass
+
         super(PrioritizedBlockReplayBuffer, self).__init__(**kwargs)
 
         self.sub_buffer_size = sub_buffer_size
@@ -74,9 +78,9 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
 
     def stats(self) -> Dict[str, Any]:
         """Compute memory usage statistics.
-        
+
         Returns:
-            Dict with est_size_bytes and num_entries
+            Dict with estimated size and entry counts.
         """
         total_size = 0
         
@@ -97,11 +101,11 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         return out
 
     def add(self, batch: SampleBatchType, **kwargs) -> None:
-        """Add a batch to the buffer, organizing into blocks.
-        
+        """Add a batch to the buffer, organizing transitions into blocks.
+
         Args:
-            batch: SampleBatch with transitions to add
-            **kwargs: Additional args (unused)
+            batch: SampleBatch with transitions to add.
+            **kwargs: Additional args (unused).
         """
         if not isinstance(batch, SampleBatch):
             return
@@ -120,11 +124,18 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
                 self._store_block()
 
     def _store_block(self) -> None:
-        """Store the current block to buffer."""
+        """Store the current block to the buffer."""
         raw_batch, weight = self.block_accumulator.flush()
         
+        min_weight = 0.01
         if np.isnan(weight) or weight <= 0:
-            weight = 0.01
+            logger.warning(
+                "event=invalid_block_weight buffer=%s weight=%s fallback=%s",
+                BUFFER_NAME,
+                weight,
+                min_weight,
+            )
+            weight = min_weight
         
         self._add_single_batch(raw_batch, weight=weight)
         
@@ -139,20 +150,20 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         self, num_items: int, beta: Optional[float] = None, **kwargs
     ) -> Optional[SampleBatch]:
         """Sample blocks and expand metadata to transition-level.
-        
+
         Args:
-            num_items: Number of blocks to sample
-            beta: PER importance sampling exponent (if None, try to use parent's beta or default to 1.0)
-            **kwargs: Additional sampling args
-            
+            num_items: Number of blocks to sample.
+            beta: PER importance sampling exponent (defaults to self.beta if not provided).
+            **kwargs: Additional sampling args.
+
         Returns:
-            SampleBatch with expanded weights/batch_indexes, or None if buffer empty
+            SampleBatch with expanded weights/batch_indexes, or None if empty.
         """
         if len(self._storage) == 0:
             return None
         
         if beta is None:
-            beta = getattr(self, 'beta', 1.0)
+            beta = getattr(self, "beta", 1.0)
         
         try:
             batch = super(PrioritizedBlockReplayBuffer, self).sample(
@@ -175,12 +186,12 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
     def _expand_block_field(
         self, batch: SampleBatch, field_name: str, target_size: int
     ) -> None:
-        """Expand block-level field to transition-level by replicating values.
-        
+        """Expand a block-level field to transition-level by replication.
+
         Args:
-            batch: SampleBatch to modify in-place
-            field_name: Field to expand (weights, batch_indexes)
-            target_size: Target size (number of transitions)
+            batch: SampleBatch to modify in-place.
+            field_name: Field to expand (weights, batch_indexes).
+            target_size: Target size (number of transitions).
         """
         if field_name not in batch or len(batch[field_name]) == target_size:
             return
@@ -189,13 +200,13 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         batch[field_name] = np.repeat(batch[field_name], replicate_factor)
 
     def _encode_sample(self, idxes: List[int]) -> SampleBatch:
-        """Encode samples - returns raw block data.
-        
+        """Encode samples and return raw block data.
+
         Args:
-            idxes: Block indices to retrieve
-            
+            idxes: Block indices to retrieve.
+
         Returns:
-            Concatenated SampleBatch with raw numpy arrays
+            Concatenated SampleBatch with raw numpy arrays.
         """
         batch_list = []
         for i in idxes:
@@ -203,4 +214,3 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             batch_list.append(self._storage[i])
 
         return concat_samples(batch_list)
-

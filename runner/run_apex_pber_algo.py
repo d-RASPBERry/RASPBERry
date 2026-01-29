@@ -23,10 +23,10 @@ if str(ROOT) not in sys.path:
 # ------ Subsection: Third-party ------
 import mlflow
 import ray
-from ray.tune.registry import register_env
+from ray.tune.registry import register_env  
 
 # ------ Subsection: Local ------
-from algorithms.apex_dqn_raspberry_algo import ApexDQNRaspberryAlgo
+from algorithms.apex_dqn_pber_algo import ApexDQNPberAlgo
 from metrics import write_iteration_json
 from metrics.logger import setup_logger
 from metrics.mlflow_helper import setup_mlflow, prepare_metrics
@@ -39,7 +39,7 @@ RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
 
 
 # ====== Section: Algorithm Construction ======
-def build_algorithm(env_name: str, env_short: str, config: dict) -> ApexDQNRaspberryAlgo:
+def build_algorithm(env_name: str, env_short: str, config: dict) -> ApexDQNPberAlgo:
     """Build APEX-DQN PBER algorithm instance.
 
     Uses dict-based config (not ApexDQNConfig) for direct construction.
@@ -77,7 +77,7 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> ApexDQNRaspb
     hyper["env_config"] = env_config
     game.close()
 
-    return ApexDQNRaspberryAlgo(config=hyper, env=env_short)
+    return ApexDQNPberAlgo(config=hyper, env=env_short)
 
 
 # ====== Section: CLI / Main ======

@@ -20,7 +20,7 @@ mlflow:
     test: "sub_buffer_size_16_aligned"
 
 run_config:
-  max_time_s: 14400  # 4 hours test
+  max_time_s: 1800  # 30 minutes test
 
 hyper_parameters:
   train_batch_size: 256

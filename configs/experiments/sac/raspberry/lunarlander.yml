@@ -17,7 +17,7 @@ mlflow:
     obs_type: "vector"
 
 run_config:
-  max_time_s: 36000
+  max_time_s: 1800
 
 hyper_parameters:
   train_batch_size: 512

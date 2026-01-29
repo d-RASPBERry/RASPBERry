@@ -21,7 +21,7 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  max_time_s: 180000
+  max_time_s: 1800
 
 hyper_parameters:
   # Optimized for Image-based Continuous Control

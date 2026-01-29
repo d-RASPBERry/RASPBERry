@@ -44,9 +44,9 @@ hyper_parameters:
 
 # Run configuration
 run_config:
-  use_mlflow: true
+  use_mlflow: false
   max_iterations: 100000  # Large enough to let max_time_s control
-  max_time_s: 3600
+  max_time_s: 1800
 
 # Logging strategy
 log_freq: 10

@@ -157,12 +157,25 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             Falls back to transition-level if aggregation fails (e.g., shape mismatch)
         """
         try:
-            block_indices = batch_indexes.reshape(-1, self.sub_buffer_size)[:, 0]
-            block_td_errors = td_errors.reshape(-1, self.sub_buffer_size)
-            block_priorities = np.abs(block_td_errors).mean(axis=1) + self.prioritized_replay_eps
-            return block_indices, block_priorities
+            block_indexes = np.asarray(batch_indexes)
+            td_errors_arr = np.asarray(td_errors)
+
+            unique_block_indexes = np.unique(block_indexes)
+            block_priorities = []
+            for block_idx in unique_block_indexes:
+                mask = block_indexes == block_idx
+                block_td_error = np.abs(td_errors_arr[mask]).mean()
+                block_priorities.append(block_td_error)
+
+            block_priorities = (
+                np.asarray(block_priorities, dtype=np.float32)
+                + self.prioritized_replay_eps
+            )
+            return unique_block_indexes, block_priorities
         except Exception as e:
-            logger.warning("Block aggregation failed (%s), using transition-level fallback", e)
+            logger.warning(
+                "Block aggregation failed (%s), using transition-level fallback", e
+            )
             return batch_indexes, np.abs(td_errors) + self.prioritized_replay_eps
 
     def _maybe_split_into_policy_batches(self, batch: SampleBatchType) -> Dict:
@@ -294,3 +307,6 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         stat["metrics"] = agg_metrics
         return stat
 
+    def apply(self, func, *args, **kwargs):
+        """Apply a function to this replay buffer actor."""
+        return func(self, *args, **kwargs)

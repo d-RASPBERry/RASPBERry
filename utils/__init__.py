@@ -6,6 +6,7 @@ from gymnasium.wrappers import (
     GrayScaleObservation,
     PixelObservationWrapper,
 )
+import gymnasium
 from minigrid.wrappers import RGBImgObsWrapper, ImgObsWrapper
 from ray.rllib.env.wrappers.atari_wrappers import (
     FrameStack as RLlibFrameStack,
@@ -14,7 +15,6 @@ from ray.rllib.env.wrappers.atari_wrappers import (
     wrap_deepmind,
 )
 from typing import Dict, Tuple, Union
-import gymnasium
 import numpy as np
 import os
 import yaml
