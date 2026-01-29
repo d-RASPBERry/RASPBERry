@@ -24,7 +24,8 @@ from replay_buffer.block_accumulator import BlockAccumulator
 BUFFER_NAME = "pber"
 logger = logging.getLogger(__name__)
 
-# ====== Section: Classes ======
+
+# ====== Section: Prioritized Block Replay Buffer ======
 class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
     """Prioritized Block Experience Replay (PBER) buffer.
     
@@ -33,11 +34,11 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
     """
 
     def __init__(
-        self,
-        obs_space: Space,
-        action_space: Space,
-        sub_buffer_size: int = 32,
-        **kwargs,
+            self,
+            obs_space: Space,
+            action_space: Space,
+            sub_buffer_size: int = 32,
+            **kwargs,
     ):
         """Initialize the prioritized block replay buffer.
 
@@ -53,11 +54,8 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         if "prioritized_replay_alpha" in kwargs and "alpha" not in kwargs:
             kwargs["alpha"] = kwargs.pop("prioritized_replay_alpha")
         # Keep beta as an attribute so callers can omit beta in sample().
-        if "prioritized_replay_beta" in kwargs and not hasattr(self, "beta"):
-            try:
-                self.beta = float(kwargs["prioritized_replay_beta"])
-            except Exception:
-                pass
+        if "prioritized_replay_beta" in kwargs:
+            self.beta = float(kwargs.pop("prioritized_replay_beta"))
 
         super(PrioritizedBlockReplayBuffer, self).__init__(**kwargs)
 
@@ -76,20 +74,20 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
             "num_transitions": 0,
         }
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self, debug: bool = False) -> Dict:
         """Compute memory usage statistics.
 
         Returns:
             Dict with estimated size and entry counts.
         """
         total_size = 0
-        
+
         for sample_batch in self._storage:
             if "obs" in sample_batch and hasattr(sample_batch["obs"], "nbytes"):
                 total_size += sample_batch["obs"].nbytes
-            
+
             if "new_obs" in sample_batch and hasattr(
-                sample_batch["new_obs"], "nbytes"
+                    sample_batch["new_obs"], "nbytes"
             ):
                 total_size += sample_batch["new_obs"].nbytes
 
@@ -112,7 +110,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
 
         idx = 0
         count = len(batch)
-        
+
         while idx < count:
             space = self.block_accumulator.block_size - self.block_accumulator.pos
             take = min(space, count - idx)
@@ -126,7 +124,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
     def _store_block(self) -> None:
         """Store the current block to the buffer."""
         raw_batch, weight = self.block_accumulator.flush()
-        
+
         min_weight = 0.01
         if np.isnan(weight) or weight <= 0:
             logger.warning(
@@ -136,18 +134,18 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
                 min_weight,
             )
             weight = min_weight
-        
+
         self._add_single_batch(raw_batch, weight=weight)
-        
+
         self.block_accumulator.reset()
-        
+
         self._metrics["num_blocks"] = len(self._storage)
         self._metrics["num_transitions"] = (
-            len(self._storage) * self.sub_buffer_size
+                len(self._storage) * self.sub_buffer_size
         )
 
     def sample(
-        self, num_items: int, beta: Optional[float] = None, **kwargs
+            self, num_items: int, beta: Optional[float] = None, **kwargs
     ) -> Optional[SampleBatch]:
         """Sample blocks and expand metadata to transition-level.
 
@@ -161,10 +159,10 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         """
         if len(self._storage) == 0:
             return None
-        
+
         if beta is None:
             beta = getattr(self, "beta", 1.0)
-        
+
         try:
             batch = super(PrioritizedBlockReplayBuffer, self).sample(
                 num_items, beta=beta, **kwargs
@@ -182,9 +180,9 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         self._expand_block_field(batch, "batch_indexes", num_transitions)
 
         return batch
-    
+
     def _expand_block_field(
-        self, batch: SampleBatch, field_name: str, target_size: int
+            self, batch: SampleBatch, field_name: str, target_size: int
     ) -> None:
         """Expand a block-level field to transition-level by replication.
 
@@ -195,7 +193,7 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
         """
         if field_name not in batch or len(batch[field_name]) == target_size:
             return
-        
+
         replicate_factor = target_size // len(batch[field_name])
         batch[field_name] = np.repeat(batch[field_name], replicate_factor)
 

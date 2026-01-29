@@ -1,3 +1,38 @@
+# Session Dump (2026-01-29)
+Repo: /home/seventheli/research/RASPBERry
+
+## Scope
+- Update Pong test launcher to run APEX/DDQN PBER and RASPBERry variants.
+- Fix runtime config discovery for runner scripts.
+- Stabilize environment dependencies (PyTorch + NumPy/OpenCV).
+
+## Changes Applied
+File: `scripts/ablation/run_test_pong.sh`
+- Launch 4 tasks per GPU: APEX-PBER, APEX-RASPBERry, DDQN-PBER, DDQN-RASPBERry.
+- Mode handling: `both` -> 4 tasks, `pber/raspberry` -> 2 tasks.
+- Distinct log names for APEX vs DDQN tasks.
+
+File: `configs/runtime.yml` (new, local)
+- Added by copying from `configs/runtimes.yml`.
+- Updated `paths.log_base_path` to `/home/seventheli/data/logging/New_RASPBERry/`.
+
+## Environment Fixes
+- Installed PyTorch stack: `torch 2.5.1+cu121`, `torchvision 0.20.1+cu121`,
+  `torchaudio 2.5.1+cu121` (CUDA available).
+- Re-pinned `numpy==1.24.3` and `opencv-python==4.6.0.66` to fix ABI mismatch
+  (`numpy 2.x` breaks cv2).
+
+## Run Attempts / Errors
+- `FileNotFoundError: configs/runtime.yml` in runner scripts.
+  Resolved by adding `configs/runtime.yml`.
+- `RuntimeError: module compiled against ABI version 0x1000009...`
+  Resolved by reinstalling NumPy/OpenCV pinned versions.
+- RLlib warning: ApexDQN moved to `rllib_contrib` (non-blocking).
+
+## Current Status
+- `configs/runtime.yml` present and ignored by git.
+- PyTorch 2.5.1+cu121 installed; NumPy/OpenCV pinned and import OK.
+- Next step: rerun `./scripts/ablation/run_test_pong.sh -n 0` and inspect logs.
 # Session Dump (2026-01-27)
 Repo: /home/seventheli/research/RASPBERry
 

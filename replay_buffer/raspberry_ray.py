@@ -4,7 +4,6 @@ Prioritized block replay buffer with on-the-fly blosc compression.
 """
 
 # ====== Section: Imports ======
-# ------ Subsection: Standard library ------
 import logging
 import time
 from typing import Any, Dict, List, Optional
@@ -185,7 +184,7 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
     return SampleBatch(data_dict)
 
 
-# ====== Section: Prioritized Block Replay Buffer with Ray Compression ======
+# ====== Section: RAM Saver Prioritized Block Replay Buffer ======
 
 class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
     """RASPBERry replay buffer with block-level compression.
@@ -228,11 +227,8 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         if "prioritized_replay_alpha" in kwargs and "alpha" not in kwargs:
             kwargs["alpha"] = kwargs.pop("prioritized_replay_alpha")
         # Keep beta as an attribute so callers can omit beta in sample().
-        if "prioritized_replay_beta" in kwargs and not hasattr(self, "beta"):
-            try:
-                self.beta = float(kwargs["prioritized_replay_beta"])
-            except Exception:
-                pass
+        if "prioritized_replay_beta" in kwargs:
+            self.beta = float(kwargs.pop("prioritized_replay_beta"))
 
         super(RASPBERryReplayBuffer, self).__init__(**kwargs)
 
@@ -322,7 +318,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
             'raw_new_obs_bytes': int(new_obs_slice.nbytes),
         }
 
-    def _compress_mode_B(self):
+    def _compress_mode_b(self):
         """Mode B: Synchronous compression (no Ray)."""
         t0 = time.time()
         compressed_data, weight, metrics = self.compress_node.sample()
@@ -335,7 +331,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
                                    metrics.get("raw_total_bytes"))
         self.compress_node.reset()
 
-    def _compress_mode_C(self):
+    def _compress_mode_c(self):
         """Mode C: Batch processing with Ray (synchronous wait)."""
         nodes = self._pending_nodes[:]
         
@@ -370,7 +366,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         actual_wall_time = (time.time() - t_batch_start) * 1000.0
         self._metrics["compress_time_ms"] += actual_wall_time
 
-    def _compress_mode_D(self):
+    def _compress_mode_d(self):
         """Mode D: True asynchronous processing with Ray."""
         
         while len(self._pending_nodes) >= self._chunk_size:
@@ -442,7 +438,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         """Reset pending nodes pool."""
         self._pending_nodes = []
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self, debug: bool = False) -> Dict:
         """Compute memory usage statistics.
 
         Returns:
@@ -575,19 +571,19 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
             if self.compress_node.is_ready():
                 if self._compression_mode == "B":
                     # Mode B: Synchronous compression (no Ray)
-                    self._compress_mode_B()
+                    self._compress_mode_b()
                 elif self._compression_mode == "C":
                     # Mode C: Accumulate nodes then batch process with Ray
                     self._pending_nodes.append(self.compress_node)
                     self.compress_node = self._create_compress_node()
                     if len(self._pending_nodes) >= self._chunk_size:
-                        self._compress_mode_C()
+                        self._compress_mode_c()
                         self._reset_pool()
                 elif self._compression_mode == "D":
                     # Mode D: True async processing with Ray
                     self._pending_nodes.append(self.compress_node)
                     self.compress_node = self._create_compress_node()
-                    self._compress_mode_D()
+                    self._compress_mode_d()
 
     def _encode_sample(self, idxes: List[int]) -> SampleBatch:
         """Encode samples and return compressed data with metadata.
