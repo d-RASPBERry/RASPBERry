@@ -4,6 +4,6 @@ extends: templates/sac_vector_base.yml
 
 hyper_parameters:
   replay_buffer_config:
-    capacity: 100000
+    capacity: 1000000
     type: MultiAgentPrioritizedReplayBuffer
 

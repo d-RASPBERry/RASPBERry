@@ -3,7 +3,7 @@
 extends: ../../../templates/ddqn_base.yml
 
 env_config:
-  env_name: "Atari-PongNoFrameskip-v4"
+  id: "Atari-PongNoFrameskip-v4"
   env_alias: "DDQN-PBER-Pong"
 
 logging:
@@ -11,11 +11,11 @@ logging:
   log_every: 10
 
 mlflow:
-  experiment: "DDQN-Pong"
+  experiment: "DDQN-Atari-Pong"
   tags:
     algorithm: "DDQN"
     buffer: "PBER"
-    environment: "Pong"
+    environment: "Atari-Pong"
     obs_type: "image"
 
 run_config:
@@ -32,12 +32,13 @@ hyper_parameters:
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
     type: MultiAgentPrioritizedBlockReplayBuffer
-    sub_buffer_size: 16
-    worker_side_prioritization: false
+    sub_buffer_size: 8
+    worker_side_prioritization: true
   
+  training_intensity: 1.0
   # Same hyperparameters as PER and RASPBERry for fair comparison
-  lr: 0.0001
+  lr: 1.e-4
   gamma: 0.99
-  num_workers: 4
-  num_envs_per_worker: 1
+  num_workers: 2
+  num_envs_per_worker: 8
 

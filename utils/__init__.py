@@ -128,6 +128,17 @@ class SkipInitialFramesWrapper(gymnasium.Wrapper):
                 obs, info = self.env.reset(**kwargs)
         return obs, info
 
+
+class MiniGridSafeStrWrapper(gymnasium.Wrapper):
+    """避免 MiniGrid 在 __str__ 访问未初始化状态时报错。"""
+
+    def __init__(self, env, env_id: str):
+        super().__init__(env)
+        self._env_id = env_id
+
+    def __str__(self) -> str:
+        return f"<MiniGridEnv {self._env_id}>"
+
 agent_dir = {
     0: '>',
     1: 'V',
@@ -450,12 +461,7 @@ def env_creator(env_config):
         # They are usually set at env creation or via camera configuration.
         # However, MuJoCo envs respect the render_mode="rgb_array" and default resolution.
         # Let's try without explicit size args first, or rely on gym's default.
-        env = PixelObservationWrapper(
-            env, 
-            pixels_only=True,
-            # render_kwargs={} # Rely on default rendering
-        )
-        # Extract pixels from dict observation {"pixels": image} -> image
+        env = PixelObservationWrapper(env, pixels_only=True)
         env = PixelObsExtractWrapper(env, key="pixels")
 
         # Apply image preprocessing (similar to BOX2DI)
@@ -481,30 +487,61 @@ def env_creator(env_config):
         env = RewardScaleWrapper(env, reward_scale)
         
         return env
+    elif env_config["id"].startswith("MiniGrid-"):
+        # MiniGrid: use pure RGB image observations
+        env_id = env_config["id"]
+        tile_size = env_config.get("tile_size", 10)
+        img_size = env_config.get("img_size", 84)
+        max_steps = env_config.get("max_steps", 200)
+
+        env = gymnasium.make(env_id, render_mode="rgb_array")
+        env = RGBImgObsWrapper(env, tile_size=tile_size)
+        env = ImgObsWrapper(env)
+
+        if img_size:
+            env = ResizeObservation(env, (img_size, img_size))
+        if max_steps:
+            env = TimeLimit(env, max_episode_steps=max_steps)
+
+        env = MiniGridSafeStrWrapper(env, env_id)
+
+        # Ensure MiniGrid internal state is initialized for safe __str__ calls
+        try:
+            env.reset()
+        except Exception:
+            pass
+        if hasattr(env.unwrapped, "agent_pos") and env.unwrapped.agent_pos is None:
+            env.unwrapped.agent_pos = (0, 0)
+        try:
+            env.unwrapped.__class__.__str__ = lambda self: f"<MiniGridEnv {env_id}>"
+        except Exception:
+            pass
+
+        return env
     else:
         raise NotImplementedError(f"Environment {env_config['id']} not supported")
 
 
-def infer_env_type(env_name: str) -> str:
-    """Infer environment type from environment name for path organization.
+def infer_env_type(env_id: str) -> str:
+    """Infer environment type from environment ID for path organization.
     
     Simply extracts the first part before '-' as the environment type.
     
     Args:
-        env_name: Environment name (e.g., "Atari-Breakout", "CarRacing-v2")
+        env_id: Environment ID (e.g., "Atari-PongNoFrameskip-v4", "BOX2DI-CarRacing-v2")
         
     Returns:
         Environment type string (first part before '-', or full name if no '-')
         
     Examples:
-        >>> infer_env_type("Atari-Breakout")
+        >>> infer_env_type("Atari-PongNoFrameskip-v4")
         'Atari'
-        >>> infer_env_type("CarRacing-v2")
-        'CarRacing'
-        >>> infer_env_type("MiniGrid-Empty-8x8-v0")
+        >>> infer_env_type("BOX2DI-CarRacing-v2")
+        'BOX2DI'
+        >>> infer_env_type("MiniGrid-DoorKey-8x8-v0")
         'MiniGrid'
     """
-    return env_name.split("-")[0] if "-" in env_name else env_name
+    return env_id.split("-")[0] if "-" in env_id else env_id
 
 
 def load_config(config_path: str) -> Dict:

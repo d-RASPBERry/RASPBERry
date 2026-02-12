@@ -3,11 +3,11 @@
 extends: ../../../templates/sac_vector_base.yml
 
 env_config:
-  env_name: "BOX2DV-LunarLanderContinuous"
+  id: "BOX2DV-LunarLanderContinuous"
   env_alias: "SAC-PBER-LunarLander"
 
 logging:
-  log_subdir: "BOX2DV/LunarLander-PBER"
+  log_subdir: "BOX2DV/LunarLander"
 
 mlflow:
   experiment: "SAC-LunarLander"
@@ -16,23 +16,22 @@ mlflow:
     buffer: "PBER"
     environment: "LunarLander"
     obs_type: "vector"
-    compression: "none"
 
 run_config:
-  max_time_s: 1800
+  max_time_s: 600
 
 hyper_parameters:
   train_batch_size: 512
   min_sample_timesteps_per_iteration: 2000
-  training_intensity: 2.0
+  training_intensity: 1.0
 
   # Replay buffer (PBER: Block-based without compression)
   replay_buffer_config:
     capacity: 1000000
     type: MultiAgentPrioritizedBlockReplayBuffer
     sub_buffer_size: 16
-    worker_side_prioritization: false
+    worker_side_prioritization: true
 
   # Resource
-  num_workers: 6
+  num_workers: 8
   num_envs_per_worker: 8

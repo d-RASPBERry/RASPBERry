@@ -119,6 +119,39 @@ PER_CONFIG="configs/experiments/sac/per/carracing.yml"
 PBER_CONFIG="configs/experiments/sac/pber/carracing.yml"
 RASP_CONFIG="configs/experiments/sac/raspberry/carracing.yml"
 
+# Temporary ablation override:
+# - force run_config.max_time_s = 600
+# - keep run_config.use_mlflow = false
+TEMP_CONFIG_DIR="/tmp/raspberry_ablation_cfg_${TIMESTAMP}_$$"
+mkdir -p "${TEMP_CONFIG_DIR}"
+trap 'rm -rf "${TEMP_CONFIG_DIR}"' EXIT
+
+create_temp_override_config() {
+    local base_cfg="$1"
+    local cfg_tag="$2"
+    local extends_path="$base_cfg"
+    if [[ "${base_cfg}" != /* ]]; then
+        extends_path="${PROJECT_ROOT}/${base_cfg}"
+    fi
+    if [ ! -f "${extends_path}" ]; then
+        echo "Error: missing config ${extends_path}" >&2
+        exit 1
+    fi
+    local out_cfg="${TEMP_CONFIG_DIR}/${cfg_tag}_$(basename "${base_cfg}")"
+    cat > "${out_cfg}" <<EOF
+extends: "${extends_path}"
+run_config:
+  max_time_s: 600
+  use_mlflow: false
+EOF
+    echo "${out_cfg}"
+}
+
+PER_CONFIG="$(create_temp_override_config "${PER_CONFIG}" "per")"
+PBER_CONFIG="$(create_temp_override_config "${PBER_CONFIG}" "pber")"
+RASP_CONFIG="$(create_temp_override_config "${RASP_CONFIG}" "raspberry")"
+echo "[ablation temp] max_time_s=600, use_mlflow=false"
+
 if [ "${GPU_ASSIGNMENT_MODE}" = "shared" ]; then
     for idx in "${!GPU_IDS[@]}"; do
         gpu="${GPU_IDS[$idx]}"

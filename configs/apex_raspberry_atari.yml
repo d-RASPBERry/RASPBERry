@@ -1,28 +1,37 @@
+# APEX-DQN-RASPBERry configuration for Atari environments
 extends: templates/apex_base.yml
 
 hyper_parameters:
-  # Training batch - APEX directly samples this many blocks from buffer
-  # With sub_buffer_size=16, this means 512 transitions per batch
   train_batch_size: 32
-  
+  training_intensity: 1.0
   # Replay buffer (RASPBERry)
   replay_buffer_config:
-    capacity: 100000
+    capacity: 1000000
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
     type: MultiAgentRASPBERryReplayBuffer
-    sub_buffer_size: 16
-    compress_base: -1
     replay_buffer_shards_colocated_with_driver: true
     worker_side_prioritization: true
     no_local_replay_buffer: true
+    sub_buffer_size: 16
     compress_pool_size: 200
+    # Options: zstd, lz4, lz4hc, blosclz
     compression_algorithm: "lz4"
+    # 1-9, higher = better compression but slower
     compression_level: 1
-    compression_nthreads: 10
-    compression_mode: "D"             # 改为批量异步模式，与单机版本一致
+    compression_nthreads: 4
+    # "A": sync, "B": batch_pool, "D": batch_async
+    compression_mode: "D"
+    # Batch size for modes B and D (shared parameter)
     chunk_size: 20
+
+mlflow:
+  experiment: "APEX-Atari"
+  tags:
+    algorithm: "APEX-DQN"
+    buffer: "RASPBERry"
+    obs_type: "image"
 
 run_config:
   use_mlflow: false

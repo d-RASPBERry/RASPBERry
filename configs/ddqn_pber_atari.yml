@@ -1,23 +1,26 @@
 # DDQN-PBER configuration for Atari environments
-# Pure block-level replay WITHOUT compression (Chapter 3: PBER)
 extends: templates/ddqn_base.yml
 
 hyper_parameters:
   replay_buffer_config:
-    # Standard PER parameters
     capacity: 1000000
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
-    worker_side_prioritization: false
-    
-    # PBER-specific parameters
     type: MultiAgentPrioritizedBlockReplayBuffer
-    sub_buffer_size: 1
-    
-  # Override resources for concurrent 3h compare run
-  num_cpus: 5
+    worker_side_prioritization: true
+    sub_buffer_size: 8
+
+  training_intensity: 1.0
+  num_cpus: 4
   num_gpus: 1
+
+mlflow:
+  experiment: "DDQN-Atari"
+  tags:
+    algorithm: "DDQN"
+    buffer: "PBER"
+    obs_type: "image"
 
 
 run_config:

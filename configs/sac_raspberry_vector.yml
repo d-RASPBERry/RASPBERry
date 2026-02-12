@@ -3,15 +3,16 @@
 extends: templates/sac_vector_base.yml
 
 hyper_parameters:
+  training_intensity: 1.0
   replay_buffer_config:
-    capacity: 100000
-    prioritized_replay_alpha: 0.6
-    prioritized_replay_beta: 0.4
+    capacity: 1000000
+    prioritized_replay_alpha: 0.5
+    prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
     type: MultiAgentRASPBERryReplayBuffer
     sub_buffer_size: 16
     compress_base: -1
-    worker_side_prioritization: false
+    worker_side_prioritization: true
     compress_pool_size: 400
     compression_algorithm: "lz4"
     compression_level: 1

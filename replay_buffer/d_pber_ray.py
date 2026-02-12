@@ -18,12 +18,12 @@ See Chapter 3 (PBER) and Chapter 5 (Distributed PBER) in thesis.
 # ====== Section: Imports ======
 # ------ Subsection: Standard library ------
 import logging
-from typing import Any, Dict, Optional
+from typing import Dict, Optional
 
 # ------ Subsection: Third-party ------
 import numpy as np
 from gymnasium.spaces import Space
-from ray.rllib.policy.sample_batch import MultiAgentBatch
+from ray.rllib.policy.sample_batch import MultiAgentBatch, SampleBatch
 from ray.rllib.utils.annotations import DeveloperAPI, override
 from ray.rllib.utils.replay_buffers import StorageUnit
 from ray.rllib.utils.replay_buffers.multi_agent_prioritized_replay_buffer import (
@@ -92,6 +92,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         self.sub_buffer_size = sub_buffer_size
         self.prioritized_replay_eps = float(prioritized_replay_eps)
         self.prioritized_replay_beta = float(prioritized_replay_beta)
+        self.rollout_fragment_length = rollout_fragment_length
 
         pber_config = {
             "type": PrioritizedBlockReplayBuffer,
@@ -126,6 +127,52 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         )
 
         self._capacity = self._configured_capacity_transitions
+
+    def _ensure_sample_batch(
+        self, sample: Optional[SampleBatchType]
+    ) -> Optional[SampleBatchType]:
+        """Normalize sampled outputs to SampleBatch when needed."""
+        if sample is None:
+            return None
+        if isinstance(sample, SampleBatch):
+            return sample
+        if isinstance(sample, dict):
+            return SampleBatch(sample)
+        return sample
+
+    def _maybe_split_into_policy_batches(self, batch: SampleBatchType) -> Dict:
+        """Split batch into per-policy sub-batches."""
+        if isinstance(batch, MultiAgentBatch):
+            return batch.policy_batches
+        return {"__default_policy__": batch}
+
+    @DeveloperAPI
+    @override(MultiAgentPrioritizedReplayBuffer)
+    def add(self, batch: SampleBatchType, **kwargs) -> None:
+        """Add a batch to the corresponding policy's underlying replay buffer."""
+        if batch is None:
+            logger.warning(
+                "Empty batch added to %s (normal at start, check if persistent)",
+                type(self).__name__,
+            )
+            return
+
+        batch = batch.copy()
+        batch = batch.as_multi_agent()
+
+        with self.add_batch_timer:
+            pids_and_batches = self._maybe_split_into_policy_batches(batch)
+            for policy_id, sample_batch in pids_and_batches.items():
+                if len(sample_batch) == 1:
+                    self._add_to_underlying_buffer(policy_id, sample_batch)
+                else:
+                    time_slices = sample_batch.timeslices(
+                        size=self.rollout_fragment_length
+                    )
+                    for s_batch in time_slices:
+                        self._add_to_underlying_buffer(policy_id, s_batch)
+
+        self._num_added += batch.count
 
     @override(MultiAgentPrioritizedReplayBuffer)
     def sample(
@@ -171,6 +218,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 raw_sample = self.replay_buffers["__all__"].sample(
                     num_items, beta=beta, **kwargs
                 )
+                raw_sample = self._ensure_sample_batch(raw_sample)
                 return raw_sample if raw_sample is not None else None
 
             # Independent mode: sample from a single policy.
@@ -178,6 +226,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 sample = self.replay_buffers[policy_id].sample(
                     num_items, beta=beta, **kwargs
                 )
+                sample = self._ensure_sample_batch(sample)
                 if sample is None:
                     return None
                 return MultiAgentBatch({policy_id: sample}, sample.count)
@@ -186,6 +235,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             samples = {}
             for pid, replay_buffer in self.replay_buffers.items():
                 sample = replay_buffer.sample(num_items, beta=beta, **kwargs)
+                sample = self._ensure_sample_batch(sample)
                 if sample is None:
                     continue
                 samples[pid] = sample
@@ -257,9 +307,6 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         return socket.gethostname()
 
     def apply(self, func, *args, **kwargs):
-        """Apply a function to all underlying buffers."""
-        results = {}
-        for policy_id, buffer in self.replay_buffers.items():
-            results[policy_id] = func(buffer, *args, **kwargs)
-        return results
+        """Apply a function to this replay buffer actor."""
+        return func(self, *args, **kwargs)
 

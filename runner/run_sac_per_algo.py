@@ -40,13 +40,13 @@ RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
 
 # ====== Section: Algorithm Construction ======
 
-def build_algorithm(env_name: str, env_short: str, config: dict) -> SAC:
+def build_algorithm(env_id: str, env_short: str, config: dict) -> SAC:
     """Build SAC PER algorithm instance.
 
     Uses dict-based config (matching RASPBERry version structure).
 
     Args:
-        env_name: Full environment name, e.g. "CarRacing-v2"
+        env_id: Environment ID for env_creator routing, e.g. "CarRacing-v2"
         env_short: Short name for registration, e.g. "CarRacing"
         config: Complete config dict loaded from YAML
 
@@ -59,11 +59,10 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> SAC:
     ModelCatalog.register_custom_model("SACLightweightCNN", SACLightweightCNN)
 
     # IMPORTANT: 将 YAML 的 env_config 完整传入 RLlib。
-    # 若只传 {"id": env_name}，像 img_size/frame_skip/frame_stack/grayscale/normalize
+    # 若只传 {"id": env_id}，像 img_size/frame_skip/frame_stack/grayscale/normalize
     # 等关键设置会被静默忽略，导致实验配置与实际行为不一致。
     yaml_env_cfg = config.get("env_config", {}) or {}
-    env_id = yaml_env_cfg.get("id") or yaml_env_cfg.get("env_name") or env_name
-    env_config = {**yaml_env_cfg, "id": env_id}
+    env_config = {**yaml_env_cfg, "id": yaml_env_cfg.get("id", env_id)}
     game = env_creator(env_config)
     register_env(env_short, env_creator)
 
@@ -121,11 +120,11 @@ def main() -> None:
     max_iterations = run_cfg.get("max_iterations", 10000)
     log_every = config.get("logging_config", {}).get("log_freq", 10)
 
-    env_name = config.get("env_config", {}).get("env_name", args.env)
-    env_alias = config.get("env_config", {}).get("env_alias", env_name)
+    env_id = config.get("env_config", {}).get("id", args.env)
+    env_alias = config.get("env_config", {}).get("env_alias", env_id)
 
     # ------ Subsection: Paths & env vars ------
-    env_type = infer_env_type(env_name)
+    env_type = infer_env_type(env_id)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     alias_slug = "".join(
         ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in env_alias
@@ -139,7 +138,7 @@ def main() -> None:
     if config_slug and config_slug.lower() not in alias_slug.lower():
         run_name_base = f"{alias_slug}-{config_slug}"
     run_name = f"{run_name_base}-{args.gpu}-{timestamp}"
-    log_root = Path(paths["log_base_path"]) / env_type / env_name
+    log_root = Path(paths["log_base_path"]) / env_type / env_id
     log_dir = log_root / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -151,7 +150,7 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("SAC-PER Training Started")
     logger.info("Env: %s (%s) | GPU: %s | Max time: %ds | Max iter: %d",
-                env_name, env_type, args.gpu, max_time_s, max_iterations)
+                env_id, env_type, args.gpu, max_time_s, max_iterations)
     logger.info("Log dir: %s", log_dir)
     logger.info("=" * 60)
 
@@ -160,7 +159,7 @@ def main() -> None:
     if mlflow_base and use_mlflow:
         # Get mlflow config from YAML (with experiment and tags)
         mlflow_cfg_from_yaml = config.get("mlflow", {})
-        mlflow_experiment = mlflow_cfg_from_yaml.get("experiment", env_name)
+        mlflow_experiment = mlflow_cfg_from_yaml.get("experiment", env_id)
         mlflow_tags_from_yaml = mlflow_cfg_from_yaml.get("tags", {})
         
         # Combine env_alias with GPU and timestamp for better readability
@@ -173,7 +172,7 @@ def main() -> None:
         extra_tags = {
             "algorithm": mlflow_tags_from_yaml.get("algorithm", "SAC"),
             "buffer": mlflow_tags_from_yaml.get("buffer", "PER"),
-            "env": mlflow_tags_from_yaml.get("environment", env_name),
+            "env": mlflow_tags_from_yaml.get("environment", env_id),
             "env_alias": env_alias,
             "obs_type": mlflow_tags_from_yaml.get("obs_type", "unknown"),
             "gpu": args.gpu,
@@ -202,7 +201,7 @@ def main() -> None:
                 hyper.get("num_cpus", 5), hyper.get("num_gpus", 0))
 
     # ------ Subsection: Algorithm init ------
-    algo = build_algorithm(env_name, env_name, config)
+    algo = build_algorithm(env_id, env_alias, config)
     logger.info("Algorithm built, starting training...")
 
     # ------ Subsection: Train loop ------

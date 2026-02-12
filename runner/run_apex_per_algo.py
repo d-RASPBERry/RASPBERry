@@ -40,13 +40,13 @@ RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
 
 
 # ====== Section: Algorithm Construction ======
-def build_algorithm(env_name: str, env_short: str, config: dict) -> ApexDQN:
+def build_algorithm(env_id: str, env_short: str, config: dict) -> ApexDQN:
     """Build APEX-DQN PER algorithm instance.
 
     Uses dict-based config (matching RASPBERry version structure).
 
     Args:
-        env_name: Full environment name, e.g. "Atari-BreakoutNoFrameskip-v4"
+        env_id: Environment ID for env_creator routing, e.g. "Atari-BreakoutNoFrameskip-v4"
         env_short: Short name for registration, e.g. "Breakout"
         config: Complete config dict loaded from YAML
 
@@ -57,8 +57,7 @@ def build_algorithm(env_name: str, env_short: str, config: dict) -> ApexDQN:
 
     # Pass full YAML env_config to preserve env-specific settings.
     yaml_env_cfg = config.get("env_config", {}) or {}
-    env_id = yaml_env_cfg.get("id") or yaml_env_cfg.get("env_name") or env_name
-    env_config = {**yaml_env_cfg, "id": env_id}
+    env_config = {**yaml_env_cfg, "id": yaml_env_cfg.get("id", env_id)}
     game = env_creator(env_config)
     register_env(env_short, env_creator)
 
@@ -113,10 +112,10 @@ def main() -> None:
     log_every = config.get("logging_config", {}).get("log_freq", 10)
 
     # Infer environment type and construct paths dynamically
-    env_name = config.get("env_config", {}).get("env_name", args.env)
-    env_alias = config.get("env_config", {}).get("env_alias", env_name)
+    env_id = config.get("env_config", {}).get("id", args.env)
+    env_alias = config.get("env_config", {}).get("env_alias", env_id)
 
-    env_type = infer_env_type(env_name)
+    env_type = infer_env_type(env_id)
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     alias_slug = "".join(
         ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in env_alias
@@ -132,7 +131,7 @@ def main() -> None:
     if config_slug and config_slug.lower() not in run_name_base.lower():
         run_name_base = f"{run_name_base}-{config_slug}"
     run_name = f"{run_name_base}-{args.gpu}-{timestamp}"
-    log_root = Path(paths["log_base_path"]) / env_type / env_name
+    log_root = Path(paths["log_base_path"]) / env_type / env_id
     log_dir = log_root / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -144,7 +143,7 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("APEX-DQN-PER Training Started")
     logger.info("Env: %s (%s) | GPU: %s | Max time: %ds | Max iter: %d",
-                env_name, env_type, args.gpu, max_time_s, max_iterations)
+                env_id, env_type, args.gpu, max_time_s, max_iterations)
     logger.info("Log dir: %s", log_dir)
     logger.info("=" * 60)
 
@@ -152,7 +151,7 @@ def main() -> None:
     use_mlflow = run_cfg.get("use_mlflow", False)
     if mlflow_base and use_mlflow:
         mlflow_cfg_from_yaml = config.get("mlflow", {})
-        mlflow_experiment = mlflow_cfg_from_yaml.get("experiment", env_name)
+        mlflow_experiment = mlflow_cfg_from_yaml.get("experiment", env_id)
         mlflow_tags_from_yaml = mlflow_cfg_from_yaml.get("tags", {})
 
         mlflow_cfg = {
@@ -163,7 +162,7 @@ def main() -> None:
         extra_tags = {
             "algorithm": mlflow_tags_from_yaml.get("algorithm", "APEX-DQN"),
             "buffer": mlflow_tags_from_yaml.get("buffer", "PER"),
-            "env": mlflow_tags_from_yaml.get("environment", env_name),
+            "env": mlflow_tags_from_yaml.get("environment", env_id),
             "env_alias": env_alias,
             "obs_type": mlflow_tags_from_yaml.get("obs_type", "unknown"),
             "gpu": args.gpu,
@@ -192,7 +191,7 @@ def main() -> None:
     )
     logger.info("Ray initialized (CPUs=%d, GPUs=%s)", num_cpus, num_gpus)
 
-    algo = build_algorithm(env_name, env_name, config)
+    algo = build_algorithm(env_id, env_alias, config)
     logger.info("Algorithm built, starting training...")
 
     start_time = time.time()

@@ -1,8 +1,8 @@
-# SAC-PBER: BOX2DI-BipedalWalker-v3 (Image observation)
+# SAC-PBER: BOX2DI-BipedalWalker (Image observation)
 extends: ../../../templates/sac_image_base.yml
 
 env_config:
-  env_name: "BOX2DI-BipedalWalker-v3"
+  id: "BOX2DI-BipedalWalker-v3"
   env_alias: "SAC-PBER-BipedalWalker-Image"
   img_size: 84
   frame_skip: 1 # Continuous control: avoid aggressive action-repeat for stability
@@ -12,10 +12,10 @@ env_config:
   reward_scale: 1.0 # Keep native reward magnitude for SAC (avoid entropy dominating)
 
 logging:
-  log_subdir: "BOX2DI/BipedalWalker-Image-PBER"
+  log_subdir: "BOX2DI/BipedalWalker-Image"
 
 mlflow:
-  experiment: "SAC-BipedalWalker-Image"
+  experiment: "SAC-BipedalWalker"
   tags:
     algorithm: "SAC"
     buffer: "PBER"
@@ -23,37 +23,37 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  max_time_s: 1800
+  max_time_s: 600
 
 hyper_parameters:
   # Optimized for Image-based Continuous Control
   train_batch_size: 256
   grad_clip: 1.0
   n_step: 1
-  rollout_fragment_length: 4
+  rollout_fragment_length: 8
   
   # Optimization
   initial_alpha: 0.2
   optimization:
-    actor_learning_rate: 0.0003
-    critic_learning_rate: 0.0003
-    entropy_learning_rate: 0.0003
+    actor_learning_rate: 3.e-4
+    critic_learning_rate: 3.e-4
+    entropy_learning_rate: 3.e-4
 
   # Sampling & Training
   min_sample_timesteps_per_iteration: 8000
-  num_steps_sampled_before_learning_starts: 20000
+  num_steps_sampled_before_learning_starts: 50000
   training_intensity: 1.0
   target_entropy: auto
 
   # Replay buffer (PBER: Block-based without compression)
   replay_buffer_config:
-    capacity: 500000
+    capacity: 1000000
     type: MultiAgentPrioritizedBlockReplayBuffer
     sub_buffer_size: 16
-    worker_side_prioritization: false
+    worker_side_prioritization: true
 
   # Resource
-  num_workers: 6
-  num_cpus: 8
-  num_envs_per_worker: 4
+  num_workers: 8
+  num_cpus: 10
+  num_envs_per_worker: 8
 

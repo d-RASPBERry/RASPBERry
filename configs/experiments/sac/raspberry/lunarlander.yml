@@ -2,7 +2,7 @@
 extends: ../../../templates/sac_vector_base.yml
 
 env_config:
-  env_name: "BOX2DV-LunarLanderContinuous"
+  id: "BOX2DV-LunarLanderContinuous"
   env_alias: "SAC-RASPBERry-LunarLander"
 
 logging:
@@ -17,12 +17,12 @@ mlflow:
     obs_type: "vector"
 
 run_config:
-  max_time_s: 1800
+  max_time_s: 600
 
 hyper_parameters:
   train_batch_size: 512
   min_sample_timesteps_per_iteration: 2000
-  training_intensity: 2.0
+  training_intensity: 1.0
 
   # Replay buffer (RASPBERry-specific)
   replay_buffer_config:
@@ -30,7 +30,7 @@ hyper_parameters:
     type: MultiAgentRASPBERryReplayBuffer
     sub_buffer_size: 16
     compress_base: -1
-    worker_side_prioritization: false
+    worker_side_prioritization: true
     compress_pool_size: 400
     compression_algorithm: "lz4"
     compression_level: 1
@@ -39,5 +39,5 @@ hyper_parameters:
     chunk_size: 20
 
   # Resource
-  num_workers: 6
+  num_workers: 8
   num_envs_per_worker: 8

@@ -2,10 +2,9 @@
 extends: ../../../templates/sac_image_base.yml
 
 env_config:
-  env_name: "BOX2DI-CarRacing"
+  id: "BOX2DI-CarRacing-v2"
   env_alias: "SAC-PER-CarRacing"
   normalize: true
-  dtype: "float32"
   # SKIP_INITIAL_FRAMES handled in utils/__init__.py
 
 logging:
@@ -20,7 +19,7 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  max_time_s: 1800
+  max_time_s: 600
 
 hyper_parameters:
   # Optimized for Image-based Continuous Control
@@ -32,21 +31,21 @@ hyper_parameters:
   # Optimization
   initial_alpha: 0.2
   optimization:
-    actor_learning_rate: 0.0003
-    critic_learning_rate: 0.0003
-    entropy_learning_rate: 0.0003
+    actor_learning_rate: 3.e-4
+    critic_learning_rate: 3.e-4
+    entropy_learning_rate: 3.e-4
 
   # Sampling & Training
   min_sample_timesteps_per_iteration: 10000
   training_intensity: 4.0
-  target_entropy: -3.0
+  target_entropy: auto
 
   # Replay buffer (PER baseline)
   replay_buffer_config:
-    capacity: 200000
+    capacity: 1000000
     type: MultiAgentPrioritizedReplayBuffer
 
   # Resource
-  num_workers: 9
+  num_workers: 8
   num_cpus: 10
   num_envs_per_worker: 8

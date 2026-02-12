@@ -3,7 +3,7 @@ hyper_parameters:
   framework: torch
 
   # Core parameters
-  lr: 0.0001
+  lr: 1.e-4
   gamma: 0.99
   double_q: true
   dueling: false
@@ -21,8 +21,9 @@ hyper_parameters:
   target_network_update_freq: 50000
 
   # Learning schedule
-  num_steps_sampled_before_learning_starts: 50000
+  num_steps_sampled_before_learning_starts: 100000
   min_sample_timesteps_per_iteration: 5000
+  training_intensity: 4.0
 
   # Exploration parameters
   final_epsilon: 0.01
@@ -34,19 +35,27 @@ hyper_parameters:
 
   # Resource configuration
   num_gpus: 1
-  num_cpus: 10
-  num_workers: 2
-  num_envs_per_worker: 5
+  num_cpus: 16
+  num_workers: 8
+  num_envs_per_worker: 8
   num_gpus_per_worker: 0.01
   num_cpus_per_worker: 1
 
+  # Replay buffer defaults (merged into derived configs)
+  replay_buffer_config:
+    no_local_replay_buffer: true
+    replay_buffer_shards_colocated_with_driver: true
+    sub_buffer_size: 16
+    worker_side_prioritization: true
+
   # Ape-X replay optimizer settings
   optimizer:
-    num_replay_buffer_shards: 4
+    num_replay_buffer_shards: 1
     async_replay_optimizer: true
 
 # Default run configuration (can be overridden in experiment configs)
 run_config:
+  use_mlflow: false
   max_iterations: 100000  # Large enough to let max_time_s control
   max_time_s: 3600
 
@@ -54,3 +63,4 @@ run_config:
 logging_config:
   log_freq: 10
   checkpoint_freq: 50
+  log_start_iteration: 20

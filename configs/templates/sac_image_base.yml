@@ -13,10 +13,10 @@ hyper_parameters:
       feature_dim: 128              # Feature dimension after CNN encoder
 
   # Core SAC parameters (tuned for Pendulum)
-  lr: 3e-4
+  lr: 3.e-4
   gamma: 0.99
   tau: 0.005                        # Soft target update coefficient
-  target_entropy: -1.0              # For 1D continuous action (Pendulum)
+  target_entropy: auto              # SAC-only: auto-tune based on action space
   initial_alpha: 0.2                # Lower initial temperature for image-based learning
   n_step: 1
 
@@ -24,18 +24,18 @@ hyper_parameters:
   hiddens: [64, 64]                # Applied to CNN features
 
   # Learning schedule (faster warmup for image-based learning)
-  num_steps_sampled_before_learning_starts: 5000
+  num_steps_sampled_before_learning_starts: 50000
   min_sample_timesteps_per_iteration: 1000
-  training_intensity: 1.0
+  training_intensity: 4.0
 
   # Training batch configuration
   train_batch_size: 64
-  rollout_fragment_length: 1
+  rollout_fragment_length: 8
 
   # Resource configuration (aligned with sac_vector_base.yml)
   num_gpus: 1
   num_cpus: 10
-  num_workers: 2         # Reduced for parallel execution
+  num_workers: 8         # Fixed across SAC runs
   num_envs_per_worker: 8 # Adjusted for throughput with fewer workers
   num_gpus_per_worker: 0.01  # Reduced GPU allocation per worker
   num_cpus_per_worker: 1
@@ -45,6 +45,9 @@ hyper_parameters:
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
+    no_local_replay_buffer: false
+    sub_buffer_size: 16
+    worker_side_prioritization: true
 
 # Run configuration
 run_config:
@@ -54,6 +57,7 @@ run_config:
   # Note: run_name is dynamically generated in runner scripts (SAC-PER-{timestamp})
 
 # Logging strategy
-log_freq: 10
-checkpoint_freq: 100
-log_start_iteration: 10
+logging_config:
+  log_freq: 10
+  checkpoint_freq: 50
+  log_start_iteration: 20

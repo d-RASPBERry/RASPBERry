@@ -12,7 +12,7 @@ hyper_parameters:
     vf_share_layers: false           # Separate value function network
 
   # Core SAC parameters (tuned for continuous control)
-  lr: 3e-4
+  lr: 3.e-4
   gamma: 0.99
   tau: 0.005                         # Soft target update coefficient
   target_entropy: auto               # Auto-tune based on action space
@@ -20,27 +20,30 @@ hyper_parameters:
   n_step: 1
 
   # Learning schedule
-  num_steps_sampled_before_learning_starts: 10000
+  num_steps_sampled_before_learning_starts: 50000
   min_sample_timesteps_per_iteration: 1000
-  training_intensity: 1.0
+  training_intensity: 4.0
 
   # Training batch configuration
   train_batch_size: 256
-  rollout_fragment_length: 1
+  rollout_fragment_length: 8
 
   # Resource configuration
   num_gpus: 1
   num_cpus: 10
-  num_workers: 4
-  num_envs_per_worker: 5
-  num_gpus_per_worker: 0.1
+  num_workers: 8
+  num_envs_per_worker: 8
+  num_gpus_per_worker: 0.01
   num_cpus_per_worker: 1
 
   # Common replay buffer parameters
   replay_buffer_config:
-    prioritized_replay_alpha: 0.6
-    prioritized_replay_beta: 0.4
+    prioritized_replay_alpha: 0.5
+    prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
+    no_local_replay_buffer: false
+    sub_buffer_size: 16
+    worker_side_prioritization: true
 
 # Run configuration
 run_config:
@@ -49,7 +52,8 @@ run_config:
   max_time_s: 1800
 
 # Logging strategy
-log_freq: 10
-checkpoint_freq: 100
-log_start_iteration: 10
+logging_config:
+  log_freq: 10
+  checkpoint_freq: 50
+  log_start_iteration: 20
 

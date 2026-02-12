@@ -1,31 +1,30 @@
 # APEX-DQN-PBER configuration for Atari environments
-# Pure block-level replay WITHOUT compression (Chapter 3 + 5: Distributed PBER)
 extends: templates/apex_base.yml
 
 hyper_parameters:
-  # Training batch - APEX directly samples this many blocks from buffer
-  # With sub_buffer_size=16, this means 512 transitions per batch
   train_batch_size: 32
-  
-  # Replay buffer (PBER - no compression)
+  training_intensity: 1.0
+  # Replay buffer (PBER)
   replay_buffer_config:
-    # Standard PER parameters
-    capacity: 100000
+    capacity: 1000000
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
-    worker_side_prioritization: true
-    replay_buffer_shards_colocated_with_driver: true
-    no_local_replay_buffer: true
-    
-    # PBER-specific parameters
     type: MultiAgentPrioritizedBlockReplayBuffer
-    sub_buffer_size: 16  # Transitions per block
+    replay_buffer_shards_colocated_with_driver: true
+    worker_side_prioritization: true
+    no_local_replay_buffer: true
+    sub_buffer_size: 16
+
+mlflow:
+  experiment: "APEX-Atari"
+  tags:
+    algorithm: "APEX-DQN"
+    buffer: "PBER"
+    obs_type: "image"
 
 run_config:
   use_mlflow: false
   run_name_template: "{env_in}_APEX_PBER"
   max_iterations: 500
   max_time_s: 1800
-
-
