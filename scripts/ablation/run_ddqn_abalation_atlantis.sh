@@ -82,25 +82,14 @@ fi
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${PROJECT_ROOT}"
 
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-SCRIPT_LOG_DIR="/home/seventheli/research/RASPBERry/logs/experiments/scripts"
-mkdir -p ${SCRIPT_LOG_DIR}
-
 ENV_NAME="Atari-AtlantisNoFrameskip-v4"
 PER_CONFIG="configs/ddqn_per_atari.yml"
 PBER_CONFIG="configs/ddqn_pber_atari.yml"
 RASP_CONFIG="configs/ddqn_raspberry_atari.yml"
 
 echo "================================================================================"
-echo "DDQN ablation (Atlantis) | env: ${ENV_NAME}"
-echo "Target GPUs: ${GPU_IDS[*]}"
-if [ "${GPU_ASSIGNMENT_MODE}" = "exclusive" ]; then
-    echo "Mode: exclusive (groups: ${GROUP_COUNT})"
-else
-    echo "Mode: shared (PER -> PBER -> RASPBERry on each GPU)"
-fi
-echo "Log dir: ${SCRIPT_LOG_DIR}"
-echo "Total tasks: ${TOTAL_TASKS}"
+echo "DDQN ablation (Atlantis)"
+echo "GPUs: ${GPU_IDS[*]} | Mode: ${GPU_ASSIGNMENT_MODE} | Tasks: ${TOTAL_TASKS}"
 echo "================================================================================"
 
 declare -a ALL_PIDS
@@ -109,28 +98,23 @@ declare -a ALL_NAMES
 if [ "${GPU_ASSIGNMENT_MODE}" = "shared" ]; then
     for idx in "${!GPU_IDS[@]}"; do
         gpu="${GPU_IDS[$idx]}"
-        echo "GPU ${gpu}: Atlantis DDQN ablation group $((idx+1))"
-        log_suffix="atlantis_gpu${gpu}_${TIMESTAMP}"
 
-        echo "  [1/3] DDQN-PER (log: ${SCRIPT_LOG_DIR}/ddqn_per_${log_suffix}.log)"
-        python runner/run_ddqn_per_algo.py --config ${PER_CONFIG} --env ${ENV_NAME} --gpu ${gpu} \
-            > ${SCRIPT_LOG_DIR}/ddqn_per_${log_suffix}.log 2>&1 &
+        python runner/run_ddqn_per_algo.py --config ${PER_CONFIG} --env ${ENV_NAME} --gpu ${gpu} &
         ALL_PIDS+=($!)
         ALL_NAMES+=("GPU${gpu}-PER")
+        echo "  [1/3] DDQN-PER       (GPU ${gpu}) -> PID $!"
         sleep ${LAUNCH_DELAY_SAME_GPU}
 
-        echo "  [2/3] DDQN-PBER (log: ${SCRIPT_LOG_DIR}/ddqn_pber_${log_suffix}.log)"
-        python runner/run_ddqn_pber_algo.py --config ${PBER_CONFIG} --env ${ENV_NAME} --gpu ${gpu} \
-            > ${SCRIPT_LOG_DIR}/ddqn_pber_${log_suffix}.log 2>&1 &
+        python runner/run_ddqn_pber_algo.py --config ${PBER_CONFIG} --env ${ENV_NAME} --gpu ${gpu} &
         ALL_PIDS+=($!)
         ALL_NAMES+=("GPU${gpu}-PBER")
+        echo "  [2/3] DDQN-PBER      (GPU ${gpu}) -> PID $!"
         sleep ${LAUNCH_DELAY_SAME_GPU}
 
-        echo "  [3/3] DDQN-RASPBERry (log: ${SCRIPT_LOG_DIR}/ddqn_raspberry_${log_suffix}.log)"
-        python runner/run_ddqn_raspberry_algo.py --config ${RASP_CONFIG} --env ${ENV_NAME} --gpu ${gpu} \
-            > ${SCRIPT_LOG_DIR}/ddqn_raspberry_${log_suffix}.log 2>&1 &
+        python runner/run_ddqn_raspberry_algo.py --config ${RASP_CONFIG} --env ${ENV_NAME} --gpu ${gpu} &
         ALL_PIDS+=($!)
         ALL_NAMES+=("GPU${gpu}-RASPBERry")
+        echo "  [3/3] DDQN-RASPBERry (GPU ${gpu}) -> PID $!"
 
         if [ ${idx} -lt $((NUM_GPUS - 1)) ]; then
             sleep ${LAUNCH_DELAY_BETWEEN_GPUS}
@@ -142,27 +126,21 @@ else
         gpu_per=${GPU_IDS[$base]}
         gpu_pber=${GPU_IDS[$((base + 1))]}
         gpu_rasp=${GPU_IDS[$((base + 2))]}
-        log_suffix="atlantis_group$((group_idx + 1))_${TIMESTAMP}"
 
-        echo "Group $((group_idx + 1)) Atlantis DDQN ablation (exclusive)"
-
-        echo "  [PER] GPU ${gpu_per} (log: ${SCRIPT_LOG_DIR}/ddqn_per_${log_suffix}.log)"
-        python runner/run_ddqn_per_algo.py --config ${PER_CONFIG} --env ${ENV_NAME} --gpu ${gpu_per} \
-            > ${SCRIPT_LOG_DIR}/ddqn_per_${log_suffix}.log 2>&1 &
+        python runner/run_ddqn_per_algo.py --config ${PER_CONFIG} --env ${ENV_NAME} --gpu ${gpu_per} &
         ALL_PIDS+=($!)
         ALL_NAMES+=("GPU${gpu_per}-PER(G$((group_idx + 1)))")
+        echo "  [PER]       GPU ${gpu_per} -> PID $!"
 
-        echo "  [PBER] GPU ${gpu_pber} (log: ${SCRIPT_LOG_DIR}/ddqn_pber_${log_suffix}.log)"
-        python runner/run_ddqn_pber_algo.py --config ${PBER_CONFIG} --env ${ENV_NAME} --gpu ${gpu_pber} \
-            > ${SCRIPT_LOG_DIR}/ddqn_pber_${log_suffix}.log 2>&1 &
+        python runner/run_ddqn_pber_algo.py --config ${PBER_CONFIG} --env ${ENV_NAME} --gpu ${gpu_pber} &
         ALL_PIDS+=($!)
         ALL_NAMES+=("GPU${gpu_pber}-PBER(G$((group_idx + 1)))")
+        echo "  [PBER]      GPU ${gpu_pber} -> PID $!"
 
-        echo "  [RASPBERry] GPU ${gpu_rasp} (log: ${SCRIPT_LOG_DIR}/ddqn_raspberry_${log_suffix}.log)"
-        python runner/run_ddqn_raspberry_algo.py --config ${RASP_CONFIG} --env ${ENV_NAME} --gpu ${gpu_rasp} \
-            > ${SCRIPT_LOG_DIR}/ddqn_raspberry_${log_suffix}.log 2>&1 &
+        python runner/run_ddqn_raspberry_algo.py --config ${RASP_CONFIG} --env ${ENV_NAME} --gpu ${gpu_rasp} &
         ALL_PIDS+=($!)
         ALL_NAMES+=("GPU${gpu_rasp}-RASPBERry(G$((group_idx + 1)))")
+        echo "  [RASPBERry] GPU ${gpu_rasp} -> PID $!"
 
         if [ ${group_idx} -lt $((GROUP_COUNT - 1)) ]; then
             sleep ${LAUNCH_DELAY_BETWEEN_GPUS}
@@ -173,13 +151,11 @@ fi
 echo ""
 echo "Submitted ${TOTAL_TASKS} DDQN tasks"
 for idx in "${!ALL_PIDS[@]}"; do
-    printf "  %-20s -> PID:%s\n" "${ALL_NAMES[$idx]}" "${ALL_PIDS[$idx]}"
+    printf "  %-24s -> PID:%s\n" "${ALL_NAMES[$idx]}" "${ALL_PIDS[$idx]}"
 done
-echo ""
-echo "Log dir: ${SCRIPT_LOG_DIR}"
 echo "Terminate all: kill ${ALL_PIDS[@]}"
-echo ""
 
+echo ""
 echo "Waiting for all tasks to finish..."
 for pid in "${ALL_PIDS[@]}"; do
     wait $pid 2>/dev/null || true

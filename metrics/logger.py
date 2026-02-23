@@ -13,6 +13,19 @@ def _resolve_level(level: Union[str, int]) -> int:
     return getattr(logging, str(level).upper(), logging.INFO)
 
 
+def redirect_stdio(log_dir: Union[Path, str], filename: str = "console.log"):
+    """Redirect stdout and stderr to a file in *log_dir*.
+
+    Call BEFORE setup_logger so the console handler inherits the redirect.
+    Uses line-buffering for near-real-time writes.
+    """
+    resolved = Path(log_dir)
+    resolved.mkdir(parents=True, exist_ok=True)
+    fp = open(resolved / filename, "w", buffering=1)  # noqa: SIM115
+    sys.stdout = fp
+    sys.stderr = fp
+
+
 def setup_logger(
     name: str,
     log_dir: Union[Path, str],

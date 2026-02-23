@@ -50,9 +50,6 @@ fi
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${PROJECT_ROOT}"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-SCRIPT_LOG_DIR="./logs/scripts"
-mkdir -p "${SCRIPT_LOG_DIR}"
 
 PER_CONFIG="configs/experiments/apex/per/minigrid_keycorridor_s6r3.yml"
 PBER_CONFIG="configs/experiments/apex/pber/minigrid_keycorridor_s6r3.yml"
@@ -63,10 +60,7 @@ done
 
 echo "================================================================================"
 echo "APEX ablation (MiniGrid-KeyCorridorS6R3)"
-echo "Target GPUs: ${GPU_IDS[*]}"
-echo "Mode: ${GPU_ASSIGNMENT_MODE}"
-echo "Log dir: ${SCRIPT_LOG_DIR}"
-echo "Total tasks: ${TOTAL_TASKS}"
+echo "GPUs: ${GPU_IDS[*]} | Mode: ${GPU_ASSIGNMENT_MODE} | Tasks: ${TOTAL_TASKS}"
 echo "================================================================================"
 
 declare -a ALL_PIDS
@@ -75,23 +69,22 @@ declare -a ALL_NAMES
 if [ "${GPU_ASSIGNMENT_MODE}" = "shared" ]; then
     for idx in "${!GPU_IDS[@]}"; do
         gpu="${GPU_IDS[$idx]}"
-        log_suffix="minigrid_keycorridor_s6r3_gpu${gpu}_${TIMESTAMP}"
 
-        python runner/run_apex_per_algo.py --config "${PER_CONFIG}" --gpu "${gpu}" \
-            > "${SCRIPT_LOG_DIR}/apex_per_${log_suffix}.log" 2>&1 &
+        python runner/run_apex_per_algo.py --config "${PER_CONFIG}" --gpu "${gpu}" &
         ALL_PIDS+=($!)
+        echo "  [1/3] APEX-PER       (GPU ${gpu}) -> PID $!"
         ALL_NAMES+=("GPU${gpu}-PER")
         sleep ${LAUNCH_DELAY_SAME_GPU}
 
-        python runner/run_apex_pber_algo.py --config "${PBER_CONFIG}" --gpu "${gpu}" \
-            > "${SCRIPT_LOG_DIR}/apex_pber_${log_suffix}.log" 2>&1 &
+        python runner/run_apex_pber_algo.py --config "${PBER_CONFIG}" --gpu "${gpu}" &
         ALL_PIDS+=($!)
+        echo "  [2/3] APEX-PBER      (GPU ${gpu}) -> PID $!"
         ALL_NAMES+=("GPU${gpu}-PBER")
         sleep ${LAUNCH_DELAY_SAME_GPU}
 
-        python runner/run_apex_raspberry_algo.py --config "${RASP_CONFIG}" --gpu "${gpu}" \
-            > "${SCRIPT_LOG_DIR}/apex_raspberry_${log_suffix}.log" 2>&1 &
+        python runner/run_apex_raspberry_algo.py --config "${RASP_CONFIG}" --gpu "${gpu}" &
         ALL_PIDS+=($!)
+        echo "  [3/3] APEX-RASPBERry (GPU ${gpu}) -> PID $!"
         ALL_NAMES+=("GPU${gpu}-RASPBERry")
 
         if [ ${idx} -lt $((NUM_GPUS - 1)) ]; then sleep ${LAUNCH_DELAY_BETWEEN_GPUS}; fi
@@ -102,33 +95,35 @@ else
         gpu_per=${GPU_IDS[$base]}
         gpu_pber=${GPU_IDS[$((base + 1))]}
         gpu_rasp=${GPU_IDS[$((base + 2))]}
-        log_suffix="minigrid_keycorridor_s6r3_group$((group_idx + 1))_${TIMESTAMP}"
 
-        python runner/run_apex_per_algo.py --config "${PER_CONFIG}" --gpu "${gpu_per}" \
-            > "${SCRIPT_LOG_DIR}/apex_per_${log_suffix}.log" 2>&1 &
+        python runner/run_apex_per_algo.py --config "${PER_CONFIG}" --gpu "${gpu_per}" &
         ALL_PIDS+=($!)
+        echo "  [PER]       GPU ${gpu_per} -> PID $!"
         ALL_NAMES+=("GPU${gpu_per}-PER(G$((group_idx + 1)))")
 
-        python runner/run_apex_pber_algo.py --config "${PBER_CONFIG}" --gpu "${gpu_pber}" \
-            > "${SCRIPT_LOG_DIR}/apex_pber_${log_suffix}.log" 2>&1 &
+        python runner/run_apex_pber_algo.py --config "${PBER_CONFIG}" --gpu "${gpu_pber}" &
         ALL_PIDS+=($!)
+        echo "  [PBER]      GPU ${gpu_pber} -> PID $!"
         ALL_NAMES+=("GPU${gpu_pber}-PBER(G$((group_idx + 1)))")
 
-        python runner/run_apex_raspberry_algo.py --config "${RASP_CONFIG}" --gpu "${gpu_rasp}" \
-            > "${SCRIPT_LOG_DIR}/apex_raspberry_${log_suffix}.log" 2>&1 &
+        python runner/run_apex_raspberry_algo.py --config "${RASP_CONFIG}" --gpu "${gpu_rasp}" &
         ALL_PIDS+=($!)
+        echo "  [RASPBERry] GPU ${gpu_rasp} -> PID $!"
         ALL_NAMES+=("GPU${gpu_rasp}-RASPBERry(G$((group_idx + 1)))")
 
         if [ ${group_idx} -lt $((GROUP_COUNT - 1)) ]; then sleep ${LAUNCH_DELAY_BETWEEN_GPUS}; fi
     done
 fi
 
+echo ""
 echo "Submitted ${TOTAL_TASKS} APEX tasks"
 for idx in "${!ALL_PIDS[@]}"; do
     printf "  %-24s -> PID:%s\n" "${ALL_NAMES[$idx]}" "${ALL_PIDS[$idx]}"
 done
-echo "Log dir: ${SCRIPT_LOG_DIR}"
 echo "Terminate all: kill ${ALL_PIDS[@]}"
+
 echo "Waiting for all tasks to finish..."
-for pid in "${ALL_PIDS[@]}"; do wait $pid 2>/dev/null || true; done
+for pid in "${ALL_PIDS[@]}"; do
+    wait $pid 2>/dev/null || true
+done
 echo "Done."

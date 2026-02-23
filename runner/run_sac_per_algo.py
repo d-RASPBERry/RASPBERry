@@ -29,7 +29,7 @@ from ray.tune.registry import register_env
 
 # ------ Subsection: Local ------
 from metrics import write_iteration_json
-from metrics.logger import setup_logger
+from metrics.logger import redirect_stdio, setup_logger
 from metrics.mlflow_helper import setup_mlflow, prepare_metrics
 from models import SACLightweightCNN
 from utils import env_creator, infer_env_type, ConfigLoader
@@ -146,6 +146,7 @@ def main() -> None:
     os.environ["TUNE_RESULTS_DIR"] = str(log_root)
 
     # ------ Subsection: Logging ------
+    redirect_stdio(log_dir)
     logger = setup_logger(run_name, log_dir)
     logger.info("=" * 60)
     logger.info("SAC-PER Training Started")

@@ -29,7 +29,7 @@ from ray.tune.registry import register_env
 # ------ Subsection: Local ------
 from algorithms.sac_raspberry_algo import SACRaspberryAlgo
 from metrics import write_iteration_json
-from metrics.logger import setup_logger
+from metrics.logger import redirect_stdio, setup_logger
 from metrics.mlflow_helper import prepare_metrics, setup_mlflow
 from models import SACLightweightCNN
 from replay_buffer.d_pber_ray import MultiAgentPrioritizedBlockReplayBuffer
@@ -153,6 +153,7 @@ def main() -> None:
     os.environ["TUNE_RESULTS_DIR"] = str(log_root)
 
     # ------ Subsection: Logging ------
+    redirect_stdio(log_dir)
     logger = setup_logger(run_name, log_dir)
 
     # 将 replay buffer 相关 logger 复用同一套 handler，避免日志分散到 stderr。

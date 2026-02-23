@@ -28,7 +28,7 @@ from ray.tune.registry import register_env
 # ------ Subsection: Local ------
 from algorithms.apex_dqn_pber_algo import ApexDQNPberAlgo
 from metrics import write_iteration_json
-from metrics.logger import setup_logger
+from metrics.logger import redirect_stdio, setup_logger
 from metrics.mlflow_helper import setup_mlflow, prepare_metrics
 from replay_buffer.d_pber_ray import MultiAgentPrioritizedBlockReplayBuffer
 from utils import env_creator, infer_env_type, ConfigLoader
@@ -142,6 +142,7 @@ def main() -> None:
     os.environ["TUNE_RESULTS_DIR"] = str(log_root)
 
     # Setup logging
+    redirect_stdio(log_dir)
     logger = setup_logger(run_name, log_dir)
     logger.info("=" * 60)
     logger.info("APEX-DQN-PBER Training Started")
