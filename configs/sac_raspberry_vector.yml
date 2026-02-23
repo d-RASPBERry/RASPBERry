@@ -14,9 +14,11 @@ hyper_parameters:
     compress_base: -1
     worker_side_prioritization: true
     compress_pool_size: 400
+    num_ray_workers: 4
+    max_inflight_tasks: 16
     compression_algorithm: "lz4"
     compression_level: 1
     compression_nthreads: 4
-    compression_mode: "D"
+    compression_mode: "C"
     chunk_size: 20
 

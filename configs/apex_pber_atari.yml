@@ -24,7 +24,7 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  use_mlflow: false
+  use_mlflow: true
   run_name_template: "{env_in}_APEX_PBER"
   max_iterations: 500
-  max_time_s: 1800
+  max_time_s: 360000

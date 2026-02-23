@@ -205,41 +205,7 @@ def main() -> None:
 
             result = algo.train()
             iteration += 1
-            
-            # Attach replay buffer statistics to result
-            # For APEX, buffer stats come from result['info']['replay_shard_X']
-            try:
-                from utils import flatten_dict
-                # Get stats from first replay shard (following 2024 notebook implementation)
-                shard_0_stats = result.get('info', {}).get('replay_shard_0', {})
-                
-                if shard_0_stats:
-                    # Extract buffer stats for default policy
-                    policy_stats = shard_0_stats.get('policy_default_policy', {})
-                    if policy_stats:
-                        # Get number of shards from config
-                        num_shards = algo.config.get("optimizer", {}).get("num_replay_buffer_shards", 4)
-                        
-                        # Multiply by number of shards to get total memory usage
-                        buffer_stats = {
-                            "est_size_bytes": policy_stats.get("est_size_bytes", 0) * num_shards,
-                            "num_entries": policy_stats.get("num_entries", 0),
-                            "added_count": policy_stats.get("added_count", 0),
-                            "sampled_count": policy_stats.get("sampled_count", 0),
-                            "num_shards": num_shards,
-                        }
-                        buffer_stats["est_size_gb"] = buffer_stats["est_size_bytes"] / 1e9
-                        result["buffer"] = buffer_stats
-                        
-                        # Log buffer stats every iteration (for distributed monitoring)
-                        if iteration % log_every == 0:
-                            logger.info("📊 APEX Buffer Stats (Total across all shards):")
-                            logger.info(f"  Shards: {num_shards}")
-                            logger.info(f"  Total Memory: {buffer_stats['est_size_gb']:.2f} GB")
-                            logger.info(f"  Entries per shard: {buffer_stats['num_entries']}")
-            except Exception as e:
-                logger.warning(f"Failed to get buffer stats from info: {e}")
-            
+
             write_iteration_json(log_dir, iteration, result)
 
             if iteration % log_every == 0:

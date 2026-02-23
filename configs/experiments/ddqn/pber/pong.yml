@@ -1,5 +1,5 @@
 # DDQN-PBER: Atari-Pong
-# Complete configuration for Pong environment with PBER (Block ER without compression)
+# Complete configuration for Pong environment
 extends: ../../../templates/ddqn_base.yml
 
 env_config:
@@ -19,13 +19,13 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  use_mlflow: false
+  use_mlflow: true
   run_name_template: "{env_alias}"
   max_iterations: 100000
-  max_time_s: 1800
+  max_time_s: 360000
 
 hyper_parameters:
-  # Replay buffer (PBER - Block ER without compression)
+  # Replay buffer (PBER baseline)
   replay_buffer_config:
     capacity: 1000000
     prioritized_replay_alpha: 0.5
@@ -33,12 +33,11 @@ hyper_parameters:
     prioritized_replay_eps: 0.000001
     type: MultiAgentPrioritizedBlockReplayBuffer
     sub_buffer_size: 8
-    worker_side_prioritization: true
-  
+
   training_intensity: 1.0
-  # Same hyperparameters as PER and RASPBERry for fair comparison
+
+  # Same hyperparameters as RASPBERry for fair comparison
   lr: 1.e-4
   gamma: 0.99
   num_workers: 2
   num_envs_per_worker: 8
-

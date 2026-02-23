@@ -20,7 +20,8 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  max_time_s: 600
+  use_mlflow: true
+  max_time_s: 360000
 
 hyper_parameters:
   # Optimized for Image-based Continuous Control
@@ -38,7 +39,6 @@ hyper_parameters:
 
   # Sampling & Training
   min_sample_timesteps_per_iteration: 10000
-  training_intensity: 1.0
   target_entropy: auto
 
   # Replay buffer (PBER: Block-based without compression)

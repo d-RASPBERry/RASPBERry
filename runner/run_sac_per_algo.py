@@ -215,18 +215,7 @@ def main() -> None:
 
             result = algo.train()
             iteration += 1
-            
-            # Attach replay buffer statistics to result
-            if hasattr(algo, 'local_replay_buffer'):
-                from utils import flatten_dict
-                buffer_stats = flatten_dict(algo.local_replay_buffer.stats())
-                if "est_size_bytes" in buffer_stats:
-                    buffer_stats["est_size_gb"] = buffer_stats["est_size_bytes"] / 1e9
-                if "num_entries" not in buffer_stats and hasattr(algo.local_replay_buffer, '_num_added'):
-                    buffer_stats["num_entries"] = min(algo.local_replay_buffer._num_added, 
-                                                      algo.local_replay_buffer.capacity)
-                result["buffer"] = buffer_stats
-            
+
             write_iteration_json(log_dir, iteration, result)
 
             if iteration % log_every == 0:

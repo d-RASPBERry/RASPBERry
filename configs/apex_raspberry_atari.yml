@@ -4,6 +4,8 @@ extends: templates/apex_base.yml
 hyper_parameters:
   train_batch_size: 32
   training_intensity: 1.0
+  # APEX replay actor manager cap (separate from replay buffer internal async cap).
+  max_requests_in_flight_per_replay_worker: 8
   # Replay buffer (RASPBERry)
   replay_buffer_config:
     capacity: 1000000
@@ -16,13 +18,17 @@ hyper_parameters:
     no_local_replay_buffer: true
     sub_buffer_size: 16
     compress_pool_size: 200
+    # Async compression parallelism (effective in RASPBERry buffer).
+    num_ray_workers: 4
+    # Allow deeper async pipeline before backpressure wait.
+    max_inflight_tasks: 16
     # Options: zstd, lz4, lz4hc, blosclz
     compression_algorithm: "lz4"
     # 1-9, higher = better compression but slower
     compression_level: 1
     compression_nthreads: 4
-    # "A": sync, "B": batch_pool, "D": batch_async
-    compression_mode: "D"
+    # "A": sync, "B": batch sync, "C": async
+    compression_mode: "C"
     # Batch size for modes B and D (shared parameter)
     chunk_size: 20
 
@@ -34,7 +40,7 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  use_mlflow: false
+  use_mlflow: true
   run_name_template: "{env_in}_APEX_RASPBERRY"
   max_iterations: 500
-  max_time_s: 1800
+  max_time_s: 360000

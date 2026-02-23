@@ -52,5 +52,5 @@ def write_iteration_json(log_dir: Path, iteration: int, result: dict) -> None:
     record = convert_np_arrays(payload)
     output_path = log_dir / f"result_{iteration:05d}.json"
     with open(output_path, "w", encoding="utf-8") as fp:
-        json.dump(record, fp, indent=2)
+        json.dump(record, fp, ensure_ascii=False, separators=(",", ":"))
 

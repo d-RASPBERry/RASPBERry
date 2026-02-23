@@ -12,13 +12,15 @@ hyper_parameters:
     sub_buffer_size: 8
     compress_base: -1
     compress_pool_size: 100
+    num_ray_workers: 4
+    max_inflight_tasks: 16
     # Options: zstd, lz4, lz4hc, blosclz
     compression_algorithm: "lz4"
     # 1-9, higher = better compression but slower
     compression_level: 1
     compression_nthreads: 4
-    # "A": sync, "B": batch_pool, "D": batch_async
-    compression_mode: "D"
+    # "A": sync, "B": batch sync, "C": async
+    compression_mode: "C"
     # Batch size for modes B and D (shared parameter)
     chunk_size: 20
 
@@ -36,8 +38,8 @@ mlflow:
 
 run_config:
   # Keep iterations high so time-based runs (e.g., timeout 30m) don't stop early.
-  use_mlflow: false
+  use_mlflow: true
   max_iterations: 100000
-  max_time_s: 1800
+  max_time_s: 360000
 
 

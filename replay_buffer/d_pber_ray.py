@@ -34,6 +34,7 @@ from ray.rllib.utils.replay_buffers.multi_agent_replay_buffer import (
     merge_dicts_with_warning,
 )
 from ray.rllib.utils.typing import PolicyID, SampleBatchType
+from ray.util import log_once
 
 # ------ Subsection: Local ------
 from replay_buffer.pber_ray import PrioritizedBlockReplayBuffer
@@ -151,10 +152,11 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
     def add(self, batch: SampleBatchType, **kwargs) -> None:
         """Add a batch to the corresponding policy's underlying replay buffer."""
         if batch is None:
-            logger.warning(
-                "Empty batch added to %s (normal at start, check if persistent)",
-                type(self).__name__,
-            )
+            if log_once(f"{type(self).__name__}:empty_batch_added"):
+                logger.warning(
+                    "Empty batch added to %s (normal at start, check if persistent)",
+                    type(self).__name__,
+                )
             return
 
         batch = batch.copy()
@@ -274,7 +276,7 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             buffer.update_priorities(unique_block_indexes, block_priorities)
 
     @override(MultiAgentPrioritizedReplayBuffer)
-    def stats(self) -> Dict:
+    def stats(self, debug: bool = False) -> Dict:
         """Get buffer statistics.
         
         Returns:

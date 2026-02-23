@@ -218,15 +218,7 @@ def main() -> None:
 
             result = algo.train()
             iteration += 1
-            
-            # Attach replay buffer stats to result payload
-            if hasattr(algo, 'local_replay_buffer'):
-                from utils import flatten_dict
-                buffer_stats = flatten_dict(algo.local_replay_buffer.stats())
-                if "est_size_bytes" in buffer_stats:
-                    buffer_stats["est_size_gb"] = buffer_stats["est_size_bytes"] / 1e9
-                result["buffer"] = buffer_stats
-            
+
             write_iteration_json(log_dir, iteration, result)
 
             if iteration % log_every == 0:

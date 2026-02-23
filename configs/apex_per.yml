@@ -16,4 +16,4 @@ run_config:
   use_mlflow: true
   run_name_template: "{env_in}_APEX_PER"
   max_iterations: 500
-  max_time_s: 7200
+  max_time_s: 360000

@@ -19,13 +19,13 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  use_mlflow: false
+  use_mlflow: true
   run_name_template: "{env_alias}"
   max_iterations: 100000
-  max_time_s: 1800
+  max_time_s: 360000
 
 hyper_parameters:
-  # Replay buffer (RASPBERry)
+  # Replay buffer (RASPBERry baseline)
   replay_buffer_config:
     capacity: 1000000
     prioritized_replay_alpha: 0.5
@@ -34,18 +34,19 @@ hyper_parameters:
     type: MultiAgentRASPBERryReplayBuffer
     sub_buffer_size: 8
     compress_base: -1
-    worker_side_prioritization: true
-    compress_pool_size: 400
+    compress_pool_size: 100
+    num_ray_workers: 4
+    max_inflight_tasks: 16
     compression_algorithm: "lz4"
     compression_level: 1
     compression_nthreads: 4
-    compression_mode: "D"
+    compression_mode: "C"
     chunk_size: 20
-  
+
   training_intensity: 1.0
-  # Atari-specific hyperparameters
+
+  # Same hyperparameters as PBER for fair comparison
   lr: 1.e-4
   gamma: 0.99
   num_workers: 2
   num_envs_per_worker: 8
-

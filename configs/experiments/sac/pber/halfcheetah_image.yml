@@ -1,0 +1,52 @@
+# SAC-PBER: MUJOCOI-HalfCheetah (Image observation)
+extends: ../../../templates/sac_image_base.yml
+
+env_config:
+  id: "MUJOCOI-HalfCheetah-v4"
+  env_alias: "SAC-PBER-HalfCheetah-Image"
+  img_size: 84
+  frame_skip: 4
+  frame_stack: 4
+  grayscale: true
+  normalize: true
+  reward_scale: 0.01
+
+logging:
+  log_subdir: "MUJOCOI/HalfCheetah-Image"
+
+mlflow:
+  experiment: "SAC-HalfCheetah"
+  tags:
+    algorithm: "SAC"
+    buffer: "PBER"
+    environment: "HalfCheetah"
+    obs_type: "image"
+
+run_config:
+  use_mlflow: true
+  max_time_s: 360000
+
+hyper_parameters:
+  train_batch_size: 256
+  grad_clip: 1.0
+  n_step: 1
+  rollout_fragment_length: 8
+  initial_alpha: 0.2
+  optimization:
+    actor_learning_rate: 3.e-4
+    critic_learning_rate: 3.e-4
+    entropy_learning_rate: 3.e-4
+
+  min_sample_timesteps_per_iteration: 8000
+  num_steps_sampled_before_learning_starts: 50000
+  target_entropy: auto
+
+  replay_buffer_config:
+    capacity: 1000000
+    type: MultiAgentPrioritizedBlockReplayBuffer
+    sub_buffer_size: 16
+    worker_side_prioritization: true
+
+  num_workers: 8
+  num_cpus: 10
+  num_envs_per_worker: 4

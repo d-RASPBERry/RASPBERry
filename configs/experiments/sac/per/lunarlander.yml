@@ -17,12 +17,12 @@ mlflow:
     obs_type: "vector"
 
 run_config:
-  max_time_s: 600
+  use_mlflow: true
+  max_time_s: 360000
 
 hyper_parameters:
   train_batch_size: 512
   min_sample_timesteps_per_iteration: 2000
-  training_intensity: 4.0
 
   # Replay buffer (PER baseline)
   replay_buffer_config:

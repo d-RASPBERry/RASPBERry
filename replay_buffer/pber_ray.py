@@ -5,7 +5,6 @@ Block-level replay buffer without compression (pure PBER baseline).
 
 # ====== Section: Imports ======
 # ------ Subsection: Standard library ------
-import logging
 from typing import Any, Dict, List, Optional
 
 # ------ Subsection: Third-party ------
@@ -19,10 +18,6 @@ from ray.rllib.utils.typing import SampleBatchType
 
 # ------ Subsection: Local ------
 from replay_buffer.block_accumulator import BlockAccumulator
-
-# ====== Section: Module State ======
-BUFFER_NAME = "pber"
-logger = logging.getLogger(__name__)
 
 
 # ====== Section: Prioritized Block Replay Buffer ======
@@ -127,12 +122,6 @@ class PrioritizedBlockReplayBuffer(PrioritizedReplayBuffer):
 
         min_weight = 0.01
         if np.isnan(weight) or weight <= 0:
-            logger.warning(
-                "event=invalid_block_weight buffer=%s weight=%s fallback=%s",
-                BUFFER_NAME,
-                weight,
-                min_weight,
-            )
             weight = min_weight
 
         self._add_single_batch(raw_batch, weight=weight)

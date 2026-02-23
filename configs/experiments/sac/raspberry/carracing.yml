@@ -20,7 +20,8 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  max_time_s: 600
+  use_mlflow: true
+  max_time_s: 360000
 
 hyper_parameters:
   # Optimized for Image-based Continuous Control
@@ -38,7 +39,6 @@ hyper_parameters:
 
   # Sampling & Training
   min_sample_timesteps_per_iteration: 10000
-  training_intensity: 1.0
   target_entropy: auto
 
   # Replay buffer (RASPBERry-specific)
@@ -49,10 +49,12 @@ hyper_parameters:
     compress_base: -1
     worker_side_prioritization: true
     compress_pool_size: 400
+    num_ray_workers: 4
+    max_inflight_tasks: 16
     compression_algorithm: "lz4"
     compression_level: 1
     compression_nthreads: 4
-    compression_mode: "D"
+    compression_mode: "C"
     chunk_size: 20
 
   # Resource

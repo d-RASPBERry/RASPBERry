@@ -19,12 +19,13 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  use_mlflow: false
+  use_mlflow: true
   run_name_template: "{env_alias}"
   max_iterations: 100000
-  max_time_s: 1800
+  max_time_s: 360000
 
 hyper_parameters:
+  training_intensity: 4.0
   # Replay buffer (PER baseline)
   replay_buffer_config:
     capacity: 1000000

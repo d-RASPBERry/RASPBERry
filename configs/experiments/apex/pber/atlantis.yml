@@ -1,0 +1,39 @@
+# APEX-PBER: Atlantis
+extends: ../../../templates/apex_base.yml
+
+env_config:
+  id: "Atari-AtlantisNoFrameskip-v4"
+  env_alias: "APEX-PBER-Atlantis"
+
+logging:
+  log_subdir: "Atari/Atlantis"
+  log_every: 10
+
+mlflow:
+  experiment: "APEX-Atari"
+  tags:
+    algorithm: "APEX-DQN"
+    buffer: "PBER"
+    environment: "Atlantis"
+    obs_type: "image"
+
+run_config:
+  use_mlflow: true
+  run_name_template: "{env_alias}"
+  max_iterations: 500
+  max_time_s: 360000
+
+hyper_parameters:
+  training_intensity: 1.0
+  # Replay buffer (PBER)
+  train_batch_size: 32
+  replay_buffer_config:
+    capacity: 1000000
+    prioritized_replay_alpha: 0.5
+    prioritized_replay_beta: 1.0
+    prioritized_replay_eps: 0.000001
+    type: MultiAgentPrioritizedBlockReplayBuffer
+    replay_buffer_shards_colocated_with_driver: true
+    worker_side_prioritization: true
+    no_local_replay_buffer: true
+    sub_buffer_size: 16

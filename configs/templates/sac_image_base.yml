@@ -51,9 +51,9 @@ hyper_parameters:
 
 # Run configuration
 run_config:
-  use_mlflow: false
+  use_mlflow: true
   max_iterations: 100000  # Large enough to let max_time_s control
-  max_time_s: 1800
+  max_time_s: 360000
   # Note: run_name is dynamically generated in runner scripts (SAC-PER-{timestamp})
 
 # Logging strategy

@@ -4,7 +4,6 @@ Prioritized block replay buffer with on-the-fly blosc compression.
 """
 
 # ====== Section: Imports ======
-import logging
 import time
 from typing import Any, Dict, List, Optional
 
@@ -22,9 +21,6 @@ from ray.rllib.utils.typing import SampleBatchType
 # ------ Subsection: Local ------
 from replay_buffer.compress_replay_node import CompressReplayNode
 
-# ====== Section: Module State ======
-BUFFER_NAME = "raspberry"
-logger = logging.getLogger(__name__)
 
 # ====== Section: Ray Remote Compression Worker ======
 
@@ -199,11 +195,13 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
             sub_buffer_size: int = 32,
             compress_base: int = -1,
             compress_pool_size: int = 5,
+            num_ray_workers: int = 1,
             compression_algorithm: str = "zstd",
             compression_level: int = 5,
             compression_nthreads: int = 1,
-            compression_mode: str = "D",  # "B": sync, "C": batch_ray, "D": async_ray
+            compression_mode: str = "C",  # A: sync, B: batch sync, C: async
             chunk_size: int = 10,
+            max_inflight_tasks: Optional[int] = None,
             **kwargs,
     ):
         """Initialize the prioritized block replay buffer.
@@ -213,12 +211,18 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
             action_space: Action space.
             sub_buffer_size: Block size (transitions per block).
             compress_base: Axis to move for compression (-1 for auto).
-            compress_pool_size: Number of Ray workers (default: 5).
+            compress_pool_size: Legacy field (ignored for worker count).
+            num_ray_workers: Max concurrent Ray compression tasks.
             compression_algorithm: Blosc algorithm (zstd, lz4, etc.).
             compression_level: Compression level (1-9).
             compression_nthreads: Blosc compression threads.
-            compression_mode: "B" (sync), "C" (batch Ray), "D" (async Ray).
+            compression_mode:
+                - "A": synchronous compression
+                - "B": batch synchronous compression
+                - "C": async Ray compression
             chunk_size: Number of nodes per Ray task batch.
+            max_inflight_tasks: Backpressure cap for async Ray tasks.
+                If omitted, defaults to `num_ray_workers * 2`.
             **kwargs: Additional args for PrioritizedReplayBuffer.
         """
         # Map repo config keys to RLlib's PrioritizedReplayBuffer args.
@@ -237,15 +241,24 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         self.obs_space = obs_space
         self.action_space = action_space
 
-        self._compression_mode = compression_mode.upper()
-        if self._compression_mode not in ["B", "C", "D"]:
-            logger.warning(
-                "event=invalid_compression_mode buffer=%s mode=%s fallback=%s",
-                BUFFER_NAME,
-                self._compression_mode,
-                "D",
+        mode = str(compression_mode).upper()
+        # External config mode (A/B/C) -> internal execution mode.
+        # Internal modes remain B/C/D for minimal code churn:
+        # - internal "B": sync compression
+        # - internal "C": batch Ray sync
+        # - internal "D": async Ray
+        mode_map = {
+            "A": "B",
+            "B": "C",
+            "C": "D",
+        }
+        self._compression_mode_input = mode
+        if mode not in mode_map:
+            raise ValueError(
+                f"Invalid compression_mode={compression_mode!r}. "
+                "Supported modes are: A (sync), B (batch sync), C (async)."
             )
-            self._compression_mode = "D"
+        self._compression_mode = mode_map[mode]
         self._chunk_size = max(1, int(chunk_size))
         
         # All modes now use compression
@@ -254,9 +267,19 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         if self._compression_mode == "B":
             self._num_ray_workers = 0  # No Ray for sync compression
         elif self._compression_mode in ["C", "D"]:
-            self._num_ray_workers = max(4, int(compress_pool_size)) if compress_pool_size > 0 else 5
+            self._num_ray_workers = max(1, int(num_ray_workers))
             if not ray.is_initialized():
                 ray.init(num_cpus=self._num_ray_workers, ignore_reinit_error=True)
+
+        # Keep legacy behavior by default, but allow explicit backpressure cap.
+        if self._compression_mode == "D":
+            default_max_inflight = self._num_ray_workers * 2
+            if max_inflight_tasks is None:
+                self._max_inflight_tasks = int(default_max_inflight)
+            else:
+                self._max_inflight_tasks = max(1, int(max_inflight_tasks))
+        else:
+            self._max_inflight_tasks = 0
 
         self._inflight_futures: List[ray.ObjectRef] = []
         self._pending_nodes: List[CompressReplayNode] = []
@@ -319,7 +342,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         }
 
     def _compress_mode_b(self):
-        """Mode B: Synchronous compression (no Ray)."""
+        """Internal mode B (external mode A): synchronous compression."""
         t0 = time.time()
         compressed_data, weight, metrics = self.compress_node.sample()
         self._metrics["compress_time_ms"] += (time.time() - t0) * 1000.0
@@ -332,7 +355,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         self.compress_node.reset()
 
     def _compress_mode_c(self):
-        """Mode C: Batch processing with Ray (synchronous wait)."""
+        """Internal mode C (external mode B): Ray batch sync compression."""
         nodes = self._pending_nodes[:]
         
         t_batch_start = time.time()
@@ -367,7 +390,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         self._metrics["compress_time_ms"] += actual_wall_time
 
     def _compress_mode_d(self):
-        """Mode D: True asynchronous processing with Ray."""
+        """Internal mode D (external mode C): asynchronous Ray compression."""
         
         while len(self._pending_nodes) >= self._chunk_size:
             chunk_nodes = self._pending_nodes[:self._chunk_size]
@@ -407,13 +430,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
                 
         
         # Backpressure keeps in-flight tasks bounded to avoid memory growth.
-        if len(self._inflight_futures) >= self._num_ray_workers * 2:
-            logger.warning(
-                "event=backpressure_wait buffer=%s in_flight=%s max_in_flight=%s",
-                BUFFER_NAME,
-                len(self._inflight_futures),
-                self._num_ray_workers * 2,
-            )
+        if self._max_inflight_tasks > 0 and len(self._inflight_futures) >= self._max_inflight_tasks:
             t_backpressure_start = time.time()
             
             oldest_ref = self._inflight_futures.pop(0)
@@ -472,8 +489,10 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
             if self._est_raw_bytes > 0 else 0.0,
             "num_entries": len(self._storage) * self.sub_buffer_size,
             "compress_time_ms": self._metrics.get("compress_time_ms", 0.0),
+            "compress_count": int(self._metrics.get("compress_count", 0)),
             "backpressure_wait_ms": self._metrics.get("backpressure_wait_ms", 0.0),
             "decompress_time_ms": self._metrics.get("decompress_time_ms", 0.0),
+            "decompress_count": int(self._metrics.get("decompress_count", 0)),
         }
         return out
 
@@ -528,7 +547,7 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
         batch[field_name] = np.repeat(batch[field_name], replicate_factor)
     
     def _drain_pending_futures(self) -> None:
-        """Drain all pending Ray futures and add to storage (Mode D async only)."""
+        """Drain all pending Ray futures (internal mode D / external mode C)."""
         t_start = time.time()
         all_results = ray.get(self._inflight_futures)
         self._inflight_futures = []
@@ -570,17 +589,17 @@ class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
 
             if self.compress_node.is_ready():
                 if self._compression_mode == "B":
-                    # Mode B: Synchronous compression (no Ray)
+                    # External mode A -> internal mode B
                     self._compress_mode_b()
                 elif self._compression_mode == "C":
-                    # Mode C: Accumulate nodes then batch process with Ray
+                    # External mode B -> internal mode C
                     self._pending_nodes.append(self.compress_node)
                     self.compress_node = self._create_compress_node()
                     if len(self._pending_nodes) >= self._chunk_size:
                         self._compress_mode_c()
                         self._reset_pool()
                 elif self._compression_mode == "D":
-                    # Mode D: True async processing with Ray
+                    # External mode C -> internal mode D
                     self._pending_nodes.append(self.compress_node)
                     self.compress_node = self._create_compress_node()
                     self._compress_mode_d()

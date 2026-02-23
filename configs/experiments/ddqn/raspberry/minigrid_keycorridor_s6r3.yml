@@ -1,0 +1,55 @@
+# DDQN-RASPBERry: MiniGrid-KeyCorridorS6R3
+# Environment creation check (pure RGB image observations)
+extends: ../../../templates/ddqn_base.yml
+
+env_config:
+  id: "MiniGrid-KeyCorridorS6R3-v0"
+  env_alias: "DDQN-RASPBERry-MiniGrid-KeyCorridorS6R3"
+  tile_size: 10
+  img_size: 84
+  max_steps: 200
+
+logging:
+  log_subdir: "MiniGrid/KeyCorridorS6R3"
+  log_every: 10
+
+mlflow:
+  experiment: "DDQN-MiniGrid"
+  tags:
+    algorithm: "DDQN"
+    buffer: "RASPBERry"
+    environment: "MiniGrid-KeyCorridorS6R3"
+    obs_type: "image"
+
+run_config:
+  use_mlflow: true
+  run_name_template: "{env_alias}"
+  max_iterations: 100000
+  max_time_s: 360000
+
+hyper_parameters:
+  # Replay buffer (RASPBERry baseline)
+  replay_buffer_config:
+    capacity: 1000000
+    prioritized_replay_alpha: 0.5
+    prioritized_replay_beta: 1.0
+    prioritized_replay_eps: 0.000001
+    type: MultiAgentRASPBERryReplayBuffer
+    sub_buffer_size: 8
+    compress_base: -1
+    compress_pool_size: 100
+    num_ray_workers: 4
+    max_inflight_tasks: 16
+    compression_algorithm: "lz4"
+    compression_level: 1
+    compression_nthreads: 4
+    compression_mode: "C"
+    chunk_size: 20
+
+  training_intensity: 1.0
+
+  # Keep core hyperparameters aligned with Pong baseline
+  lr: 1.e-4
+  gamma: 0.99
+  num_workers: 2
+  num_envs_per_worker: 8

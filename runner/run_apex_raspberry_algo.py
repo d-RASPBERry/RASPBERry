@@ -36,10 +36,12 @@ from utils import env_creator, infer_env_type, ConfigLoader
 # ====== Section: Constants ======
 DEFAULT_CONFIG_PATH = str((ROOT / "configs/apex_raspberry_atari.yml").resolve())
 RUNTIME_CONFIG = str((ROOT / "configs/runtime.yml").resolve())
-
-
 # ====== Section: Algorithm Construction ======
-def build_algorithm(env_id: str, env_short: str, config: dict) -> ApexDQNRaspberryAlgo:
+def build_algorithm(
+    env_id: str,
+    env_short: str,
+    config: dict,
+) -> ApexDQNRaspberryAlgo:
     """Build APEX-DQN RASPBERry algorithm instance.
 
     Uses dict-based config (not ApexDQNConfig) for direct construction.
@@ -76,7 +78,10 @@ def build_algorithm(env_id: str, env_short: str, config: dict) -> ApexDQNRaspber
     hyper["env_config"] = env_config
     game.close()
 
-    return ApexDQNRaspberryAlgo(config=hyper, env=env_short)
+    return ApexDQNRaspberryAlgo(
+        config=hyper,
+        env=env_short,
+    )
 
 
 # ====== Section: CLI / Main ======
@@ -190,7 +195,11 @@ def main() -> None:
     )
     logger.info("Ray initialized (CPUs=%d, GPUs=%s)", num_cpus, num_gpus)
 
-    algo = build_algorithm(env_id, env_alias, config)
+    algo = build_algorithm(
+        env_id=env_id,
+        env_short=env_alias,
+        config=config,
+    )
     logger.info("Algorithm built, starting training...")
 
     start_time = time.time()
@@ -204,54 +213,6 @@ def main() -> None:
 
             result = algo.train()
             iteration += 1
-            
-            # Attach replay buffer statistics to result
-            # For APEX, buffer stats come from result['info']['replay_shard_X']
-            try:
-                from utils import flatten_dict
-                # Get stats from first replay shard (following 2024 notebook implementation)
-                shard_0_stats = result.get('info', {}).get('replay_shard_0', {})
-                
-                if shard_0_stats:
-                    # Extract buffer stats for default policy
-                    policy_stats = shard_0_stats.get('policy_default_policy', {})
-                    if policy_stats:
-                        # Get number of shards from config
-                        num_shards = algo.config.get("optimizer", {}).get("num_replay_buffer_shards", 4)
-                        
-                        # Multiply by number of shards to get total memory usage
-                        buffer_stats = {
-                            "est_size_bytes": policy_stats.get("est_size_bytes", 0) * num_shards,
-                            "num_entries": policy_stats.get("num_entries", 0),
-                            "added_count": policy_stats.get("added_count", 0),
-                            "sampled_count": policy_stats.get("sampled_count", 0),
-                            "num_shards": num_shards,
-                        }
-                        buffer_stats["est_size_gb"] = buffer_stats["est_size_bytes"] / 1e9
-                        
-                        # For RASPBERry, also include compression stats if available
-                        if "est_compressed_bytes" in policy_stats:
-                            buffer_stats["est_compressed_bytes"] = policy_stats["est_compressed_bytes"] * num_shards
-                            buffer_stats["est_compressed_gb"] = buffer_stats["est_compressed_bytes"] / 1e9
-                        if "est_raw_bytes" in policy_stats:
-                            buffer_stats["est_raw_bytes"] = policy_stats["est_raw_bytes"] * num_shards
-                            buffer_stats["est_raw_gb"] = buffer_stats["est_raw_bytes"] / 1e9
-                        
-                        result["buffer"] = buffer_stats
-                        
-                        # Log buffer stats every iteration (for distributed monitoring)
-                        if iteration % log_every == 0:
-                            logger.info("📊 APEX-RASPBERry Buffer Stats (Total across all shards):")
-                            logger.info(f"  Shards: {num_shards}")
-                            logger.info(f"  Total Memory: {buffer_stats['est_size_gb']:.2f} GB")
-                            logger.info(f"  Entries per shard: {buffer_stats['num_entries']}")
-                            if "est_compressed_gb" in buffer_stats:
-                                logger.info(f"  Compressed Memory: {buffer_stats['est_compressed_gb']:.2f} GB")
-                                compression_ratio = buffer_stats.get("est_raw_gb", 0) / buffer_stats.get("est_compressed_gb", 1) if buffer_stats.get("est_compressed_gb", 0) > 0 else 1.0
-                                logger.info(f"  Compression Ratio: {compression_ratio:.2f}x")
-            except Exception as e:
-                logger.warning(f"Failed to get buffer stats from info: {e}")
-            
             write_iteration_json(log_dir, iteration, result)
 
             if iteration % log_every == 0:

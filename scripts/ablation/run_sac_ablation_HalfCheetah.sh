@@ -10,13 +10,22 @@
 #     3) SAC-RASPBERry (分块回放 + 压缩)
 #
 # 使用方法:
-#   ./run_sac_ablation_HalfCheetah_Image.sh                # 默认 GPU 共享 (仅使用 GPU 0)
-#   ./run_sac_ablation_HalfCheetah_Image.sh -n 0,1,2       # 指定逗号分隔 GPU 列表
-#   ./run_sac_ablation_HalfCheetah_Image.sh -m exclusive   # 开启独占模式 (需提供3的倍数GPU)
+#   ./run_sac_ablation_HalfCheetah.sh                # 默认 GPU 共享 (仅使用 GPU 0)
+#   ./run_sac_ablation_HalfCheetah.sh -n 0,1,2       # 指定逗号分隔 GPU 列表
+#   ./run_sac_ablation_HalfCheetah.sh -m exclusive   # 开启独占模式 (需提供3的倍数GPU)
 #
 ################################################################################
 
 set -euo pipefail
+
+# MuJoCo 图像观测在初始化 PixelObservationWrapper 时会触发 env.render()，
+# 在无显示器/无 X11 的机器上默认 GLFW 后端会报:
+#   "X11: The DISPLAY environment variable is missing" / "gladLoadGL error"
+# 这里在检测到 DISPLAY 未设置时，自动切换到 EGL 离屏渲染（可通过环境变量覆盖）。
+if [ -z "${DISPLAY:-}" ]; then
+    export MUJOCO_GL="${MUJOCO_GL:-egl}"
+    echo "[env] DISPLAY 未设置，自动启用 MUJOCO_GL=${MUJOCO_GL} (MuJoCo offscreen)"
+fi
 
 # 默认参数
 GPU_LIST_ARG="0"
@@ -118,39 +127,6 @@ declare -a ALL_NAMES
 PER_CONFIG="configs/experiments/sac/per/halfcheetah_image.yml"
 PBER_CONFIG="configs/experiments/sac/pber/halfcheetah_image.yml"
 RASP_CONFIG="configs/experiments/sac/raspberry/halfcheetah_image.yml"
-
-# Temporary ablation override:
-# - force run_config.max_time_s = 600
-# - keep run_config.use_mlflow = false
-TEMP_CONFIG_DIR="/tmp/raspberry_ablation_cfg_${TIMESTAMP}_$$"
-mkdir -p "${TEMP_CONFIG_DIR}"
-trap 'rm -rf "${TEMP_CONFIG_DIR}"' EXIT
-
-create_temp_override_config() {
-    local base_cfg="$1"
-    local cfg_tag="$2"
-    local extends_path="$base_cfg"
-    if [[ "${base_cfg}" != /* ]]; then
-        extends_path="${PROJECT_ROOT}/${base_cfg}"
-    fi
-    if [ ! -f "${extends_path}" ]; then
-        echo "Error: missing config ${extends_path}" >&2
-        exit 1
-    fi
-    local out_cfg="${TEMP_CONFIG_DIR}/${cfg_tag}_$(basename "${base_cfg}")"
-    cat > "${out_cfg}" <<EOF
-extends: "${extends_path}"
-run_config:
-  max_time_s: 600
-  use_mlflow: false
-EOF
-    echo "${out_cfg}"
-}
-
-PER_CONFIG="$(create_temp_override_config "${PER_CONFIG}" "per")"
-PBER_CONFIG="$(create_temp_override_config "${PBER_CONFIG}" "pber")"
-RASP_CONFIG="$(create_temp_override_config "${RASP_CONFIG}" "raspberry")"
-echo "[ablation temp] max_time_s=600, use_mlflow=false"
 
 if [ "${GPU_ASSIGNMENT_MODE}" = "shared" ]; then
     for idx in "${!GPU_IDS[@]}"; do

@@ -29,12 +29,14 @@ from ray.rllib.utils.replay_buffers.multi_agent_replay_buffer import (
     merge_dicts_with_warning,
 )
 from ray.rllib.utils.typing import PolicyID, SampleBatchType
+from ray.util import log_once
 
 # ------ Subsection: Local ------
 from replay_buffer.raspberry_ray import RASPBERryReplayBuffer, decompress_sample_batch
 
 # ====== Section: Module State ======
 logger = logging.getLogger(__name__)
+
 
 # ====== Section: Classes ======
 @DeveloperAPI
@@ -60,11 +62,13 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             prioritized_replay_eps: float = 1e-6,
             compress_base: int = -1,
             compress_pool_size: int = 5,
+            num_ray_workers: Optional[int] = None,
             compression_algorithm: str = 'zstd',
             compression_level: int = 5,
             compression_nthreads: int = 1,
-            compression_mode: str = "D",  # "B": sync, "C": batch_ray, "D": async_ray
+            compression_mode: str = "C",  # A: sync, B: batch sync, C: async
             chunk_size: int = 10,
+            max_inflight_tasks: Optional[int] = None,
             **kwargs
     ):
         if "replay_mode" in kwargs and (
@@ -77,6 +81,11 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         self.sub_buffer_size = sub_buffer_size
         self.compress_base = compress_base
         self.prioritized_replay_eps = float(prioritized_replay_eps)
+        # Default to one worker per shard, but allow explicit override in config.
+        if num_ray_workers is None:
+            effective_num_ray_workers = max(1, int(num_shards))
+        else:
+            effective_num_ray_workers = max(1, int(num_ray_workers))
 
         pber_config = {
             "type": RASPBERryReplayBuffer,
@@ -87,12 +96,16 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
             "prioritized_replay_alpha": prioritized_replay_alpha,
             "prioritized_replay_beta": prioritized_replay_beta,
             "compress_base": compress_base,
+            # Keep legacy field for compatibility with existing call paths.
+            # Worker concurrency is controlled by `num_ray_workers` below.
             "compress_pool_size": compress_pool_size,
+            "num_ray_workers": effective_num_ray_workers,
             "compression_algorithm": compression_algorithm,
             "compression_level": compression_level,
             "compression_nthreads": compression_nthreads,
             "compression_mode": compression_mode,
             "chunk_size": chunk_size,
+            "max_inflight_tasks": max_inflight_tasks,
             "prioritized_replay_eps": prioritized_replay_eps,
         }
 
@@ -135,14 +148,14 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 block_indices, block_priorities = self._convert_to_block_priorities(
                     batch_indexes, td_errors
                 )
-                
+
                 if hasattr(self.replay_buffers[policy_id], 'update_priorities'):
                     self.replay_buffers[policy_id].update_priorities(
                         block_indices, block_priorities
                     )
 
     def _convert_to_block_priorities(
-        self, batch_indexes: np.ndarray, td_errors: np.ndarray
+            self, batch_indexes: np.ndarray, td_errors: np.ndarray
     ) -> tuple:
         """Aggregate transition-level TD-errors to block-level priorities.
         
@@ -168,14 +181,15 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 block_priorities.append(block_td_error)
 
             block_priorities = (
-                np.asarray(block_priorities, dtype=np.float32)
-                + self.prioritized_replay_eps
+                    np.asarray(block_priorities, dtype=np.float32)
+                    + self.prioritized_replay_eps
             )
             return unique_block_indexes, block_priorities
         except Exception as e:
-            logger.warning(
-                "Block aggregation failed (%s), using transition-level fallback", e
-            )
+            if log_once(f"{type(self).__name__}:block_aggregation_failed"):
+                logger.warning(
+                    "Block aggregation failed (%s), using transition-level fallback", e
+                )
             return batch_indexes, np.abs(td_errors) + self.prioritized_replay_eps
 
     def _maybe_split_into_policy_batches(self, batch: SampleBatchType) -> Dict:
@@ -197,10 +211,11 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
     def add(self, batch: SampleBatchType, **kwargs) -> None:
         """Add a batch to the corresponding policy's underlying replay buffer."""
         if batch is None:
-            logger.warning(
-                "Empty batch added to %s (normal at start, check if persistent)",
-                type(self).__name__,
-            )
+            if log_once(f"{type(self).__name__}:empty_batch_added"):
+                logger.warning(
+                    "Empty batch added to %s (normal at start, check if persistent)",
+                    type(self).__name__,
+                )
             return
 
         batch = batch.copy()
@@ -248,12 +263,12 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                     if sample is not None:
                         sample = decompress_sample_batch(sample, self.compress_base)
                         samples[pid] = sample
-                
+
                 if samples:
                     return MultiAgentBatch(samples, sum(s.count for s in samples.values()))
                 return None
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self, debug: bool = False) -> Dict[str, Any]:
         """Return replay buffer statistics."""
         stat = {
             "add_batch_time_ms": round(1000 * self.add_batch_timer.mean, 3),

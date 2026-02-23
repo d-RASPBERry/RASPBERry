@@ -1,6 +1,5 @@
 # ====== Section: Imports ======
 # ------ Subsection: Standard library ------
-import logging
 import time
 from typing import Tuple
 
@@ -13,8 +12,6 @@ from ray.rllib.policy.sample_batch import SampleBatch
 # ------ Subsection: Local ------
 from utils import get_obs_shape
 
-# ====== Section: Module State ======
-logger = logging.getLogger(__name__)
 
 # ====== Section: Classes ======
 class CompressReplayNode(object):
@@ -219,7 +216,6 @@ class CompressReplayNode(object):
             metrics["raw_total_bytes"] = float(raw_obs_bytes + raw_new_obs_bytes)
             return compressed_batch, block_weight, metrics
         except Exception as e:
-            logger.exception("Compression failed")
             raise RuntimeError(f"Compression failed: {e}")
 
     def _compress_sample_batch(self, sample_batch: SampleBatch) -> Tuple[SampleBatch, float, float, float, float, int, int]:

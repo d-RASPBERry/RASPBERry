@@ -2,6 +2,7 @@
 extends: templates/apex_base.yml
 
 hyper_parameters:
+  training_intensity: 4.0
   # Replay buffer (RASPBERry)
   replay_buffer_config:
     capacity: 1000000
@@ -21,7 +22,7 @@ mlflow:
     obs_type: "image"
 
 run_config:
-  use_mlflow: false
+  use_mlflow: true
   run_name_template: "{env_in}_APEX_PER"
   max_iterations: 500
-  max_time_s: 1800
+  max_time_s: 360000
