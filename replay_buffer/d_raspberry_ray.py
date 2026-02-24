@@ -171,7 +171,8 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         """
         try:
             block_indexes = np.asarray(batch_indexes)
-            td_errors_arr = np.asarray(td_errors)
+            td_errors_arr = np.asarray(td_errors, dtype=np.float32)
+            td_errors_arr = np.nan_to_num(td_errors_arr, nan=0.0, posinf=0.0, neginf=0.0)
 
             unique_block_indexes = np.unique(block_indexes)
             block_priorities = []
@@ -180,17 +181,28 @@ class MultiAgentRASPBERryReplayBuffer(MultiAgentPrioritizedReplayBuffer):
                 block_td_error = np.abs(td_errors_arr[mask]).mean()
                 block_priorities.append(block_td_error)
 
-            block_priorities = (
-                    np.asarray(block_priorities, dtype=np.float32)
-                    + self.prioritized_replay_eps
+            block_priorities = np.asarray(block_priorities, dtype=np.float32)
+            block_priorities = np.nan_to_num(
+                block_priorities, nan=0.0, posinf=0.0, neginf=0.0
             )
+
+            min_priority = max(self.prioritized_replay_eps, 1e-6)
+            block_priorities = block_priorities + min_priority
+            # RLlib's prioritized buffer asserts `priority > 0` (strict).
+            block_priorities = np.maximum(block_priorities, min_priority)
             return unique_block_indexes, block_priorities
         except Exception as e:
             if log_once(f"{type(self).__name__}:block_aggregation_failed"):
                 logger.warning(
                     "Block aggregation failed (%s), using transition-level fallback", e
                 )
-            return batch_indexes, np.abs(td_errors) + self.prioritized_replay_eps
+            td_errors_arr = np.asarray(td_errors, dtype=np.float32)
+            td_errors_arr = np.nan_to_num(td_errors_arr, nan=0.0, posinf=0.0, neginf=0.0)
+
+            min_priority = max(self.prioritized_replay_eps, 1e-6)
+            priorities = np.abs(td_errors_arr) + min_priority
+            priorities = np.maximum(priorities, min_priority)
+            return batch_indexes, priorities
 
     def _maybe_split_into_policy_batches(self, batch: SampleBatchType) -> Dict:
         """Split batch into per-policy sub-batches.

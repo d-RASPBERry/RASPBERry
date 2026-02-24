@@ -255,25 +255,66 @@ class MultiAgentPrioritizedBlockReplayBuffer(MultiAgentPrioritizedReplayBuffer):
         Args:
             prio_dict: Dict mapping policy_id to (batch_indexes, td_errors)
         """
-        for policy_id, (batch_indexes, td_errors) in prio_dict.items():
-            buffer = self.replay_buffers.get(policy_id)
-            if buffer is None:
-                continue
+        with self.update_priorities_timer:
+            for policy_id, (batch_indexes, td_errors) in prio_dict.items():
+                buffer = self.replay_buffers.get(policy_id)
+                if buffer is None:
+                    continue
 
-            # batch_indexes already represent block/storage indices (may repeat per transition).
+                block_indices, block_priorities = self._convert_to_block_priorities(
+                    batch_indexes, td_errors
+                )
+                if len(block_indices) == 0:
+                    continue
+                buffer.update_priorities(block_indices, block_priorities)
+
+    def _convert_to_block_priorities(
+        self, batch_indexes: np.ndarray, td_errors: np.ndarray
+    ) -> tuple:
+        """Aggregate transition-level TD-errors to block-level priorities.
+
+        Returns:
+            (block_indices, block_priorities): Block indices and aggregated priorities
+
+        Note:
+            Falls back to transition-level if aggregation fails.
+        """
+        try:
             block_indexes = np.asarray(batch_indexes)
-            unique_block_indexes = np.unique(block_indexes)
+            td_errors_arr = np.asarray(td_errors, dtype=np.float32)
 
-            # Aggregate TD-errors per block (mean to align with RASPBERry)
+            unique_block_indexes = np.unique(block_indexes)
+            if unique_block_indexes.size == 0:
+                return unique_block_indexes, np.asarray([], dtype=np.float32)
+
             block_priorities = []
             for block_idx in unique_block_indexes:
                 mask = block_indexes == block_idx
-                block_td_error = np.abs(td_errors[mask]).mean()
+                block_td_error = np.abs(td_errors_arr[mask]).mean()
                 block_priorities.append(block_td_error)
 
-            block_priorities = np.array(block_priorities, dtype=np.float32)
+            block_priorities = np.asarray(block_priorities, dtype=np.float32)
+            block_priorities = np.nan_to_num(
+                block_priorities, nan=0.0, posinf=0.0, neginf=0.0
+            )
 
-            buffer.update_priorities(unique_block_indexes, block_priorities)
+            min_priority = max(self.prioritized_replay_eps, 1e-6)
+            block_priorities = block_priorities + min_priority
+            # RLlib's prioritized buffer asserts `priority > 0` (strict).
+            block_priorities = np.maximum(block_priorities, min_priority)
+            return unique_block_indexes, block_priorities
+        except Exception as e:
+            if log_once(f"{type(self).__name__}:block_aggregation_failed"):
+                logger.warning(
+                    "Block aggregation failed (%s), using transition-level fallback", e
+                )
+            td_errors_arr = np.asarray(td_errors, dtype=np.float32)
+            td_errors_arr = np.nan_to_num(td_errors_arr, nan=0.0, posinf=0.0, neginf=0.0)
+
+            min_priority = max(self.prioritized_replay_eps, 1e-6)
+            priorities = np.abs(td_errors_arr) + min_priority
+            priorities = np.maximum(priorities, min_priority)
+            return np.asarray(batch_indexes), priorities
 
     @override(MultiAgentPrioritizedReplayBuffer)
     def stats(self, debug: bool = False) -> Dict:
