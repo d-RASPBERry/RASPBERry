@@ -82,10 +82,16 @@ fi
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${PROJECT_ROOT}"
 
-ENV_NAME="Atari-AtlantisNoFrameskip-v4"
-PER_CONFIG="configs/apex_per_atari.yml"
-PBER_CONFIG="configs/apex_pber_atari.yml"
-RASP_CONFIG="configs/apex_raspberry_atari.yml"
+PER_CONFIG="configs/experiments/apex/per/atlantis.yml"
+PBER_CONFIG="configs/experiments/apex/pber/atlantis.yml"
+RASP_CONFIG="configs/experiments/apex/raspberry/atlantis.yml"
+
+for cfg in "${PER_CONFIG}" "${PBER_CONFIG}" "${RASP_CONFIG}"; do
+    if [ ! -f "${cfg}" ]; then
+        echo "Error: missing config ${cfg}" >&2
+        exit 1
+    fi
+done
 
 echo "================================================================================"
 echo "APEX ablation (Atlantis)"
@@ -99,19 +105,19 @@ if [ "${GPU_ASSIGNMENT_MODE}" = "shared" ]; then
     for idx in "${!GPU_IDS[@]}"; do
         gpu="${GPU_IDS[$idx]}"
 
-        python runner/run_apex_per_algo.py --config ${PER_CONFIG} --env ${ENV_NAME} --gpu ${gpu} &
+        python runner/run_apex_per_algo.py --config "${PER_CONFIG}" --gpu "${gpu}" &
         ALL_PIDS+=($!)
         echo "  [1/3] APEX-PER       (GPU ${gpu}) -> PID $!"
         ALL_NAMES+=("GPU${gpu}-PER")
         sleep ${LAUNCH_DELAY_SAME_GPU}
 
-        python runner/run_apex_pber_algo.py --config ${PBER_CONFIG} --env ${ENV_NAME} --gpu ${gpu} &
+        python runner/run_apex_pber_algo.py --config "${PBER_CONFIG}" --gpu "${gpu}" &
         ALL_PIDS+=($!)
         echo "  [2/3] APEX-PBER      (GPU ${gpu}) -> PID $!"
         ALL_NAMES+=("GPU${gpu}-PBER")
         sleep ${LAUNCH_DELAY_SAME_GPU}
 
-        python runner/run_apex_raspberry_algo.py --config ${RASP_CONFIG} --env ${ENV_NAME} --gpu ${gpu} &
+        python runner/run_apex_raspberry_algo.py --config "${RASP_CONFIG}" --gpu "${gpu}" &
         ALL_PIDS+=($!)
         echo "  [3/3] APEX-RASPBERry (GPU ${gpu}) -> PID $!"
         ALL_NAMES+=("GPU${gpu}-RASPBERry")
@@ -127,17 +133,17 @@ else
         gpu_pber=${GPU_IDS[$((base + 1))]}
         gpu_rasp=${GPU_IDS[$((base + 2))]}
 
-        python runner/run_apex_per_algo.py --config ${PER_CONFIG} --env ${ENV_NAME} --gpu ${gpu_per} &
+        python runner/run_apex_per_algo.py --config "${PER_CONFIG}" --gpu "${gpu_per}" &
         ALL_PIDS+=($!)
         echo "  [PER]       GPU ${gpu_per} -> PID $!"
         ALL_NAMES+=("GPU${gpu_per}-PER(G$((group_idx + 1)))")
 
-        python runner/run_apex_pber_algo.py --config ${PBER_CONFIG} --env ${ENV_NAME} --gpu ${gpu_pber} &
+        python runner/run_apex_pber_algo.py --config "${PBER_CONFIG}" --gpu "${gpu_pber}" &
         ALL_PIDS+=($!)
         echo "  [PBER]      GPU ${gpu_pber} -> PID $!"
         ALL_NAMES+=("GPU${gpu_pber}-PBER(G$((group_idx + 1)))")
 
-        python runner/run_apex_raspberry_algo.py --config ${RASP_CONFIG} --env ${ENV_NAME} --gpu ${gpu_rasp} &
+        python runner/run_apex_raspberry_algo.py --config "${RASP_CONFIG}" --gpu "${gpu_rasp}" &
         ALL_PIDS+=($!)
         echo "  [RASPBERry] GPU ${gpu_rasp} -> PID $!"
         ALL_NAMES+=("GPU${gpu_rasp}-RASPBERry(G$((group_idx + 1)))")
