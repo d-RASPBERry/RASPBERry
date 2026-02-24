@@ -26,7 +26,7 @@ from ray.tune.registry import register_env
 
 # ------ Subsection: Local ------
 from algorithms.dqn_raspberry_algo import DQNRaspberryAlgo
-from metrics import write_iteration_json
+from metrics import write_iteration_json, attach_buffer_stats
 from metrics.logger import redirect_stdio, setup_logger
 from metrics.mlflow_helper import setup_mlflow, prepare_metrics
 from replay_buffer.d_raspberry_ray import MultiAgentRASPBERryReplayBuffer
@@ -217,6 +217,7 @@ def main() -> None:
             result = algo.train()
             iteration += 1
 
+            attach_buffer_stats(result, algo)
             write_iteration_json(log_dir, iteration, result)
 
             if iteration % log_every == 0:
