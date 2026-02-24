@@ -20,7 +20,7 @@ mlflow:
 run_config:
   use_mlflow: true
   run_name_template: "{env_alias}"
-  max_iterations: 500
+  max_iterations: 100000
   max_time_s: 360000
 
 hyper_parameters:
