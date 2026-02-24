@@ -13,7 +13,7 @@ logging:
   log_every: 10
 
 mlflow:
-  experiment: "APEX-MiniGrid"
+  experiment: "APEX-DDQN-MiniGrid-KeyCorridorS6R3"
   tags:
     algorithm: "APEX-DQN"
     buffer: "PER"

@@ -11,7 +11,7 @@ logging:
   log_every: 10
 
 mlflow:
-  experiment: "DDQN-Atari"
+  experiment: "DDQN-Atari-Breakout"
   tags:
     algorithm: "DDQN"
     buffer: "RASPBERry"

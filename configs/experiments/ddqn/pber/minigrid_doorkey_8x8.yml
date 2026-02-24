@@ -14,7 +14,7 @@ logging:
   log_every: 10
 
 mlflow:
-  experiment: "DDQN-MiniGrid"
+  experiment: "DDQN-MiniGrid-DoorKey-8x8"
   tags:
     algorithm: "DDQN"
     buffer: "PBER"

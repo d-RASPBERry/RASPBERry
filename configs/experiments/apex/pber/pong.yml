@@ -10,7 +10,7 @@ logging:
   log_every: 10
 
 mlflow:
-  experiment: "APEX-Atari-Pong"
+  experiment: "APEX-DDQN-Atari-Pong"
   tags:
     algorithm: "APEX-DQN"
     buffer: "PBER"
