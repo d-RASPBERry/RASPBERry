@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ################################################################################
-# APEX ablation launcher (MiniGrid-KeyCorridorS6R3)
+# DDQN ablation launcher (MiniGrid-KeyCorridorS4R3)
 ################################################################################
 
 set -euo pipefail
@@ -51,15 +51,15 @@ fi
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${PROJECT_ROOT}"
 
-PER_CONFIG="configs/experiments/apex/per/minigrid_keycorridor_s6r3.yml"
-PBER_CONFIG="configs/experiments/apex/pber/minigrid_keycorridor_s6r3.yml"
-RASP_CONFIG="configs/experiments/apex/raspberry/minigrid_keycorridor_s6r3.yml"
+PER_CONFIG="configs/experiments/ddqn/per/minigrid_keycorridor_s4r3.yml"
+PBER_CONFIG="configs/experiments/ddqn/pber/minigrid_keycorridor_s4r3.yml"
+RASP_CONFIG="configs/experiments/ddqn/raspberry/minigrid_keycorridor_s4r3.yml"
 for cfg in "${PER_CONFIG}" "${PBER_CONFIG}" "${RASP_CONFIG}"; do
     [ -f "${cfg}" ] || { echo "Error: missing config ${cfg}" >&2; exit 1; }
 done
 
 echo "================================================================================"
-echo "APEX ablation (MiniGrid-KeyCorridorS6R3)"
+echo "DDQN ablation (MiniGrid-KeyCorridorS4R3)"
 echo "GPUs: ${GPU_IDS[*]} | Mode: ${GPU_ASSIGNMENT_MODE} | Tasks: ${TOTAL_TASKS}"
 echo "================================================================================"
 
@@ -70,22 +70,22 @@ if [ "${GPU_ASSIGNMENT_MODE}" = "shared" ]; then
     for idx in "${!GPU_IDS[@]}"; do
         gpu="${GPU_IDS[$idx]}"
 
-        python runner/run_apex_per_algo.py --config "${PER_CONFIG}" --gpu "${gpu}" &
+        python runner/run_ddqn_per_algo.py --config "${PER_CONFIG}" --gpu "${gpu}" &
         ALL_PIDS+=($!)
-        echo "  [1/3] APEX-PER       (GPU ${gpu}) -> PID $!"
         ALL_NAMES+=("GPU${gpu}-PER")
+        echo "  [1/3] DDQN-PER       (GPU ${gpu}) -> PID $!"
         sleep ${LAUNCH_DELAY_SAME_GPU}
 
-        python runner/run_apex_pber_algo.py --config "${PBER_CONFIG}" --gpu "${gpu}" &
+        python runner/run_ddqn_pber_algo.py --config "${PBER_CONFIG}" --gpu "${gpu}" &
         ALL_PIDS+=($!)
-        echo "  [2/3] APEX-PBER      (GPU ${gpu}) -> PID $!"
         ALL_NAMES+=("GPU${gpu}-PBER")
+        echo "  [2/3] DDQN-PBER      (GPU ${gpu}) -> PID $!"
         sleep ${LAUNCH_DELAY_SAME_GPU}
 
-        python runner/run_apex_raspberry_algo.py --config "${RASP_CONFIG}" --gpu "${gpu}" &
+        python runner/run_ddqn_raspberry_algo.py --config "${RASP_CONFIG}" --gpu "${gpu}" &
         ALL_PIDS+=($!)
-        echo "  [3/3] APEX-RASPBERry (GPU ${gpu}) -> PID $!"
         ALL_NAMES+=("GPU${gpu}-RASPBERry")
+        echo "  [3/3] DDQN-RASPBERry (GPU ${gpu}) -> PID $!"
 
         if [ ${idx} -lt $((NUM_GPUS - 1)) ]; then sleep ${LAUNCH_DELAY_BETWEEN_GPUS}; fi
     done
@@ -96,32 +96,33 @@ else
         gpu_pber=${GPU_IDS[$((base + 1))]}
         gpu_rasp=${GPU_IDS[$((base + 2))]}
 
-        python runner/run_apex_per_algo.py --config "${PER_CONFIG}" --gpu "${gpu_per}" &
+        python runner/run_ddqn_per_algo.py --config "${PER_CONFIG}" --gpu "${gpu_per}" &
         ALL_PIDS+=($!)
-        echo "  [PER]       GPU ${gpu_per} -> PID $!"
         ALL_NAMES+=("GPU${gpu_per}-PER(G$((group_idx + 1)))")
+        echo "  [PER]       GPU ${gpu_per} -> PID $!"
 
-        python runner/run_apex_pber_algo.py --config "${PBER_CONFIG}" --gpu "${gpu_pber}" &
+        python runner/run_ddqn_pber_algo.py --config "${PBER_CONFIG}" --gpu "${gpu_pber}" &
         ALL_PIDS+=($!)
-        echo "  [PBER]      GPU ${gpu_pber} -> PID $!"
         ALL_NAMES+=("GPU${gpu_pber}-PBER(G$((group_idx + 1)))")
+        echo "  [PBER]      GPU ${gpu_pber} -> PID $!"
 
-        python runner/run_apex_raspberry_algo.py --config "${RASP_CONFIG}" --gpu "${gpu_rasp}" &
+        python runner/run_ddqn_raspberry_algo.py --config "${RASP_CONFIG}" --gpu "${gpu_rasp}" &
         ALL_PIDS+=($!)
-        echo "  [RASPBERry] GPU ${gpu_rasp} -> PID $!"
         ALL_NAMES+=("GPU${gpu_rasp}-RASPBERry(G$((group_idx + 1)))")
+        echo "  [RASPBERry] GPU ${gpu_rasp} -> PID $!"
 
         if [ ${group_idx} -lt $((GROUP_COUNT - 1)) ]; then sleep ${LAUNCH_DELAY_BETWEEN_GPUS}; fi
     done
 fi
 
 echo ""
-echo "Submitted ${TOTAL_TASKS} APEX tasks"
+echo "Submitted ${TOTAL_TASKS} DDQN tasks"
 for idx in "${!ALL_PIDS[@]}"; do
     printf "  %-24s -> PID:%s\n" "${ALL_NAMES[$idx]}" "${ALL_PIDS[$idx]}"
 done
 echo "Terminate all: kill ${ALL_PIDS[@]}"
 
+echo ""
 echo "Waiting for all tasks to finish..."
 for pid in "${ALL_PIDS[@]}"; do
     wait $pid 2>/dev/null || true

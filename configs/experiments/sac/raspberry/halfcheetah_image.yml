@@ -42,7 +42,7 @@ hyper_parameters:
   target_entropy: auto
 
   replay_buffer_config:
-    capacity: 1000000
+    capacity: 200000
     type: MultiAgentRASPBERryReplayBuffer
     sub_buffer_size: 16
     compress_base: -1

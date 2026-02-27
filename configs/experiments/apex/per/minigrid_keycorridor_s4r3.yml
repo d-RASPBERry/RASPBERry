@@ -1,23 +1,23 @@
-# APEX-PER: MiniGrid-KeyCorridorS6R3
+# APEX-PER: MiniGrid-KeyCorridorS4R3
 extends: ../../../templates/apex_base.yml
 
 env_config:
-  id: "MiniGrid-KeyCorridorS6R3-v0"
-  env_alias: "APEX-PER-MiniGrid-KeyCorridorS6R3"
+  id: "MiniGrid-KeyCorridorS4R3-v0"
+  env_alias: "APEX-PER-MiniGrid-KeyCorridorS4R3"
   tile_size: 10
   img_size: 84
   max_steps: 200
 
 logging:
-  log_subdir: "MiniGrid/KeyCorridorS6R3"
+  log_subdir: "MiniGrid/KeyCorridorS4R3"
   log_every: 10
 
 mlflow:
-  experiment: "APEX-DDQN-MiniGrid-KeyCorridorS6R3"
+  experiment: "APEX-DDQN-MiniGrid-KeyCorridorS4R3"
   tags:
     algorithm: "APEX-DQN"
     buffer: "PER"
-    environment: "MiniGrid-KeyCorridorS6R3"
+    environment: "MiniGrid-KeyCorridorS4R3"
     obs_type: "image"
 
 run_config:
