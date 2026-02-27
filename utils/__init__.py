@@ -448,6 +448,15 @@ def env_creator(env_config):
             env = SkipInitialFramesWrapper(env, reset_skip)
 
         return env
+    elif env_config["id"][0:8] == "MUJOCOV-":
+        # MUJOCOV: MuJoCo with native VECTOR (state) observations
+        env_id = env_config["id"].replace("MUJOCOV-", "")
+        env = gymnasium.make(env_id)
+        env = ClipObservationWrapper(env)
+        reward_scale = env_config.get("reward_scale", None)
+        if reward_scale is not None:
+            env = RewardScaleWrapper(env, reward_scale)
+        return env
     elif env_config["id"][0:8] == "MUJOCOI-":
         # MUJOCOI: MuJoCo with IMAGE observations (render_mode="rgb_array")
         # MuJoCo envs by default return vector state; we need PixelObservationWrapper

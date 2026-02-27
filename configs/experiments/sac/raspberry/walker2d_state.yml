@@ -1,0 +1,43 @@
+# SAC-RASPBERry: MUJOCOV-Walker2d (State observation)
+extends: ../../../templates/sac_vector_base.yml
+
+env_config:
+  id: "MUJOCOV-Walker2d-v4"
+  env_alias: "SAC-RASPBERry-Walker2d-State"
+
+logging:
+  log_subdir: "MUJOCOV/Walker2d-State"
+
+mlflow:
+  experiment: "SAC-Walker2d"
+  tags:
+    algorithm: "SAC"
+    buffer: "RASPBERry"
+    environment: "Walker2d"
+    obs_type: "vector"
+
+run_config:
+  use_mlflow: true
+  max_time_s: 360000
+
+hyper_parameters:
+  train_batch_size: 256
+  min_sample_timesteps_per_iteration: 1000
+
+  replay_buffer_config:
+    capacity: 1000000
+    type: MultiAgentRASPBERryReplayBuffer
+    sub_buffer_size: 16
+    compress_base: -1
+    worker_side_prioritization: true
+    compress_pool_size: 400
+    num_ray_workers: 4
+    max_inflight_tasks: 16
+    compression_algorithm: "lz4"
+    compression_level: 1
+    compression_nthreads: 4
+    compression_mode: "C"
+    chunk_size: 20
+
+  num_workers: 8
+  num_envs_per_worker: 4

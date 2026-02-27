@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ################################################################################
-# SAC 消融实验启动脚本 (HalfCheetah - MuJoCo 图像观测)
+# SAC 消融实验启动脚本 (Walker2d - MuJoCo 状态观测)
 #
 # 功能:
 #   对每个指定 GPU 顺序启动 3 个 SAC 变体:
@@ -10,35 +10,22 @@
 #     3) SAC-RASPBERry (分块回放 + 压缩)
 #
 # 使用方法:
-#   ./run_sac_ablation_HalfCheetah.sh                # 默认 GPU 共享 (仅使用 GPU 0)
-#   ./run_sac_ablation_HalfCheetah.sh -n 0,1,2       # 指定逗号分隔 GPU 列表
-#   ./run_sac_ablation_HalfCheetah.sh -m exclusive   # 开启独占模式 (需提供3的倍数GPU)
+#   ./run_sac_ablation_Walker2d.sh                # 默认 GPU 共享 (仅使用 GPU 0)
+#   ./run_sac_ablation_Walker2d.sh -n 0,1,2       # 指定逗号分隔 GPU 列表
+#   ./run_sac_ablation_Walker2d.sh -m exclusive   # 开启独占模式 (需提供3的倍数GPU)
 #
 ################################################################################
 
 set -euo pipefail
 
-# MuJoCo 图像观测在初始化 PixelObservationWrapper 时会触发 env.render()，
-# 在无显示器/无 X11 的机器上默认 GLFW 后端会报:
-#   "X11: The DISPLAY environment variable is missing" / "gladLoadGL error"
-# 这里在检测到 DISPLAY 未设置时，自动切换到 EGL 离屏渲染（可通过环境变量覆盖）。
-if [ -z "${DISPLAY:-}" ]; then
-    export MUJOCO_GL="${MUJOCO_GL:-egl}"
-    echo "[env] DISPLAY not set, using MUJOCO_GL=${MUJOCO_GL} (offscreen rendering)"
-fi
-
-# 默认参数
 GPU_LIST_ARG="0"
 GPU_ASSIGNMENT_MODE="shared"
-LAUNCH_DELAY_BETWEEN_GPUS=60
+LAUNCH_DELAY_BETWEEN_GPUS=10
 LAUNCH_DELAY_SAME_GPU=120
 
-# 解析命令行参数
 while getopts "n:m:h" opt; do
     case $opt in
-        n)
-            GPU_LIST_ARG="$OPTARG"
-            ;;
+        n) GPU_LIST_ARG="$OPTARG" ;;
         m)
             GPU_ASSIGNMENT_MODE="$OPTARG"
             ;;
@@ -47,13 +34,10 @@ while getopts "n:m:h" opt; do
             echo "Options:"
             echo "  -n GPU_IDS   Comma-separated GPU IDs (default: 0)"
             echo "  -m MODE     shared or exclusive (default: shared)"
-            echo "  -h          Show this help"
+            echo "Example: -n 0,1,2 -m exclusive"
             exit 0
             ;;
-        \?)
-            echo "Invalid option: -$OPTARG" >&2
-            exit 1
-            ;;
+        \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
     esac
 done
 
@@ -99,23 +83,21 @@ else
     GROUP_COUNT=${NUM_GPUS}
 fi
 
-# 获取项目根目录（上溯两层）
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${PROJECT_ROOT}"
 
 echo "================================================================================"
-echo "SAC ablation (HalfCheetah-Image)"
+echo "SAC ablation (Walker2d-State)"
 echo "GPUs: ${GPU_IDS[*]} | Mode: ${GPU_ASSIGNMENT_MODE} | Tasks: ${TOTAL_TASKS}"
 echo "================================================================================"
 echo ""
 
-# 用于跟踪所有进程
 declare -a ALL_PIDS
 declare -a ALL_NAMES
 
-PER_CONFIG="configs/experiments/sac/per/halfcheetah_image.yml"
-PBER_CONFIG="configs/experiments/sac/pber/halfcheetah_image.yml"
-RASP_CONFIG="configs/experiments/sac/raspberry/halfcheetah_image.yml"
+PER_CONFIG="configs/experiments/sac/per/walker2d_state.yml"
+PBER_CONFIG="configs/experiments/sac/pber/walker2d_state.yml"
+RASP_CONFIG="configs/experiments/sac/raspberry/walker2d_state.yml"
 
 if [ "${GPU_ASSIGNMENT_MODE}" = "shared" ]; then
     for idx in "${!GPU_IDS[@]}"; do
@@ -187,4 +169,3 @@ for pid in "${ALL_PIDS[@]}"; do
     wait $pid 2>/dev/null || true
 done
 echo "Done."
-
