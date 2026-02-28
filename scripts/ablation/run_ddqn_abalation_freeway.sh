@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ################################################################################
-# DDQN ablation launcher (MiniGrid-KeyCorridorS4R3)
+# DDQN ablation launcher (Atari-Freeway)
 ################################################################################
 
 set -euo pipefail
@@ -51,15 +51,15 @@ fi
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${PROJECT_ROOT}"
 
-PER_CONFIG="configs/experiments/ddqn/per/minigrid_keycorridor_s4r3.yml"
-PBER_CONFIG="configs/experiments/ddqn/pber/minigrid_keycorridor_s4r3.yml"
-RASP_CONFIG="configs/experiments/ddqn/raspberry/minigrid_keycorridor_s4r3.yml"
+PER_CONFIG="configs/experiments/ddqn/per/freeway.yml"
+PBER_CONFIG="configs/experiments/ddqn/pber/freeway.yml"
+RASP_CONFIG="configs/experiments/ddqn/raspberry/freeway.yml"
 for cfg in "${PER_CONFIG}" "${PBER_CONFIG}" "${RASP_CONFIG}"; do
     [ -f "${cfg}" ] || { echo "Error: missing config ${cfg}" >&2; exit 1; }
 done
 
 echo "================================================================================"
-echo "DDQN ablation (MiniGrid-KeyCorridorS4R3)"
+echo "DDQN ablation (Atari-Freeway)"
 echo "GPUs: ${GPU_IDS[*]} | Mode: ${GPU_ASSIGNMENT_MODE} | Tasks: ${TOTAL_TASKS}"
 echo "================================================================================"
 

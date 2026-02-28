@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ################################################################################
-# APEX ablation launcher (MiniGrid-KeyCorridorS4R3)
+# APEX ablation launcher (MiniGrid-LavaCrossingS9N1)
 ################################################################################
 
 set -euo pipefail
@@ -51,15 +51,15 @@ fi
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${PROJECT_ROOT}"
 
-PER_CONFIG="configs/experiments/apex/per/minigrid_keycorridor_s4r3.yml"
-PBER_CONFIG="configs/experiments/apex/pber/minigrid_keycorridor_s4r3.yml"
-RASP_CONFIG="configs/experiments/apex/raspberry/minigrid_keycorridor_s4r3.yml"
+PER_CONFIG="configs/experiments/apex/per/minigrid_lavacrossing_s9n1.yml"
+PBER_CONFIG="configs/experiments/apex/pber/minigrid_lavacrossing_s9n1.yml"
+RASP_CONFIG="configs/experiments/apex/raspberry/minigrid_lavacrossing_s9n1.yml"
 for cfg in "${PER_CONFIG}" "${PBER_CONFIG}" "${RASP_CONFIG}"; do
     [ -f "${cfg}" ] || { echo "Error: missing config ${cfg}" >&2; exit 1; }
 done
 
 echo "================================================================================"
-echo "APEX ablation (MiniGrid-KeyCorridorS4R3)"
+echo "APEX ablation (MiniGrid-LavaCrossingS9N1)"
 echo "GPUs: ${GPU_IDS[*]} | Mode: ${GPU_ASSIGNMENT_MODE} | Tasks: ${TOTAL_TASKS}"
 echo "================================================================================"
 

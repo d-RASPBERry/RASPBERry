@@ -1,24 +1,21 @@
-# DDQN-PER: MiniGrid-DoorKey-8x8
-# Environment creation check (pure RGB image observations)
+# DDQN-PER: Atari-Freeway
+# Environment creation check (image observations)
 extends: ../../../templates/ddqn_base.yml
 
 env_config:
-  id: "MiniGrid-DoorKey-8x8-v0"
-  env_alias: "DDQN-PER-MiniGrid-DoorKey-8x8"
-  tile_size: 10
-  img_size: 84
-  max_steps: 200
+  id: "Atari-FreewayNoFrameskip-v4"
+  env_alias: "DDQN-PER-Freeway"
 
 logging:
-  log_subdir: "MiniGrid/DoorKey-8x8"
+  log_subdir: "Atari/Freeway"
   log_every: 10
 
 mlflow:
-  experiment: "DDQN-MiniGrid-DoorKey-8x8"
+  experiment: "DDQN-Atari-Freeway"
   tags:
     algorithm: "DDQN"
     buffer: "PER"
-    environment: "MiniGrid-DoorKey-8x8"
+    environment: "Freeway"
     obs_type: "image"
 
 run_config:

@@ -1,24 +1,24 @@
-# DDQN-RASPBERry: MiniGrid-DoorKey-8x8
+# DDQN-RASPBERry: MiniGrid-LavaCrossingS9N1
 # Environment creation check (pure RGB image observations)
 extends: ../../../templates/ddqn_base.yml
 
 env_config:
-  id: "MiniGrid-DoorKey-8x8-v0"
-  env_alias: "DDQN-RASPBERry-MiniGrid-DoorKey-8x8"
+  id: "MiniGrid-LavaCrossingS9N1-v0"
+  env_alias: "DDQN-RASPBERry-MiniGrid-LavaCrossingS9N1"
   tile_size: 10
   img_size: 84
   max_steps: 200
 
 logging:
-  log_subdir: "MiniGrid/DoorKey-8x8"
+  log_subdir: "MiniGrid/LavaCrossingS9N1"
   log_every: 10
 
 mlflow:
-  experiment: "DDQN-MiniGrid-DoorKey-8x8"
+  experiment: "DDQN-MiniGrid-LavaCrossingS9N1"
   tags:
     algorithm: "DDQN"
     buffer: "RASPBERry"
-    environment: "MiniGrid-DoorKey-8x8"
+    environment: "MiniGrid-LavaCrossingS9N1"
     obs_type: "image"
 
 run_config:

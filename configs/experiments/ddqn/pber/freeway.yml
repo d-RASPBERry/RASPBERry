@@ -1,24 +1,21 @@
-# DDQN-PBER: MiniGrid-KeyCorridorS4R3
-# Environment creation check (pure RGB image observations)
+# DDQN-PBER: Atari-Freeway
+# Environment creation check (image observations)
 extends: ../../../templates/ddqn_base.yml
 
 env_config:
-  id: "MiniGrid-KeyCorridorS4R3-v0"
-  env_alias: "DDQN-PBER-MiniGrid-KeyCorridorS4R3"
-  tile_size: 10
-  img_size: 84
-  max_steps: 200
+  id: "Atari-FreewayNoFrameskip-v4"
+  env_alias: "DDQN-PBER-Freeway"
 
 logging:
-  log_subdir: "MiniGrid/KeyCorridorS4R3"
+  log_subdir: "Atari/Freeway"
   log_every: 10
 
 mlflow:
-  experiment: "DDQN-MiniGrid-KeyCorridorS4R3"
+  experiment: "DDQN-Atari-Freeway"
   tags:
     algorithm: "DDQN"
     buffer: "PBER"
-    environment: "MiniGrid-KeyCorridorS4R3"
+    environment: "Freeway"
     obs_type: "image"
 
 run_config:

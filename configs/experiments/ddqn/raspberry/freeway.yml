@@ -1,24 +1,21 @@
-# DDQN-PBER: MiniGrid-DoorKey-8x8
-# Environment creation check (pure RGB image observations)
+# DDQN-RASPBERry: Atari-Freeway
+# Environment creation check (image observations)
 extends: ../../../templates/ddqn_base.yml
 
 env_config:
-  id: "MiniGrid-DoorKey-8x8-v0"
-  env_alias: "DDQN-PBER-MiniGrid-DoorKey-8x8"
-  tile_size: 10
-  img_size: 84
-  max_steps: 200
+  id: "Atari-FreewayNoFrameskip-v4"
+  env_alias: "DDQN-RASPBERry-Freeway"
 
 logging:
-  log_subdir: "MiniGrid/DoorKey-8x8"
+  log_subdir: "Atari/Freeway"
   log_every: 10
 
 mlflow:
-  experiment: "DDQN-MiniGrid-DoorKey-8x8"
+  experiment: "DDQN-Atari-Freeway"
   tags:
     algorithm: "DDQN"
-    buffer: "PBER"
-    environment: "MiniGrid-DoorKey-8x8"
+    buffer: "RASPBERry"
+    environment: "Freeway"
     obs_type: "image"
 
 run_config:
@@ -28,14 +25,23 @@ run_config:
   max_time_s: 360000
 
 hyper_parameters:
-  # Replay buffer (PBER baseline)
+  # Replay buffer (RASPBERry baseline)
   replay_buffer_config:
     capacity: 1000000
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
-    type: MultiAgentPrioritizedBlockReplayBuffer
+    type: MultiAgentRASPBERryReplayBuffer
     sub_buffer_size: 8
+    compress_base: -1
+    compress_pool_size: 100
+    num_ray_workers: 4
+    max_inflight_tasks: 16
+    compression_algorithm: "lz4"
+    compression_level: 1
+    compression_nthreads: 4
+    compression_mode: "C"
+    chunk_size: 20
 
   training_intensity: 1.0
 

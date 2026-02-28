@@ -1,23 +1,23 @@
-# APEX-PBER: MiniGrid-KeyCorridorS4R3
+# APEX-PER: MiniGrid-LavaCrossingS9N1
 extends: ../../../templates/apex_base.yml
 
 env_config:
-  id: "MiniGrid-KeyCorridorS4R3-v0"
-  env_alias: "APEX-PBER-MiniGrid-KeyCorridorS4R3"
+  id: "MiniGrid-LavaCrossingS9N1-v0"
+  env_alias: "APEX-PER-MiniGrid-LavaCrossingS9N1"
   tile_size: 10
   img_size: 84
   max_steps: 200
 
 logging:
-  log_subdir: "MiniGrid/KeyCorridorS4R3"
+  log_subdir: "MiniGrid/LavaCrossingS9N1"
   log_every: 10
 
 mlflow:
-  experiment: "APEX-DDQN-MiniGrid-KeyCorridorS4R3"
+  experiment: "APEX-DDQN-MiniGrid-LavaCrossingS9N1"
   tags:
     algorithm: "APEX-DQN"
-    buffer: "PBER"
-    environment: "MiniGrid-KeyCorridorS4R3"
+    buffer: "PER"
+    environment: "MiniGrid-LavaCrossingS9N1"
     obs_type: "image"
 
 run_config:
@@ -27,16 +27,14 @@ run_config:
   max_time_s: 360000
 
 hyper_parameters:
-  training_intensity: 1.0
-  # Replay buffer (PBER)
-  train_batch_size: 32
+  training_intensity: 4.0
+  # Replay buffer (PER)
   replay_buffer_config:
     capacity: 1000000
     prioritized_replay_alpha: 0.5
     prioritized_replay_beta: 1.0
     prioritized_replay_eps: 0.000001
-    type: MultiAgentPrioritizedBlockReplayBuffer
+    type: MultiAgentPrioritizedReplayBuffer
     replay_buffer_shards_colocated_with_driver: true
     worker_side_prioritization: true
     no_local_replay_buffer: true
-    sub_buffer_size: 16
