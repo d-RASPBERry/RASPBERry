@@ -1,0 +1,17 @@
+# JR06 block-size ablation (APEX-RASPBERry)
+# env=lavacrossing_s9n1, m=sub_buffer_size=32, seed=0
+extends: configs/experiments/apex/raspberry/minigrid_lavacrossing_s9n1.yml
+
+env_config:
+  env_alias: "APEX-RASPBERry-MiniGrid-LavaCrossingS9N1-m32-seed0"
+
+hyper_parameters:
+  seed: 0
+  replay_buffer_config:
+    sub_buffer_size: 32
+
+mlflow:
+  tags:
+    ablation: "jr06_blocksize"
+    block_size: "32"
+    seed: "0"
