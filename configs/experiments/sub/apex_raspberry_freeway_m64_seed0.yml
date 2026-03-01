@@ -1,6 +1,6 @@
 # JR06 block-size ablation (APEX-RASPBERry)
 # env=freeway, m=sub_buffer_size=64, seed=0
-extends: configs/experiments/apex/raspberry/freeway.yml
+extends: ../apex/raspberry/freeway.yml
 
 env_config:
   env_alias: "APEX-RASPBERry-Freeway-m64-seed0"
