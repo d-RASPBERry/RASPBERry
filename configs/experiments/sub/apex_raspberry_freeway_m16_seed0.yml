@@ -5,8 +5,14 @@ extends: ../apex/raspberry/freeway.yml
 env_config:
   env_alias: "APEX-RASPBERry-Freeway-m16-seed0"
 
+run_config:
+  # 20h wall-clock budget.
+  max_time_s: 72000
+
 hyper_parameters:
   seed: 0
+  # Keep per-learner-update transitions M fixed at 512: M = train_batch_size * sub_buffer_size.
+  train_batch_size: 32
   replay_buffer_config:
     sub_buffer_size: 16
 
