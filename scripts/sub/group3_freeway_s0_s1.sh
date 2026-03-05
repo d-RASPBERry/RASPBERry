@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ################################################################################
-# JR06 block-size ablation — group 3
+# JR06 block-size ablation - group 3
 # Freeway seed0 m={32,64}  +  Freeway seed1 m=8
 #
 # Usage:
@@ -57,7 +57,7 @@ for c in "${CFG1}" "${CFG2}" "${CFG3}"; do
 done
 
 echo "================================================================================"
-echo "JR06 group3 — freeway-s0-m32 / freeway-s0-m64 / freeway-s1-m8"
+echo "JR06 group3 - freeway-s0-m32 / freeway-s0-m64 / freeway-s1-m8"
 echo "GPUs: ${GPU_IDS[*]} | Mode: ${GPU_ASSIGNMENT_MODE}"
 echo "================================================================================"
 

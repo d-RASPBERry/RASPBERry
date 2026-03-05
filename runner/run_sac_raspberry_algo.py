@@ -224,7 +224,7 @@ def main() -> None:
     try:
         while iteration < max_iterations:
             if time.time() - start_time > max_time_s:
-                logger.info("⏰ Time limit reached (%ds), stopping", max_time_s)
+                logger.info("Time limit reached (%ds), stopping", max_time_s)
                 break
 
             result = algo.train()
@@ -261,9 +261,9 @@ def main() -> None:
                             logger.warning("[mlflow] log_artifacts failed: %s", e)
 
     except KeyboardInterrupt:
-        logger.info("⚠️  Training interrupted by user")
+        logger.info("Training interrupted by user")
     except Exception as e:
-        logger.error("❌ Error during training: %s", e, exc_info=True)
+        logger.error("Error during training: %s", e, exc_info=True)
         raise
     finally:
         elapsed = time.time() - start_time

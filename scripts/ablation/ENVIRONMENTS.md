@@ -1,4 +1,4 @@
-# Ablation Experiments (5+3) — 3×5×2 + 3×3 = 39
+# Ablation Experiments (5+3) - 3x5x2 + 3x3 = 39
 
 ## Scope locked (5+3 split)
 

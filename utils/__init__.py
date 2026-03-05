@@ -185,8 +185,8 @@ def wrap_sac_like_deepmind(
 ):
     """DeepMind-style preprocessing tailored for BOX2DI SAC runs (e.g., CarRacing).
     
-    Mirrors wrap_deepmind ordering: MaxAndSkip → Resize/Gray → (optional) clip →
-    FrameStack → normalize/dtype cast. Defaults keep channel-last tensors to
+    Mirrors wrap_deepmind ordering: MaxAndSkip -> Resize/Gray -> (optional) clip ->
+    FrameStack -> normalize/dtype cast. Defaults keep channel-last tensors to
     match RLlib's CNN expectations.
     """
     dtype = resolve_dtype(dtype)

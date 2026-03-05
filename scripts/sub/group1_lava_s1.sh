@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ################################################################################
-# JR06 block-size ablation — group 1
+# JR06 block-size ablation - group 1
 # LavaCrossingS9N1 seed1  m={8,16,32}
 #
 # Usage:
@@ -57,7 +57,7 @@ for c in "${CFG1}" "${CFG2}" "${CFG3}"; do
 done
 
 echo "================================================================================"
-echo "JR06 group1 — lava seed1 m={8,16,32}"
+echo "JR06 group1 - lava seed1 m={8,16,32}"
 echo "GPUs: ${GPU_IDS[*]} | Mode: ${GPU_ASSIGNMENT_MODE}"
 echo "================================================================================"
 
