@@ -7,7 +7,7 @@ Key operations:
 - sample(): Decompress sampled batches (weights already expanded by underlying buffer)
 - update_priorities(): Aggregate transition-level TD-errors to block-level priorities
 
-See docs/raspberr_design.md for architecture details.
+Handles decompression of sampled blocks before returning to the trainer.
 """
 
 # ====== Section: Imports ======

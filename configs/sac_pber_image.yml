@@ -1,6 +1,6 @@
 # SAC-PBER configuration for IMAGE observation environments
 # (Atari, MiniGrid, Pendulum, CarRacing)
-# Pure block-level replay WITHOUT compression (Chapter 3: PBER)
+# Pure block-level replay WITHOUT compression
 extends: templates/sac_image_base.yml
 
 hyper_parameters:

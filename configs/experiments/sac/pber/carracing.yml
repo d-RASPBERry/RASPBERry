@@ -1,5 +1,5 @@
 # SAC-PBER: BOX2DI-CarRacing (Image observation)
-# PBER = Block Experience Replay without compression (Chapter 3: PBER)
+# PBER = Block Experience Replay without compression
 extends: ../../../templates/sac_image_base.yml
 
 env_config:

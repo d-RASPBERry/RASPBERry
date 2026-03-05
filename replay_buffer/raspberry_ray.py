@@ -180,7 +180,7 @@ def decompress_sample_batch(ma_batch: SampleBatch, compress_base: int = -1) -> S
     return SampleBatch(data_dict)
 
 
-# ====== Section: RAM Saver Prioritized Block Replay Buffer ======
+# ====== Section: RASPBERry Replay Buffer ======
 
 class RASPBERryReplayBuffer(PrioritizedReplayBuffer):
     """RASPBERry replay buffer with block-level compression.

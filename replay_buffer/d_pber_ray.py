@@ -12,7 +12,7 @@ Design:
 - No compression/decompression logic (pure block-level storage)
 - Compatible with distributed training (Ape-X)
 
-See Chapter 3 (PBER) and Chapter 5 (Distributed PBER) in thesis.
+Compatible with both single-agent and distributed (Ape-X) training pipelines.
 """
 
 # ====== Section: Imports ======
