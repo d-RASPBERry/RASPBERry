@@ -1,4 +1,4 @@
-# JR06 block-size ablation (APEX-RASPBERry)
+# Block-size ablation (APEX-RASPBERry)
 # env=lavacrossing_s9n1, m=sub_buffer_size=16, seed=1
 extends: ../apex/raspberry/minigrid_lavacrossing_s9n1.yml
 

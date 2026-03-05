@@ -1,4 +1,4 @@
-# JR06 block-size ablation (APEX-RASPBERry)
+# Block-size ablation (APEX-RASPBERry)
 # env=freeway, m=sub_buffer_size=16, seed=0
 extends: ../apex/raspberry/freeway.yml
 
