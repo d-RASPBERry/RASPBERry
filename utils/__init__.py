@@ -21,16 +21,16 @@ import yaml
 
 
 class ClipObservationWrapper(gymnasium.Wrapper):
-    """包装器：裁剪观察值到观察空间的合法范围内。
+    """Clip observations to the valid range of the observation space.
     
-    用于修复某些环境（如 LunarLanderContinuous）在极端情况下
-    返回超出定义范围的观察值的问题。
+    Fixes environments (e.g., LunarLanderContinuous) that may return
+    observations outside defined bounds in edge cases.
     """
     
     def __init__(self, env):
         super().__init__(env)
         if not isinstance(env.observation_space, spaces.Box):
-            raise ValueError("ClipObservationWrapper 只支持 Box 观察空间")
+            raise ValueError("ClipObservationWrapper only supports Box observation spaces")
     
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
@@ -82,7 +82,7 @@ class CarRacingActionWrapper(gymnasium.ActionWrapper):
 
 
 class RewardScaleWrapper(gymnasium.RewardWrapper):
-    """统一的奖励缩放包装器，便于在外层脚本中检查 scale."""
+    """Unified reward scaling wrapper for easy scale inspection in outer scripts."""
 
     def __init__(self, env, scale: float = 1.0):
         super().__init__(env)
@@ -109,7 +109,7 @@ class PixelObsExtractWrapper(gymnasium.ObservationWrapper):
 
 
 class SkipInitialFramesWrapper(gymnasium.Wrapper):
-    """在 reset 后自动跳过固定数量帧，常用于 CarRacing 等环境."""
+    """Auto-skip a fixed number of frames after reset, commonly used for CarRacing-like envs."""
 
     def __init__(self, env, skip_frames: int = 0):
         super().__init__(env)
@@ -130,7 +130,7 @@ class SkipInitialFramesWrapper(gymnasium.Wrapper):
 
 
 class MiniGridSafeStrWrapper(gymnasium.Wrapper):
-    """避免 MiniGrid 在 __str__ 访问未初始化状态时报错。"""
+    """Prevent MiniGrid from raising errors when __str__ accesses uninitialized state."""
 
     def __init__(self, env, env_id: str):
         super().__init__(env)
@@ -433,10 +433,10 @@ def env_creator(env_config):
         
         # [Stability Fix] Scale rewards for ALL Image tasks (configurable)
         if "CarRacing" in env_id:
-            # CarRacing 默认缩放 0.01，仍允许 YAML 覆写
+            # CarRacing defaults to 0.01 scale; YAML override still allowed
             default_reward_scale = 0.01
         else:
-            # BipedalWalker/Others 默认缩放 0.05，可通过 env_config.reward_scale 调整
+            # BipedalWalker/Others default to 0.05 scale; adjustable via env_config.reward_scale
             default_reward_scale = 0.05
         reward_scale = env_config.get("reward_scale", default_reward_scale)
         env = RewardScaleWrapper(env, reward_scale)
@@ -601,53 +601,53 @@ def deep_merge_config(base: Dict, override: Dict) -> Dict:
 
 
 class ConfigLoader:
-    """简化的配置加载器 - 统一配置管理的最小化实现。
+    """Simplified config loader - minimal unified configuration management.
     
-    设计原则:
-        - 简单: 只做必要的事（加载、合并、统一访问）
-        - 直接: 不做隐式转换和魔法操作
-        - 明确: 必须显式指定 runtime 路径
+    Design principles:
+        - Simple: only do what's necessary (load, merge, unified access)
+        - Direct: no implicit conversions or magic
+        - Explicit: runtime path must be specified explicitly
     
-    核心功能:
-        1. 加载实验配置（自动处理 extends 继承）
-        2. 合并 runtime 配置
-        3. 提供统一的访问接口
+    Core features:
+        1. Load experiment config (auto-handles extends inheritance)
+        2. Merge runtime config
+        3. Provide unified access interface
     
-    使用方法:
+    Usage:
         loader = ConfigLoader(runtime_config_path="configs/runtime.yml")
         config = loader.load("configs/experiments/sac/raspberry/pendulum.yml")
         
-        # 统一访问路径
+        # Unified access paths
         paths = config['runtime']['paths']
         ray_cfg = config['runtime']['ray']
         hyper = config['hyper_parameters']
-        log_freq = config.get('log_freq', 10)  # 不强制规范化
+        log_freq = config.get('log_freq', 10)  # no forced normalization
     
-    返回结构:
+    Return structure:
         {
-            'runtime': {              # 来自 runtime.yml
+            'runtime': {              # from runtime.yml
                 'paths': {...},
                 'ray': {...},
                 'mlflow': {...},
                 'logging': {...}
             },
-            'env_config': {...},      # 来自 experiment.yml
+            'env_config': {...},      # from experiment.yml
             'hyper_parameters': {...},
             'run_config': {...},
             'mlflow': {...},
-            'logging': {...}          # 如果存在
-            # ... 其他字段保持不变
+            'logging': {...}          # if present
+            # ... other fields unchanged
         }
     """
     
     def __init__(self, runtime_config_path: str):
-        """初始化 ConfigLoader.
+        """Initialize ConfigLoader.
         
         Args:
-            runtime_config_path: runtime.yml 的完整路径（必须显式指定）
+            runtime_config_path: Full path to runtime.yml (must be specified explicitly)
         
         Raises:
-            FileNotFoundError: 如果 runtime.yml 不存在
+            FileNotFoundError: If runtime.yml does not exist
         """
         if not os.path.exists(runtime_config_path):
             raise FileNotFoundError(f"Runtime config not found: {runtime_config_path}")
@@ -655,23 +655,23 @@ class ConfigLoader:
         self.runtime_config = load_config(runtime_config_path)
     
     def load(self, experiment_config_path: str) -> Dict:
-        """加载并合并配置.
+        """Load and merge configuration.
         
         Args:
-            experiment_config_path: 实验配置文件路径
+            experiment_config_path: Path to experiment config file
             
         Returns:
-            合并后的完整配置字典
+            Fully merged configuration dict
             
-        处理步骤:
-            1. 加载实验配置（load_config 自动处理 extends）
-            2. 注入 runtime 配置到 config['runtime']
-            3. 返回合并后的配置
+        Steps:
+            1. Load experiment config (load_config auto-handles extends)
+            2. Inject runtime config into config['runtime']
+            3. Return merged config
         """
-        # Step 1: 加载实验配置（load_config 自动处理 extends）
+        # Step 1: Load experiment config (load_config auto-handles extends)
         config = load_config(experiment_config_path)
         
-        # Step 2: 注入 runtime 配置
+        # Step 2: Inject runtime config
         config['runtime'] = self.runtime_config
         
         return config

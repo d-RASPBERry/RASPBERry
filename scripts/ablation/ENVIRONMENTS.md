@@ -3,9 +3,9 @@
 ## Scope locked (5+3 split)
 
 - Preferred split: **5 + 3** (value/policy emphasis), not `4 + 4`
-- Value-based（DDQN+APEX 共用 5）:
+- Value-based (DDQN+APEX, shared 5):
   - `Atlantis`, `Breakout`, `Pong`, `MiniGrid-DoorKey-8x8`, `MiniGrid-KeyCorridorS6R3`
-- SAC（3）:
+- SAC (3):
   - `CarRacing`, `LunarLanderContinuous`, `HalfCheetah`
 
 ## Re-run and reuse policy

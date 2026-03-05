@@ -1,6 +1,6 @@
-"""实验观测与记录工具模块。
+"""Experiment observation and logging utilities.
 
-包含日志记录、mlflow 跟踪和结果持久化等功能。
+Includes logging, mlflow tracking, and result persistence.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Any
 
 from utils import convert_np_arrays
 
-# 导出子模块的功能
+# Re-export submodule functions
 from .logger import setup_logger
 from .mlflow_helper import setup_mlflow, prepare_metrics
 
@@ -26,12 +26,12 @@ __all__ = [
 
 
 def write_iteration_json(log_dir: Path, iteration: int, result: dict) -> None:
-    """保存训练结果为 JSON 文件。
+    """Save training results as a JSON file.
     
     Args:
-        log_dir: 日志目录路径
-        iteration: 当前迭代次数
-        result: 训练结果字典，包含指标、状态等信息
+        log_dir: Log directory path
+        iteration: Current iteration number
+        result: Training result dict containing metrics, state, etc.
     """
     sanitized_result = dict(result) if isinstance(result, dict) else result
     if isinstance(sanitized_result, dict):

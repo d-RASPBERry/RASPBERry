@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""SAC + RASPBERry 训练脚本（最小可运行版）。
+"""SAC + RASPBERry training script (minimal runnable version).
 
-直接构建 `SACRaspberryAlgo` + RASPBERry replay buffer，用于快速实验。
-文件结构与 `run_sac_per_algo.py` / `run_sac_pber_algo.py` 对齐，便于对比与复用。
+Directly builds SACRaspberryAlgo + RASPBERry replay buffer for quick experiments.
+File structure aligned with run_sac_per_algo.py / run_sac_pber_algo.py for easy comparison and reuse.
 """
 
 # ====== Section: Imports ======
@@ -59,10 +59,11 @@ def build_algorithm(env_id: str, env_short: str, config: dict) -> SACRaspberryAl
     # Register custom CNN model
     ModelCatalog.register_custom_model("SACLightweightCNN", SACLightweightCNN)
 
-    # IMPORTANT: 将 YAML 的 env_config 完整传入 RLlib。
-    # 若只传 {"id": env_id}，像 img_size/frame_skip/frame_stack/grayscale/normalize
-    # 等关键设置会被静默忽略，导致实验配置与实际行为不一致
-    # （例如 BOX2D 默认 frame_skip=4 覆盖掉 config 的设定）。
+    # IMPORTANT: Pass the full YAML env_config to RLlib.
+    # Passing only {"id": env_id} silently ignores key settings like
+    # img_size/frame_skip/frame_stack/grayscale/normalize, causing
+    # mismatch between experiment config and actual behavior
+    # (e.g. BOX2D default frame_skip=4 overriding the config value).
     yaml_env_cfg = config.get("env_config", {}) or {}
     env_config = {**yaml_env_cfg, "id": yaml_env_cfg.get("id", env_id)}
     game = env_creator(env_config)

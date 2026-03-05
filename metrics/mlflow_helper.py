@@ -105,7 +105,7 @@ def prepare_metrics(result: dict) -> dict:
     metrics.update(flatten_dict(result.get("sampler_results", {})))
     info_flat = flatten_dict(result.get("info", {}))
 
-    # Replay buffer statistics可能嵌套在"buffer"或info中
+    # Replay buffer statistics may be nested under "buffer" or info
     buffer_stats = result.get("buffer") or info_flat.get("buffer")
     if buffer_stats:
         metrics.update(flatten_dict(buffer_stats))

@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 
 ################################################################################
-# SAC 消融实验启动脚本 (LunarLanderContinuous)
+# SAC ablation launch script (LunarLanderContinuous)
 #
-# 功能:
-#   对每个指定 GPU 按顺序启动 3 个 SAC 变体:
-#     1) SAC-PER (经验回放 + PER)
-#     2) SAC-PBER (分块回放, 无压缩)
-#     3) SAC-RASPBERry (分块回放 + 压缩)
+# Features:
+#   Launches 3 SAC variants sequentially on each specified GPU:
+#     1) SAC-PER (experience replay + PER)
+#     2) SAC-PBER (block replay, no compression)
+#     3) SAC-RASPBERry (block replay + compression)
 #
-# 使用方法:
-#   ./run_sac_ablation_LunarLander.sh                # 默认 GPU 共享 (仅使用 GPU 0)
-#   ./run_sac_ablation_LunarLander.sh -n 0,1,2       # 指定逗号分隔 GPU 列表
-#   ./run_sac_ablation_LunarLander.sh -m exclusive   # 开启独占模式 (需提供3的倍数GPU)
+# Usage:
+#   ./run_sac_ablation_LunarLander.sh                # default GPU shared (GPU 0 only)
+#   ./run_sac_ablation_LunarLander.sh -n 0,1,2       # comma-separated GPU list
+#   ./run_sac_ablation_LunarLander.sh -m exclusive   # exclusive mode (requires GPU count multiple of 3)
 #
 ################################################################################
 

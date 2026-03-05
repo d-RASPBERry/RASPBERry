@@ -3,7 +3,7 @@
 ################################################################################
 # JR06 block-size ablation — group 0
 # LavaCrossingS9N1 seed0  m={8,32,64}
-# (m=16 seed0 已由主消融实验覆盖，跳过)
+# (m=16 seed0 already covered by the main ablation, skipped)
 #
 # Usage:
 #   ./group0_lava_s0.sh -n 0              # shared: 3 experiments on GPU 0
