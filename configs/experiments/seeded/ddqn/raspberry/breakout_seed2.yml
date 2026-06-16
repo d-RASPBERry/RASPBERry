@@ -1,0 +1,13 @@
+# Seed overlay for DDQN: DDQN Breakout RASPBERry seed 2
+extends: ../../../ddqn/raspberry/breakout.yml
+
+env_config:
+  env_alias: "DDQN-RASPBERry-Breakout-seed2"
+
+hyper_parameters:
+  seed: 2
+
+mlflow:
+  tags:
+    experiment_group: "DDQN"
+    seed: "2"

@@ -1,0 +1,13 @@
+# Seed overlay for Edge: DDQN Pong PER seed 4
+extends: ../../../ddqn/per/pong.yml
+
+env_config:
+  env_alias: "Edge-DDQN-PER-Pong-seed4"
+
+hyper_parameters:
+  seed: 4
+
+mlflow:
+  tags:
+    experiment_group: "Edge"
+    seed: "4"

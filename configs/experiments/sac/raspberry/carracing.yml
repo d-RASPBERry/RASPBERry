@@ -8,8 +8,6 @@ env_config:
   # SKIP_INITIAL_FRAMES now handled in utils/__init__.py (set to 50 for CarRacing)
   # reset_skip_frames: 50 # Redundant, but explicit is good if we wanted to override
 
-logging:
-  log_subdir: "BOX2DI/CarRacing"
 
 mlflow:
   experiment: "SAC-CarRacing"

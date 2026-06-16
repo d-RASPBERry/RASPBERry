@@ -1,0 +1,13 @@
+# Seed overlay for DDQN: DDQN Freeway PER seed 0
+extends: ../../../ddqn/per/freeway.yml
+
+env_config:
+  env_alias: "DDQN-PER-Freeway-seed0"
+
+hyper_parameters:
+  seed: 0
+
+mlflow:
+  tags:
+    experiment_group: "DDQN"
+    seed: "0"

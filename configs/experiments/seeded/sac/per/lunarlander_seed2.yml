@@ -1,0 +1,13 @@
+# Seed overlay for SAC: SAC LunarLander PER seed 2
+extends: ../../../sac/per/lunarlander.yml
+
+env_config:
+  env_alias: "SAC-PER-LunarLander-seed2"
+
+hyper_parameters:
+  seed: 2
+
+mlflow:
+  tags:
+    experiment_group: "SAC"
+    seed: "2"

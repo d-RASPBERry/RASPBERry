@@ -1,0 +1,13 @@
+# Seed overlay for SAC: SAC CarRacing PBER seed 0
+extends: ../../../sac/pber/carracing.yml
+
+env_config:
+  env_alias: "SAC-PBER-CarRacing-seed0"
+
+hyper_parameters:
+  seed: 0
+
+mlflow:
+  tags:
+    experiment_group: "SAC"
+    seed: "0"

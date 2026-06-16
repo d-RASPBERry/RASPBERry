@@ -1,0 +1,13 @@
+# Seed overlay for DDQN: DDQN Freeway PBER seed 4
+extends: ../../../ddqn/pber/freeway.yml
+
+env_config:
+  env_alias: "DDQN-PBER-Freeway-seed4"
+
+hyper_parameters:
+  seed: 4
+
+mlflow:
+  tags:
+    experiment_group: "DDQN"
+    seed: "4"

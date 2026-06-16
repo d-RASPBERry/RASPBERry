@@ -5,8 +5,6 @@ env_config:
   id: "MUJOCOV-Walker2d-v4"
   env_alias: "SAC-RASPBERry-Walker2d-State"
 
-logging:
-  log_subdir: "MUJOCOV/Walker2d-State"
 
 mlflow:
   experiment: "SAC-Walker2d"

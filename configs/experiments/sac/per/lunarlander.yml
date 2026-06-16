@@ -5,8 +5,6 @@ env_config:
   id: "BOX2DV-LunarLanderContinuous"
   env_alias: "SAC-PER-LunarLander"
 
-logging:
-  log_subdir: "BOX2DV/LunarLander"
 
 mlflow:
   experiment: "SAC-LunarLander"

@@ -1,0 +1,13 @@
+# Seed overlay for Ape-X DDQN: Ape-X DDQN LavaCrossing D-PER seed 4
+extends: ../../../apex/per/minigrid_lavacrossing_s9n1.yml
+
+env_config:
+  env_alias: "APEX-PER-MiniGrid-LavaCrossingS9N1-seed4"
+
+hyper_parameters:
+  seed: 4
+
+mlflow:
+  tags:
+    experiment_group: "Ape-X DDQN"
+    seed: "4"

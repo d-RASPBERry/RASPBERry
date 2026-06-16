@@ -1,0 +1,13 @@
+# Seed overlay for Ape-X DDQN: Ape-X DDQN Atlantis D-PER seed 0
+extends: ../../../apex/per/atlantis.yml
+
+env_config:
+  env_alias: "APEX-PER-Atlantis-seed0"
+
+hyper_parameters:
+  seed: 0
+
+mlflow:
+  tags:
+    experiment_group: "Ape-X DDQN"
+    seed: "0"

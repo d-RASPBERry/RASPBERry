@@ -5,9 +5,6 @@ env_config:
   id: "Atari-FreewayNoFrameskip-v4"
   env_alias: "APEX-RASPBERry-Freeway"
 
-logging:
-  log_subdir: "Atari/Freeway"
-  log_every: 10
 
 mlflow:
   experiment: "APEX-DDQN-Atari-Freeway"

@@ -1,0 +1,13 @@
+# Seed overlay for Ape-X DDQN: Ape-X DDQN DoorKey RASPBERry seed 2
+extends: ../../../apex/raspberry/minigrid_doorkey_8x8.yml
+
+env_config:
+  env_alias: "APEX-RASPBERry-MiniGrid-DoorKey-8x8-seed2"
+
+hyper_parameters:
+  seed: 2
+
+mlflow:
+  tags:
+    experiment_group: "Ape-X DDQN"
+    seed: "2"

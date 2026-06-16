@@ -1,0 +1,23 @@
+# Block-size ablation (APEX-RASPBERry)
+# env=lavacrossing_s9n1, m=sub_buffer_size=16, seed=2
+extends: ../apex/raspberry/minigrid_lavacrossing_s9n1.yml
+
+env_config:
+  env_alias: "APEX-RASPBERry-MiniGrid-LavaCrossingS9N1-m16-seed2"
+
+run_config:
+  # 20h wall-clock budget.
+  max_time_s: 72000
+
+hyper_parameters:
+  seed: 2
+  # Keep per-learner-update transitions M fixed at 512: M = train_batch_size * sub_buffer_size.
+  train_batch_size: 32
+  replay_buffer_config:
+    sub_buffer_size: 16
+
+mlflow:
+  tags:
+    ablation: "jr06_blocksize"
+    block_size: "16"
+    seed: "2"

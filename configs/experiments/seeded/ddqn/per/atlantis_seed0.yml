@@ -1,0 +1,13 @@
+# Seed overlay for DDQN: DDQN Atlantis PER seed 0
+extends: ../../../ddqn/per/atlantis.yml
+
+env_config:
+  env_alias: "DDQN-PER-Atlantis-seed0"
+
+hyper_parameters:
+  seed: 0
+
+mlflow:
+  tags:
+    experiment_group: "DDQN"
+    seed: "0"

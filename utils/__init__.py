@@ -553,6 +553,70 @@ def infer_env_type(env_id: str) -> str:
     return env_id.split("-")[0] if "-" in env_id else env_id
 
 
+# ====== Section: Config Utilities ======
+
+DEFAULT_LOGGING_CONFIG = {
+    "log_freq": 20,
+    "result_json_freq": 20,
+    "checkpoint_freq": 50,
+    "log_start_iteration": 20,
+}
+
+
+def resolve_logging_config(config: Dict) -> Dict:
+    """Return the effective logging config for runner loops.
+
+    Experiment templates define the base ``logging_config``. The machine-local
+    ``runtime.logging`` section may override those values for a local run.
+    """
+
+    logging_config = DEFAULT_LOGGING_CONFIG.copy()
+    allowed_keys = set(logging_config)
+
+    template_config = config.get("logging_config", {})
+    if template_config is None:
+        template_config = {}
+    if not isinstance(template_config, dict):
+        raise TypeError("logging_config must be a dict")
+
+    runtime_config = config.get("runtime", {})
+    if runtime_config is None:
+        runtime_config = {}
+    if not isinstance(runtime_config, dict):
+        raise TypeError("runtime must be a dict")
+
+    runtime_logging = runtime_config.get("logging", {})
+    if runtime_logging is None:
+        runtime_logging = {}
+    if not isinstance(runtime_logging, dict):
+        raise TypeError("runtime.logging must be a dict")
+
+    for source_name, source_config in (
+        ("logging_config", template_config),
+        ("runtime.logging", runtime_logging),
+    ):
+        unknown_keys = set(source_config) - allowed_keys
+        if unknown_keys:
+            raise KeyError(f"{source_name} has unknown keys: {sorted(unknown_keys)}")
+        logging_config.update(source_config)
+
+    for key in ("log_freq", "result_json_freq"):
+        value = int(logging_config[key])
+        if value < 1:
+            raise ValueError(f"{key} must be >= 1")
+        logging_config[key] = value
+
+    for key in ("checkpoint_freq", "log_start_iteration"):
+        value = logging_config.get(key)
+        if value is not None:
+            value = int(value)
+            if value < 0:
+                raise ValueError(f"{key} must be >= 0")
+            logging_config[key] = value
+
+    return logging_config
+
+
 def load_config(config_path: str) -> Dict:
     """Load YAML configuration file with support for extends inheritance.
 

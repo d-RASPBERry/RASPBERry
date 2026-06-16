@@ -1,0 +1,13 @@
+# Seed overlay for Ape-X DDQN: Ape-X DDQN DoorKey D-PBER seed 2
+extends: ../../../apex/pber/minigrid_doorkey_8x8.yml
+
+env_config:
+  env_alias: "APEX-PBER-MiniGrid-DoorKey-8x8-seed2"
+
+hyper_parameters:
+  seed: 2
+
+mlflow:
+  tags:
+    experiment_group: "Ape-X DDQN"
+    seed: "2"

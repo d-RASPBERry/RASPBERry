@@ -1,0 +1,13 @@
+# Seed overlay for DDQN: DDQN Breakout PER seed 0
+extends: ../../../ddqn/per/breakout.yml
+
+env_config:
+  env_alias: "DDQN-PER-Breakout-seed0"
+
+hyper_parameters:
+  seed: 0
+
+mlflow:
+  tags:
+    experiment_group: "DDQN"
+    seed: "0"

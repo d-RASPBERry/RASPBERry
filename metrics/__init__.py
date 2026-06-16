@@ -14,12 +14,17 @@ from utils import convert_np_arrays
 
 # Re-export submodule functions
 from .logger import setup_logger
-from .mlflow_helper import setup_mlflow, prepare_metrics
+from .mlflow_helper import (
+    log_final_artifact_archive,
+    prepare_metrics,
+    setup_mlflow,
+)
 
 __all__ = [
     "setup_logger",
     "setup_mlflow",
     "prepare_metrics",
+    "log_final_artifact_archive",
     "write_iteration_json",
     "attach_buffer_stats",
 ]

@@ -1,0 +1,13 @@
+# Seed overlay for Edge: DDQN Pong RASPBERry seed 1
+extends: ../../../ddqn/raspberry/pong.yml
+
+env_config:
+  env_alias: "Edge-DDQN-RASPBERry-Pong-seed1"
+
+hyper_parameters:
+  seed: 1
+
+mlflow:
+  tags:
+    experiment_group: "Edge"
+    seed: "1"

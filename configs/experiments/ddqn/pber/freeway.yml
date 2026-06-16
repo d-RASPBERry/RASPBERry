@@ -6,9 +6,6 @@ env_config:
   id: "Atari-FreewayNoFrameskip-v4"
   env_alias: "DDQN-PBER-Freeway"
 
-logging:
-  log_subdir: "Atari/Freeway"
-  log_every: 10
 
 mlflow:
   experiment: "DDQN-Atari-Freeway"

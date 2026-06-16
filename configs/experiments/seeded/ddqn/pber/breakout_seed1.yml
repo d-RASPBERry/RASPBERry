@@ -1,0 +1,13 @@
+# Seed overlay for DDQN: DDQN Breakout PBER seed 1
+extends: ../../../ddqn/pber/breakout.yml
+
+env_config:
+  env_alias: "DDQN-PBER-Breakout-seed1"
+
+hyper_parameters:
+  seed: 1
+
+mlflow:
+  tags:
+    experiment_group: "DDQN"
+    seed: "1"

@@ -1,0 +1,13 @@
+# Seed overlay for Ape-X DDQN: Ape-X DDQN Breakout D-PER seed 1
+extends: ../../../apex/per/breakout.yml
+
+env_config:
+  env_alias: "APEX-PER-Breakout-seed1"
+
+hyper_parameters:
+  seed: 1
+
+mlflow:
+  tags:
+    experiment_group: "Ape-X DDQN"
+    seed: "1"

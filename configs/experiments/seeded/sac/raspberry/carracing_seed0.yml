@@ -1,0 +1,13 @@
+# Seed overlay for SAC: SAC CarRacing RASPBERry seed 0
+extends: ../../../sac/raspberry/carracing.yml
+
+env_config:
+  env_alias: "SAC-RASPBERry-CarRacing-seed0"
+
+hyper_parameters:
+  seed: 0
+
+mlflow:
+  tags:
+    experiment_group: "SAC"
+    seed: "0"

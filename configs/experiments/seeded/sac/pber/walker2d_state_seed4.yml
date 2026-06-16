@@ -1,0 +1,13 @@
+# Seed overlay for SAC: SAC Walker2d PBER seed 4
+extends: ../../../sac/pber/walker2d_state.yml
+
+env_config:
+  env_alias: "SAC-PBER-Walker2d-State-seed4"
+
+hyper_parameters:
+  seed: 4
+
+mlflow:
+  tags:
+    experiment_group: "SAC"
+    seed: "4"

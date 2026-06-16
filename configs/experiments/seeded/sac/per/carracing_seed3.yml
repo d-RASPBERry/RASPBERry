@@ -1,0 +1,13 @@
+# Seed overlay for SAC: SAC CarRacing PER seed 3
+extends: ../../../sac/per/carracing.yml
+
+env_config:
+  env_alias: "SAC-PER-CarRacing-seed3"
+
+hyper_parameters:
+  seed: 3
+
+mlflow:
+  tags:
+    experiment_group: "SAC"
+    seed: "3"

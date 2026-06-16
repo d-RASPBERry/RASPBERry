@@ -1,0 +1,13 @@
+# Seed overlay for DDQN: DDQN Atlantis RASPBERry seed 3
+extends: ../../../ddqn/raspberry/atlantis.yml
+
+env_config:
+  env_alias: "DDQN-RASPBERry-Atlantis-seed3"
+
+hyper_parameters:
+  seed: 3
+
+mlflow:
+  tags:
+    experiment_group: "DDQN"
+    seed: "3"

@@ -28,12 +28,12 @@ from ray.tune.registry import register_env
 
 # ------ Subsection: Local ------
 from algorithms.sac_raspberry_algo import SACRaspberryAlgo
-from metrics import write_iteration_json, attach_buffer_stats
+from metrics import write_iteration_json, attach_buffer_stats, log_final_artifact_archive
 from metrics.logger import redirect_stdio, setup_logger
 from metrics.mlflow_helper import prepare_metrics, setup_mlflow
 from models import SACLightweightCNN
 from replay_buffer.d_pber_ray import MultiAgentPrioritizedBlockReplayBuffer
-from utils import env_creator, infer_env_type, ConfigLoader
+from utils import env_creator, infer_env_type, ConfigLoader, resolve_logging_config
 
 # ====== Section: Constants ======
 DEFAULT_CONFIG_PATH = str((ROOT / "configs/sac_pber_image.yml").resolve())
@@ -122,10 +122,13 @@ def main() -> None:
     
     run_cfg = config["run_config"]
     hyper = config["hyper_parameters"]
+    seed = hyper.get("seed")
 
     max_time_s = run_cfg.get("max_time_s", 7200)
     max_iterations = run_cfg.get("max_iterations", 10000)
-    log_every = config.get("logging_config", {}).get("log_freq", 10)
+    logging_cfg = resolve_logging_config(config)
+    log_every = logging_cfg["log_freq"]
+    result_json_every = logging_cfg["result_json_freq"]
 
     env_id = config.get("env_config", {}).get("id", args.env)
     env_alias = config.get("env_config", {}).get("env_alias", env_id)
@@ -180,6 +183,12 @@ def main() -> None:
         max_iterations,
     )
     logger.info("Log dir: %s", log_dir)
+    logger.info(
+        "Seed: %s | log_freq: %d | result_json_freq: %d",
+        seed if seed is not None else "none",
+        log_every,
+        result_json_every,
+    )
     logger.info("=" * 60)
 
     # ------ Subsection: MLflow (optional) ------
@@ -194,6 +203,7 @@ def main() -> None:
             **mlflow_base,
             "experiment": mlflow_experiment,
             "run_name": f"{run_name_base}-{args.gpu}-{timestamp}",
+            "tags": mlflow_tags_from_yaml,
         }
         extra_tags = {
             "algorithm": mlflow_tags_from_yaml.get("algorithm", "SAC"),
@@ -244,7 +254,8 @@ def main() -> None:
             iteration += 1
 
             attach_buffer_stats(result, algo)
-            write_iteration_json(log_dir, iteration, result)
+            if iteration % result_json_every == 0:
+                write_iteration_json(log_dir, iteration, result)
 
             if iteration % log_every == 0:
                 reward = result.get("episode_reward_mean", "n/a")
@@ -266,12 +277,6 @@ def main() -> None:
                         mlflow.log_metrics(metrics, step=step)
                     except Exception as e:
                         logger.warning("[mlflow] log_metrics failed: %s", e)
-                    else:
-                        try:
-                            if iteration % mlflow_cfg.get("log_artifacts_every", 200) == 0:
-                                mlflow.log_artifacts(str(log_dir))
-                        except Exception as e:
-                            logger.warning("[mlflow] log_artifacts failed: %s", e)
 
     except KeyboardInterrupt:
         logger.info("Training interrupted by user")
@@ -292,9 +297,9 @@ def main() -> None:
 
         if mlflow_run is not None:
             try:
-                mlflow.log_artifacts(str(log_dir))
+                log_final_artifact_archive(mlflow, log_dir, logger, mlflow_cfg)
             except Exception as e:
-                logger.warning("[mlflow] log_artifacts failed: %s", e)
+                logger.warning("[mlflow] final artifact archive failed: %s", e)
             try:
                 mlflow.end_run()
             except Exception as e:

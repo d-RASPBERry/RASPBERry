@@ -1,0 +1,13 @@
+# Seed overlay for DDQN: DDQN LavaCrossing PER seed 4
+extends: ../../../ddqn/per/minigrid_lavacrossing_s9n1.yml
+
+env_config:
+  env_alias: "DDQN-PER-MiniGrid-LavaCrossingS9N1-seed4"
+
+hyper_parameters:
+  seed: 4
+
+mlflow:
+  tags:
+    experiment_group: "DDQN"
+    seed: "4"

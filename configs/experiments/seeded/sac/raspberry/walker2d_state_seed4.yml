@@ -1,0 +1,13 @@
+# Seed overlay for SAC: SAC Walker2d RASPBERry seed 4
+extends: ../../../sac/raspberry/walker2d_state.yml
+
+env_config:
+  env_alias: "SAC-RASPBERry-Walker2d-State-seed4"
+
+hyper_parameters:
+  seed: 4
+
+mlflow:
+  tags:
+    experiment_group: "SAC"
+    seed: "4"

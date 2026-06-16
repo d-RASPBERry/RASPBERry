@@ -1,0 +1,13 @@
+# Seed overlay for SAC: SAC LunarLander RASPBERry seed 0
+extends: ../../../sac/raspberry/lunarlander.yml
+
+env_config:
+  env_alias: "SAC-RASPBERry-LunarLander-seed0"
+
+hyper_parameters:
+  seed: 0
+
+mlflow:
+  tags:
+    experiment_group: "SAC"
+    seed: "0"

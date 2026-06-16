@@ -8,8 +8,6 @@ env_config:
   normalize: true
   # SKIP_INITIAL_FRAMES handled in utils/__init__.py
 
-logging:
-  log_subdir: "BOX2DI/CarRacing"
 
 mlflow:
   experiment: "SAC-CarRacing"

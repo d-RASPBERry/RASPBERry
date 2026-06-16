@@ -6,9 +6,6 @@ env_config:
   id: "Atari-PongNoFrameskip-v4"
   env_alias: "DDQN-PER-Pong"
 
-logging:
-  log_subdir: "Atari/Pong"
-  log_every: 10
 
 mlflow:
   experiment: "DDQN-Atari-Pong"

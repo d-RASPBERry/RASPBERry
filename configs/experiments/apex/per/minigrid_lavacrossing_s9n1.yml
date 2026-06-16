@@ -8,9 +8,6 @@ env_config:
   img_size: 84
   max_steps: 200
 
-logging:
-  log_subdir: "MiniGrid/LavaCrossingS9N1"
-  log_every: 10
 
 mlflow:
   experiment: "APEX-DDQN-MiniGrid-LavaCrossingS9N1"

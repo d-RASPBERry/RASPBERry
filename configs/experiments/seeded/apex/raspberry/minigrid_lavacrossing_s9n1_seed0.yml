@@ -1,0 +1,13 @@
+# Seed overlay for Ape-X DDQN: Ape-X DDQN LavaCrossing RASPBERry seed 0
+extends: ../../../apex/raspberry/minigrid_lavacrossing_s9n1.yml
+
+env_config:
+  env_alias: "APEX-RASPBERry-MiniGrid-LavaCrossingS9N1-seed0"
+
+hyper_parameters:
+  seed: 0
+
+mlflow:
+  tags:
+    experiment_group: "Ape-X DDQN"
+    seed: "0"

@@ -1,0 +1,13 @@
+# Seed overlay for Ape-X DDQN: Ape-X DDQN Pong RASPBERry seed 3
+extends: ../../../apex/raspberry/pong.yml
+
+env_config:
+  env_alias: "APEX-RASPBERry-Pong-seed3"
+
+hyper_parameters:
+  seed: 3
+
+mlflow:
+  tags:
+    experiment_group: "Ape-X DDQN"
+    seed: "3"

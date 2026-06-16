@@ -5,9 +5,6 @@ env_config:
   id: "Atari-PongNoFrameskip-v4"
   env_alias: "APEX-PBER-Pong"
 
-logging:
-  log_subdir: "Atari/Pong"
-  log_every: 10
 
 mlflow:
   experiment: "APEX-DDQN-Atari-Pong"

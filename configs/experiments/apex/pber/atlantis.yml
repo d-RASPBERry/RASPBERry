@@ -5,9 +5,6 @@ env_config:
   id: "Atari-AtlantisNoFrameskip-v4"
   env_alias: "APEX-PBER-Atlantis"
 
-logging:
-  log_subdir: "Atari/Atlantis"
-  log_every: 10
 
 mlflow:
   experiment: "APEX-DDQN-Atari-Atlantis"
